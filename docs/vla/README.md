@@ -6,6 +6,18 @@
 
 1. [Pipeline v2（2026-11-10）](2026-11-10_VLA_branch_Pipeline_v2.md)：现行设计，包括方法、backbone 和 benchmark 选型、实验配置、阶段计划和后续检索清单。
 2. [检索结果：backbone、benchmark 与近邻（2026-11-10）](2026-11-10_VLA_branch_检索结果_backbone_benchmark_近邻.md)：三个检索 agent 的原始报告。
-3. [检索清单与 Pipeline v1（2026-11-10）](2026-11-10_VLA_branch_检索清单与Pipeline_v1.md)：已被取代，保留作历史记录。
+3. [R1 近邻全文核实（2026-11-10）](2026-11-10_VLA_branch_R1_近邻全文核实.md)：六篇最接近的工作逐篇核对，以及 ObjDream、Ledger 等新发现的近邻。
+4. [R2 LIBERO 变体协议（2026-11-10）](2026-11-10_VLA_branch_R2_LIBERO变体协议.md)：三个 LIBERO 变体的训练与评测协议、公开数据的内容，以及哪些标签可以直接读取、哪些需要回放。
+5. [R3 A6000 训练成本（2026-11-10）](2026-11-10_VLA_branch_R3_A6000训练成本.md)：starVLA 和 π0.5 在 8 卡 A6000 上的显存、时间和总 GPU 小时估计。
+6. [检索清单与 Pipeline v1（2026-11-10）](2026-11-10_VLA_branch_检索清单与Pipeline_v1.md)：已被取代，保留作历史记录。
 
 后续检索结果、选型和实验记录都放在本目录，文件名以日期开头。
+
+## 汇报 notebook
+
+- [数据集与仿真环境汇报（2026-11-10）](../../report/2026-11-10_vla_datasets_sim_report.ipynb)：各 benchmark 的能力对照表和官方 teaser 图，LIBERO-Plus 及两个诊断集的说明，一个 LIBERO-Object 任务的细节（视频、末端路径、CAW 标签、动作积分检查），以及 RoboTwin 2.0 Hard。
+- 重新运行前先准备：
+  1. `python -m pip install h5py==3.16.0`，在 `affordance3d` 环境里装（已写入 `requirements.txt`）；
+  2. `bash scripts/download_vla_report_images.sh`，下载官方图片；
+  3. `bash scripts/download_libero_demo.sh`，下载约 664MB 的任务文件和它的 BDDL，存到主 checkout 的 `data/libero/` 下。
+- 对应代码：`affordance3d/libero_io.py`（读取 LIBERO 文件）、`affordance3d/caw_labels.py`（从末端路径和夹爪指令生成 CAW 标签，检查动作积分）、`report/vla_report_helpers.py`（表格和图）。
