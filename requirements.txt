@@ -32,6 +32,9 @@ tyro==1.0.17
 viser==1.1.1
 pyviz3d==0.4.0  # 0.5.x requires numpy<2
 
+# VLA branch: LIBERO demonstration files (robomimic-style HDF5)
+h5py==3.16.0
+
 # Visualisation and the step-by-step notebook
 matplotlib==3.11.2
 plotly==7.1.0
