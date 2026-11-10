@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Create the starVLA training environment on the A6000 server (estar).
 #
-# - conda prefix env on /data (the /home disk is nearly full), package caches on /data as well
+# - conda prefix env on the local /data disk (fast imports; /home is nearly full and holds code only)
+# - wheelhouse and package caches in the NAS work dir
 # - Python 3.10 and the pins from starVLA's requirements.txt (torch 2.6.0 / CUDA 12.4 wheels)
 # - no GPU is used by this script
 #
@@ -12,7 +13,7 @@
 # Usage on the server:  bash setup_starvla_env.sh            (safe to re-run; it resumes)
 set -euo pipefail
 
-W="${W:-/data/xinyizheng/affordance3d_vla}"
+W="${W:-/mnt/nas/xinyizheng/affordance_vla}"
 ENV_PREFIX="${ENV_PREFIX:-/data/xinyizheng/envs/starvla}"
 STARVLA="${STARVLA:-$W/repos/starVLA}"
 PIP_INDEX="${PIP_INDEX:-https://mirrors.aliyun.com/pypi/simple/}"  # pypi.org is slow from this server
@@ -61,6 +62,8 @@ if ! python -c "import torch, torchvision" 2>/dev/null; then
 fi
 pip_install -r "$STARVLA/requirements.txt"
 pip_install -e "$STARVLA" --no-deps
+# tests and the report notebook; numpy is named explicitly so that pip keeps starVLA's pin
+pip_install numpy==1.26.4 -r "$(dirname "$0")/requirements_dev_server.txt"
 
 # flash-attn: prebuilt wheel (there is no nvcc on this server, so it cannot be compiled here).
 # starVLA runs without it when the attention implementation is "sdpa", so a failure here is not fatal.

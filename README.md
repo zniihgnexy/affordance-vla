@@ -19,7 +19,8 @@ On 10 November 2026 this repository was split from the `vla` branch of [affordan
 - `affordance3d/caw_labels.py` derives contact–approach–waypoint labels from end-effector paths and gripper commands, and checks how well summed actions track the path.
 - `report/vla_report_helpers.py` and `scripts/build_vla_report.py` build the report notebook.
 - `scripts/remote/` sets up and probes the starVLA training stack on the A6000 server.
-- **Environment:** [`requirements.txt`](requirements.txt), installed with conda + pip (commands at the top of the file). Run the tests with `python -m pytest`.
+- **Working copy:** since 10 November 2026 the working copy is `~/affordance-vla` on the A6000 server, with data, models and outputs on the NAS; the layout is in the V0 server setup record.
+- **Environment:** on the server, the starVLA env built by `scripts/remote/setup_starvla_env.sh`. [`requirements.txt`](requirements.txt) is the earlier Mac environment. Run the tests with `python -m pytest`.
 
 ## Background carried over from affordance3D
 

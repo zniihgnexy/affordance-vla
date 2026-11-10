@@ -23,7 +23,7 @@ from affordance3d.scenefun3d import (
 
 
 def test_laser_scan_reader_returns_points_and_colours(tmp_path) -> None:
-    import open3d as o3d
+    o3d = pytest.importorskip("open3d")  # not installed in the server env (old prototype only)
 
     cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]]))
     cloud.colors = o3d.utility.Vector3dVector([[1.0, 0.0, 0.0], [0.0, 0.5, 1.0]])

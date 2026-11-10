@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Download what the starVLA LIBERO recipe needs onto the A6000 server (estar): the four LIBERO suites in
-# LeRobot format and the Qwen3-VL-2B weights. Everything goes to /data; no GPU is used. Resumable.
+# LeRobot format and the Qwen3-VL-2B weights. Everything goes to the NAS work dir; no GPU is used. Resumable.
 #
 # Measured from this server on 2026-11-10: huggingface.co 0.05-0.1 MB/s and unstable, hf-mirror.com
 # ~0.3 MB/s with dropped connections (`hf download` then reports success with files missing),
@@ -9,7 +9,7 @@
 # Usage on the server:  nohup bash download_assets.sh > $W/logs/download_assets.log 2>&1 &
 set -uo pipefail
 
-W="${W:-/data/xinyizheng/affordance3d_vla}"
+W="${W:-/mnt/nas/xinyizheng/affordance_vla}"
 PY="${PY:-$HOME/anaconda3/bin/python}"
 MODEL="${MODEL:-Qwen/Qwen3-VL-2B-Instruct}"
 DATASET_OWNER="${DATASET_OWNER:-adamzhuo}"

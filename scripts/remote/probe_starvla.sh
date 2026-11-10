@@ -7,7 +7,7 @@
 # Output: $OUT/summary.tsv plus one log per batch size.
 set -uo pipefail
 
-W="${W:-/data/xinyizheng/affordance3d_vla}"
+W="${W:-/mnt/nas/xinyizheng/affordance_vla}"
 ENV_PREFIX="${ENV_PREFIX:-/data/xinyizheng/envs/starvla}"
 STARVLA="${STARVLA:-$W/repos/starVLA}"
 FRAMEWORK="${FRAMEWORK:-QwenPI}"

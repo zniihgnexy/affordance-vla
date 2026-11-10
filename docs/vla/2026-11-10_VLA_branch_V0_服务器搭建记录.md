@@ -11,35 +11,47 @@
 | 硬件 | x86-64，8 × RTX A6000（每张 48GB），144 核，1TB 内存，驱动 580 / CUDA 13.0，没有 `nvcc` |
 | 可用的卡 | 只能用 0、1、4、5、6、7；2 和 3 不能碰 |
 | 当时的占用 | 卡 0、4 被另一位用户的 vLLM 占着（43GB、38GB）；卡 1、5、6、7 各跑着两个 `vid_tokenizer` 队列作业（每张约 12GB，利用率 99–100%） |
-| 存储 | `/home` 已用 97%，只剩 117GB；`/data` 剩 3.5TB。所以本分支的东西全部放 `/data` |
+| 存储 | `/home` 已用 97%，只剩 117GB，只放代码等小文件；NAS（`/mnt/nas/xinyizheng/`，NFS）剩 7.9TB，放数据和模型；本地盘 `/data` 剩 3.5TB，只放 conda 环境 |
 | 网络 | huggingface.co 0.05–0.1 MB/s 且不稳定；hf-mirror.com 约 0.3 MB/s；modelscope.cn 约 25 MB/s；pypi.org 很慢，阿里云镜像可用；GitHub 能连但慢。**HTTP/1.1 连接被限速到约 0.8 MB/s，HTTP/2 约 20 MB/s**，而 pip 只用 HTTP/1.1，所以大文件要先用 curl 下载 |
 
 ## 2. 在服务器上建了什么
 
-工作目录是 `/data/xinyizheng/affordance3d_vla/`：
+**2026-11-10 晚起，工作以服务器为准。** 项目负责人的 Mac 空间不够，所以代码的工作副本、数据和模型都在服务器上，改动在服务器上提交并 push 到 GitHub。约定是：`/home` 只放代码等小文件，大的数据和模型放 NAS。
+
+| 位置 | 内容 |
+| --- | --- |
+| `~/affordance-vla` | 本仓库的工作副本，`origin` 是 `git@github.com:zniihgnexy/affordance-vla.git`（服务器的 SSH 密钥已绑定 GitHub 账号）。其中 `data`、`runs`、`report/assets` 是指向 NAS 的符号链接，不进 git |
+| `/mnt/nas/xinyizheng/affordance_vla/` | NAS 上的大文件目录，下面分 `models`、`data`、`repos`、`cache`、`runs`、`logs` |
+| `/data/xinyizheng/envs/starvla` | conda 前缀环境，留在本地盘（导入快；conda 环境不能直接搬，换位置要重建） |
+
+NAS 目录里的内容：
 
 | 路径 | 内容 |
 | --- | --- |
-| `repos/starVLA` | starVLA，分支 `starVLA_dev`，commit `13d8ad4`（浅克隆） |
+| `repos/starVLA` | starVLA，分支 `starVLA_dev`，commit `13d8ad4`（浅克隆），以可编辑方式装进环境 |
 | `repos/LIBERO` | LIBERO 官方仓库（浅克隆，640MB） |
 | `data/libero_lerobot/` | LIBERO 四个 suite 的 LeRobot 格式数据，也就是 starVLA 官方训练用的 `IPEC-COMMUNITY/libero_*_no_noops_1.0.0_lerobot`。从 ModelScope 上的同名转存（`adamzhuo/...`）下载：抽样文件与 HF 原版逐字节一致，每个文件都按 ModelScope 列表里的 sha256 校验 |
+| `data/libero/` | LIBERO 原始 HDF5 的一个任务文件（汇报 notebook 用） |
 | `models/Qwen3-VL-2B-Instruct` | Qwen3-VL-2B 权重（4.26GB），从 ModelScope 下载 |
-| `cache/` | conda、pip、HF 的缓存，避免写到 `/home` |
-| `scripts/` | 从本仓库 `scripts/remote/` 拷过去的脚本 |
-| `logs/`、`runs/` | 安装、下载日志和实验输出 |
+| `cache/wheelhouse` | 建环境时预先下载的大安装包（torch、CUDA 库、flash-attn） |
+| `runs/`、`logs/` | 实验输出和安装、下载日志 |
 
-conda 环境是前缀环境 `/data/xinyizheng/envs/starvla`：Python 3.10，torch 2.6.0（CUDA 12.4 版），flash-attn 2.7.4.post1，其余按 starVLA 的 `requirements.txt` 固定版本。装好后的完整版本清单（141 个包）存在本仓库的 `scripts/remote/starvla_env_freeze.txt`。
+环境：Python 3.10，torch 2.6.0（CUDA 12.4 版），flash-attn 2.7.4.post1，其余按 starVLA 的 `requirements.txt` 固定版本。完整版本清单存在本仓库的 `scripts/remote/starvla_env_freeze.txt`。
+
+最初这些大文件放在 `/data/xinyizheng/affordance3d_vla/`，2026-11-10 晚按上面的约定搬到了 NAS，原目录已删除。
 
 **复现方法**（都不占 GPU）：
 
 ```bash
-W=/data/xinyizheng/affordance3d_vla
-mkdir -p $W/{repos,data,models,logs,runs,cache,scripts}
+git clone git@github.com:zniihgnexy/affordance-vla.git ~/affordance-vla
+W=/mnt/nas/xinyizheng/affordance_vla
+mkdir -p $W/{models,data,repos,cache,runs,logs}
 git clone --depth 1 -b starVLA_dev https://github.com/starVLA/starVLA.git $W/repos/starVLA
 git clone --depth 1 https://github.com/Lifelong-Robot-Learning/LIBERO.git $W/repos/LIBERO
-# 把本仓库 scripts/remote/ 下的脚本拷到 $W/scripts/ 之后：
-nohup bash $W/scripts/setup_starvla_env.sh > $W/logs/setup_starvla_env.log 2>&1 &
-nohup bash $W/scripts/download_assets.sh   > $W/logs/download_assets.log   2>&1 &
+cd ~/affordance-vla
+ln -s $W/data data && ln -s $W/runs runs
+nohup bash scripts/remote/setup_starvla_env.sh > $W/logs/setup_starvla_env.log 2>&1 &
+nohup bash scripts/remote/download_assets.sh   > $W/logs/download_assets.log   2>&1 &
 ```
 
 ## 3. `scripts/remote/` 里的脚本

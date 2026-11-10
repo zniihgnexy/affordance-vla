@@ -4,9 +4,9 @@ Catches path, config and dependency errors before a GPU slot is spent, and print
 count per top-level module (which decides whether full fine-tuning can fit on a 48 GB card).
 
 Usage on the server (inside the starvla env, from the starVLA repo root):
-    CUDA_VISIBLE_DEVICES= python /data/xinyizheng/affordance3d_vla/scripts/smoke_starvla_cpu.py \
-        --vlm /data/xinyizheng/affordance3d_vla/models/Qwen3-VL-2B-Instruct \
-        --data-root /data/xinyizheng/affordance3d_vla/data/libero_lerobot
+    CUDA_VISIBLE_DEVICES= python ~/affordance-vla/scripts/remote/smoke_starvla_cpu.py \
+        --vlm /mnt/nas/xinyizheng/affordance_vla/models/Qwen3-VL-2B-Instruct \
+        --data-root /mnt/nas/xinyizheng/affordance_vla/data/libero_lerobot
 """
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def main() -> None:
     parser.add_argument("--framework", default="QwenPI")
     parser.add_argument("--data-mix", default="libero_all")
     parser.add_argument("--batch-size", type=int, default=2)
-    parser.add_argument("--out", default="/data/xinyizheng/affordance3d_vla/runs/smoke_cpu")
+    parser.add_argument("--out", default="/mnt/nas/xinyizheng/affordance_vla/runs/smoke_cpu")
     parser.add_argument("--skip-data", action="store_true")
     args = parser.parse_args()
 

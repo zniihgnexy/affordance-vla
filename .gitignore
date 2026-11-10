@@ -11,6 +11,10 @@ __pycache__/
 /data/
 /third_party/
 /runs/
+# On the server these are symlinks into the NAS work dir (a trailing slash would not match a symlink).
+/data
+/runs
+/report/assets
 
 # Report media: videos are regenerated when the report runs; official preview images
 # are fetched with scripts/download_report_images.sh (third-party, not redistributed here).
