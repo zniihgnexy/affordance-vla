@@ -11,9 +11,12 @@
 ## 当前状态（2026-11-10）
 
 - **工作方式：** 以服务器上的 `~/affordance-vla` 为准，改动在服务器上提交并 push；大文件在 NAS 上，布局见 [V0 服务器搭建记录](2026-11-10_VLA_branch_V0_服务器搭建记录.md) 第 2 节。
-- **阶段：** V0（核实与搭建）。检索 R1–R3 和数据集汇报已完成；服务器上的代码、环境、模型、数据都已就绪，CPU 冒烟测试通过。
-- **卡在哪：** GPU 探测还没提交。主力配置 QwenPI + Qwen3-VL-2B 有 38 亿参数，全量微调单张 A6000 放不下，而共享队列一个作业只给一张卡。
-- **下一步：** 等项目负责人对 [V0 服务器搭建记录](2026-11-10_VLA_branch_V0_服务器搭建记录.md) 第 7 节的三件事做决定，再改探测脚本并通过队列提交。
+- **阶段：** V0（核实与搭建）。检索 R1–R3 和数据集汇报已完成；服务器上的训练环境、仿真环境、模型和数据都已就绪。已用 starVLA 官方开源权重在一个 LIBERO 任务上把整条流程跑通：训练样本、模型内部、开环预测、闭环仿真、标签（见下面的流程 demo）。我们自己的方法还没有训练。
+- **已决定（2026-11-10，项目负责人）：**
+  1. GPU 作业优先放 0–3 号卡里的空卡；卡上有别的作业但显存够也可以放；只要能跑就排队跑，仍然都走队列。
+  2. 正式训练时两个项目分时间段使用服务器，一个时间段内 8 张卡都可用，具体安排到时由项目负责人逐个定。
+  3. QwenPI-2B 全量微调单卡放不下的问题先搁置，等 VLA 模型部分讨论之后再定。
+- **下一步：** 和项目负责人讨论 VLA 模型部分。流程 demo 最后一节列了要一起决定的 6 个问题。
 
 ## 入口
 
@@ -29,6 +32,17 @@
 
 ## 汇报 notebook
 
+- [流程 demo（2026-11-10）](../../report/2026-11-10_vla_pipeline_demo.ipynb)：用 LIBERO-Object 的一个任务和 starVLA 官方权重 `Qwen3-VL-PI-LIBERO-4in1`，一步一步走完整条流程。
+  - **内容：** 训练样本；模型内部（token、隐状态、4 步去噪）；开环预测和训练损失；闭环 rollout（标准、换指令、挪动目标，共 21 条）；CAW 标签；计划–动作一致性度量；episode 状态。
+  - **哪些是真的：** 数据、开源模型、它的开环和闭环动作、仿真日志，以及由日志算出的所有数字。
+  - **哪些还是占位（notebook 里标为 ORACLE）：** CAW 计划、一致性度量里的"计划"、episode 状态。它们都由示范回放和仿真真值算出，还没有模型预测它们。
+  - **主要结果：** 按训练时的指令 5 次全部成功；指令换成场景里别的物体，10 次里 8 次拿错；目标挪动 4–16 厘米，6 次里只成功 1 次。整组 21 条跑了两遍，20 条的结果相同。
+  - **重新运行（都在服务器上）：**
+    1. `scripts/remote/setup_libero_env.sh`，建 LIBERO 仿真环境；
+    2. `scripts/remote/fetch_modelscope_model.sh`，下载官方权重和 Qwen3-VL-4B；
+    3. 按 `scripts/remote/run_vla_demo_gpu.sh` 文件头的说明，先在 CPU 上回放一条示范，再把这个脚本提交到 GPU 队列；
+    4. 在 `report/` 下运行 `scripts/build_vla_pipeline_demo.py`，再执行 notebook。
+  - **对应代码：** `affordance3d/` 下的 `plan_consistency.py`（一致性度量）、`episode_state.py`（episode 状态）、`rollout_outcome.py`（结果分类）、`rollout_log.py`（读日志）、`libero_camera.py`（相机投影）；`report/` 下的 `vla_pipeline_demo_helpers.py` 和 `vla_pipeline_demo_labels.py`（图和表）。
 - [数据集与仿真环境汇报（2026-11-10）](../../report/2026-11-10_vla_datasets_sim_report.ipynb)：各 benchmark 的能力对照表和官方 teaser 图，LIBERO-Plus 及两个诊断集的说明，一个 LIBERO-Object 任务的细节（视频、末端路径、CAW 标签、动作积分检查），以及 RoboTwin 2.0 Hard。
 - 重新运行前先准备：
   1. `python -m pip install h5py==3.16.0`，在 `affordance3d` 环境里装（已写入 `requirements.txt`）；

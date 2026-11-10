@@ -1,6 +1,6 @@
 # VLA branch V0：A6000 服务器搭建记录
 
-**日期：2026-11-10｜状态：环境、数据、模型已就绪，CPU 冒烟测试通过；GPU 探测还没提交，等项目负责人决定｜对应 [Pipeline v2](2026-11-10_VLA_branch_Pipeline_v2.md) 第 7 节 V0**
+**日期：2026-11-10｜状态：训练环境、仿真环境、数据、模型已就绪；官方权重的推理探测和闭环 rollout 已通过队列跑完（第 9 节）；QwenPI-2B 的训练显存探测还没做，backbone 配置暂时搁置｜对应 [Pipeline v2](2026-11-10_VLA_branch_Pipeline_v2.md) 第 7 节 V0**
 
 服务器是共享的 `estar`，从项目负责人的 Mac 上用 `ssh estar` 连接。所有查询和执行都走 SSH。本文记录在服务器上建了什么、怎么复现，以及提交 GPU 探测之前需要项目负责人决定的事。
 
@@ -9,7 +9,7 @@
 | 项目 | 情况 |
 | --- | --- |
 | 硬件 | x86-64，8 × RTX A6000（每张 48GB），144 核，1TB 内存，驱动 580 / CUDA 13.0，没有 `nvcc` |
-| 可用的卡 | 只能用 0、1、4、5、6、7；2 和 3 不能碰 |
+| 可用的卡 | 原规定只能用 0、1、4、5、6、7，2 和 3 不能碰。2026-11-10 项目负责人更新为：优先用 0–3 号卡里的空卡，卡上有别的作业但显存够也可以放（见第 7 节）。队列运行器默认的可用卡和 `submit_queue_job.sh` 接受的卡仍是 0、1、4、5、6、7 |
 | 当时的占用 | 卡 0、4 被另一位用户的 vLLM 占着（43GB、38GB）；卡 1、5、6、7 各跑着两个 `vid_tokenizer` 队列作业（每张约 12GB，利用率 99–100%） |
 | 存储 | `/home` 已用 97%，只剩 117GB，只放代码等小文件；NAS（`/mnt/nas/xinyizheng/`，NFS）剩 7.9TB，放数据和模型；本地盘 `/data` 剩 3.5TB，只放 conda 环境 |
 | 网络 | huggingface.co 0.05–0.1 MB/s 且不稳定；hf-mirror.com 约 0.3 MB/s；modelscope.cn 约 25 MB/s；pypi.org 很慢，阿里云镜像可用；GitHub 能连但慢。**HTTP/1.1 连接被限速到约 0.8 MB/s，HTTP/2 约 20 MB/s**，而 pip 只用 HTTP/1.1，所以大文件要先用 curl 下载 |
@@ -23,6 +23,7 @@
 | `~/affordance-vla` | 本仓库的工作副本，`origin` 是 `git@github.com:zniihgnexy/affordance-vla.git`（服务器的 SSH 密钥已绑定 GitHub 账号）。其中 `data`、`runs`、`report/assets` 是指向 NAS 的符号链接，不进 git |
 | `/mnt/nas/xinyizheng/affordance_vla/` | NAS 上的大文件目录，下面分 `models`、`data`、`repos`、`cache`、`runs`、`logs` |
 | `/data/xinyizheng/envs/starvla` | conda 前缀环境，留在本地盘（导入快；conda 环境不能直接搬，换位置要重建） |
+| `/data/xinyizheng/envs/libero` | LIBERO 仿真环境（MuJoCo 3.2.3、robosuite 1.4.0），只用 CPU，软件渲染。和 starVLA 环境分开，因为 LIBERO 需要较旧的 numpy、gym 和 torch |
 
 NAS 目录里的内容：
 
@@ -33,6 +34,10 @@ NAS 目录里的内容：
 | `data/libero_lerobot/` | LIBERO 四个 suite 的 LeRobot 格式数据，也就是 starVLA 官方训练用的 `IPEC-COMMUNITY/libero_*_no_noops_1.0.0_lerobot`。从 ModelScope 上的同名转存（`adamzhuo/...`）下载：抽样文件与 HF 原版逐字节一致，每个文件都按 ModelScope 列表里的 sha256 校验 |
 | `data/libero/` | LIBERO 原始 HDF5 的一个任务文件（汇报 notebook 用） |
 | `models/Qwen3-VL-2B-Instruct` | Qwen3-VL-2B 权重（4.26GB），从 ModelScope 下载 |
+| `models/Qwen3-VL-PI-LIBERO-4in1` | starVLA 官方的 QwenPI LIBERO 权重（16.4GB，底座是 Qwen3-VL-4B），从 ModelScope 的官方镜像 `starVLA/...` 下载并逐文件校验 sha256 |
+| `models/Qwen3-VL-4B-Instruct` | 上面这份权重建模型时要用的 Qwen3-VL-4B 底座（8.9GB） |
+| `cache/libero_config` | LIBERO 的路径配置（没有它，LIBERO 第一次导入时会停下来等输入） |
+| `runs/vla_pipeline_demo` | 流程 demo 的探测结果和 22 条逐步日志（约 0.8GB）。`runs/vla_pipeline_demo_prev` 是第一遍的结果，留作对照 |
 | `cache/wheelhouse` | 建环境时预先下载的大安装包（torch、CUDA 库、flash-attn） |
 | `runs/`、`logs/` | 实验输出和安装、下载日志 |
 
@@ -64,6 +69,11 @@ nohup bash scripts/remote/download_assets.sh   > $W/logs/download_assets.log   2
 | `smoke_starvla_cpu.py` | 在 CPU 上建模型、取一个训练 batch，打印各模块参数量。用来在占用 GPU 之前查出路径、配置和依赖问题 | 否 |
 | `probe_starvla.sh` | V0 探测：用 starVLA 原版训练器在一张卡上各跑几十步（batch 16 / 8 / 4），记录显存峰值和每步时间 | 是，只能通过队列启动 |
 | `submit_queue_job.sh` | 往共享 GPU 队列里放一个作业 | 间接 |
+| `fetch_modelscope_model.sh` | 用 curl 下载一个 ModelScope 模型仓库，按大小和 sha256 逐文件校验，可断点续传 | 否 |
+| `setup_libero_env.sh`、`libero_env.sh`、`requirements_libero_env.txt` | 建 LIBERO 仿真环境；`libero_env.sh` 设置软件渲染和路径变量，运行仿真前先 `source` 它 | 否 |
+| `rollout_libero_logged.py` | 在仿真里跑闭环 rollout 或回放一条示范，逐步记录末端、物体位置、接触、可见像素和目标判定 | 否（只连策略服务） |
+| `probe_vla_demo.py` | 加载官方权重，测模型的 token 数、去噪过程、开环预测和训练损失 | 是，只能通过队列启动 |
+| `run_vla_demo_gpu.sh` | 流程 demo 的 GPU 作业：先跑 `probe_vla_demo.py`，再起 starVLA 的策略服务并行跑 21 条 rollout | 是，只能通过队列启动 |
 
 ## 4. GPU 队列是怎么工作的
 
@@ -113,6 +123,14 @@ nohup bash scripts/remote/download_assets.sh   > $W/logs/download_assets.log   2
 
 ## 7. 待项目负责人决定
 
+**2026-11-10 的答复：**
+
+1. **GPU 怎么用：** 优先用 0–3 号卡里的空卡；卡上有别的作业但显存够，也可以放进去；只要能跑就排队跑。仍然都走队列。
+2. **正式训练怎么分卡：** 两个项目分时间段使用，一个时间段内 8 张卡都可用，具体由项目负责人到时逐个安排。
+3. **backbone 配置：** 先搁置，等 VLA 模型部分讨论之后再定。
+
+下面是当时提出的原问题，留作背景。
+
 1. **backbone 配置。** QwenPI-2B 全量微调只能多卡跑。可选的方向：
    - 保持 QwenPI-2B 全量微调，探测和训练都用 4 张以上的卡；
    - 换成更小的动作头（starVLA 的 QwenGR00T，R3 估计动作头约 3 亿参数），单卡可能放得下；
@@ -127,4 +145,20 @@ nohup bash scripts/remote/download_assets.sh   > $W/logs/download_assets.log   2
 - [x] conda 环境安装（含 flash-attn）
 - [x] 模型和 LIBERO 数据下载，逐文件校验
 - [x] CPU 冒烟测试：模型和数据都能建，得到参数量和显存下限
-- [ ] GPU 探测（等上面第 7 节的决定）
+- [x] LIBERO 仿真环境（CPU 软件渲染），渲染出第一帧
+- [x] 官方权重的推理探测和 21 条闭环 rollout，都通过队列跑在 1 号卡上（第 9 节）
+- [ ] QwenPI-2B 的训练显存探测（backbone 配置搁置，暂不做）
+
+## 9. 流程 demo 的实测数字（2026-11-10）
+
+结果和图都在 [流程 demo notebook](../../report/2026-11-10_vla_pipeline_demo.ipynb) 里，这里只记以后排作业会用到的数字。
+
+| 项目 | 实测 |
+| --- | --- |
+| 官方权重 `Qwen3-VL-PI-LIBERO-4in1` | 77.9 亿参数（VLM 44.4 亿，动作头 33.5 亿）；bf16 推理占约 14.7 GiB，峰值 14.8 GiB；从 NAS 加载约 50 秒 |
+| 一次策略调用 | 约 1.3 秒，其中模型部分约 0.55–0.6 秒（VLM 340–380 毫秒，4 步去噪每步约 52 毫秒）；当时这张卡上还有两个别的作业 |
+| 仿真 | 软件渲染每步约 0.34 秒（两个相机的 RGB 和实例分割，256×256）；当时服务器 CPU 负载在 50–120 之间 |
+| 队列作业 | `minmb=22000 share=3 cards=0 1`，提交后立刻在 1 号卡上启动（卡上原有两个 `vid_tokenizer` 作业）；探测加 21 条 rollout 共 15 分钟。整个作业跑了两遍，第二遍用的是提交进仓库的最终脚本 |
+| 并行 | 9 个仿真进程共用一个策略服务。服务一次只处理一个请求，每个动作块要等约 9 秒，所以这次的总时间主要花在排队等策略上 |
+| 示范回放 | 这个任务的前 6 条示范里，5 条回放后能再次达到目标（去掉开头 10 步静止则是 4 条）；其中 4 条的末端路径与原始记录相差约 10–15 毫米，另一条偏差明显更大。做标签时要按回放是否成功筛选 |
+| 装环境 | 服务器上 pip 只有约 0.3 MB/s；conda 默认求解器在 conda-forge 上要算很久，要加 `--solver libmamba`；robosuite 不限定 opencv 版本，pip 会逐个版本试，要固定 `opencv-python==4.11.0.86` |
