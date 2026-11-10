@@ -1,6 +1,12 @@
-# VLA branch
+# VLA 方向文档
 
-`vla` 分支的研究方向：改变 VLA 的训练方式。训练时让 VLA 预测"接触点–接近方向–路径点"计划，约束动作与计划一致，并加入 episode 内的轻量 affordance 状态，目标是在杂乱的桌面操作仿真中提高成功率、减少抓错物体、方向错误和碰撞。必须训练 VLA，这是和 `mem` 分支（环境记忆系统）的区别。`main` 上的文档是两者共享的 brainstorming 基础。
+本仓库（`affordance-vla`）的研究方向：改变 VLA 的训练方式。训练时让 VLA 预测"接触点–接近方向–路径点"计划，约束动作与计划一致，并加入 episode 内的轻量 affordance 状态，目标是在杂乱的桌面操作仿真中提高成功率、减少抓错物体、方向错误和碰撞。必须训练 VLA，这是和记忆方向（环境记忆系统）的区别。
+
+**仓库拆分（2026-11-10）：** 本仓库由 [affordance3D](https://github.com/zniihgnexy/affordance3D) 的 `vla` 分支带着完整提交历史独立出来；记忆方向（`mem`）留在 affordance3D。拆分之前写的文档里：
+
+- "`vla` 分支"指的就是本仓库；
+- "`mem` 分支"指 affordance3D 仓库里的记忆方向；
+- "`main` 上的文档"指 `docs/vla/` 以外、从 affordance3D 带过来的早期文档，是两个方向共享的 brainstorming 基础，本仓库不再维护。
 
 ## 入口
 
@@ -20,5 +26,5 @@
 - 重新运行前先准备：
   1. `python -m pip install h5py==3.16.0`，在 `affordance3d` 环境里装（已写入 `requirements.txt`）；
   2. `bash scripts/download_vla_report_images.sh`，下载官方图片；
-  3. `bash scripts/download_libero_demo.sh`，下载约 664MB 的任务文件和它的 BDDL，存到主 checkout 的 `data/libero/` 下。
+  3. `bash scripts/download_libero_demo.sh`，下载约 664MB 的任务文件和它的 BDDL，存到本仓库的 `data/libero/` 下（不进 git）。
 - 对应代码：`affordance3d/libero_io.py`（读取 LIBERO 文件）、`affordance3d/caw_labels.py`（从末端路径和夹爪指令生成 CAW 标签，检查动作积分）、`report/vla_report_helpers.py`（表格和图）。
