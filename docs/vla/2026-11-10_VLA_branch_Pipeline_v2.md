@@ -99,7 +99,7 @@ VLA 训练（同一 backbone）
 
 | 角色 | 选择 | 理由 | 注意 |
 | --- | --- | --- | --- |
-| 主力开发 | starVLA，Qwen3-VL-4B 加 π 式 flow 动作头 | 同一套代码里已有 LIBERO、SimplerEnv、RoboTwin 2.0、RoboCasa 的同 backbone 基线，加一个头只需写一个文件；Afford-VLA 和 Wiring Matters 都用这类设置，便于直接对比 | 官方配方用 8–48 张 80GB A100；在 A6000 上要用 ZeRO、小 batch 加梯度累积，固定代码版本 |
+| 主力开发 | starVLA，Qwen3-VL-2B 加 π 式 flow 动作头（QwenPI）；2026-11-10 由 4B 改为 2B，见第 11.2 节 | 同一套代码里已有 LIBERO、SimplerEnv、RoboTwin 2.0、RoboCasa 的同 backbone 基线，加一个头只需写一个文件；Afford-VLA 和 Wiring Matters 都用这类设置，便于直接对比 | 官方配方用 8–48 张 80GB A100；在 A6000 上要用 ZeRO、小 batch 加梯度累积，固定代码版本 |
 | 第二 backbone，证明通用性 | π0.5（openpi JAX 版，或 LeRobot 的 PyTorch 版，并对照 openpi 的分数） | 审稿人几乎一定要求；保留了语言模型头 | 按 RoboTwin 文档，openpi 用 FSDP 可以在 4×40GB 上全量微调，8 卡 A6000 够用；openpi 的 PyTorch 路径没有 LoRA、FSDP 和混合精度，LeRobot 版能否分片需核实 |
 | 备选 | GR00T N1.7 | 唯一写明支持 ARM 的候选，以后可上 Isambard | VLM 默认冻结，没有语言模型头 |
 | 只当相关工作或对照 | MolmoAct2、InternVLA-M1 | 本身已带深度、轨迹或框，会混淆"常规训练"这个对照 | InternVLA-M1 权重是非商用许可 |
@@ -306,7 +306,7 @@ ICCV 2027 通常 3 月初截止，赶不上完整版本。项目负责人表示�
 - 先用 1 个种子初筛，只对入围的配置跑 3 个种子。
 - LIBERO-Plus 的评测只给入围的配置做。
 
-**待项目负责人决定：** backbone 的规模和训练方式。在这之前，V0 的第一件事是用一小时测一下 2B 和 4B 在 A6000 上的显存和吞吐。
+**已决定（2026-11-10，项目负责人）：** 主力 backbone 改为 starVLA QwenPI 加 Qwen3-VL-2B，全量微调。这和 Wiring Matters 的设置相同，可以直接对比，在 48GB 显卡上也更有可能放得下。第 4.1 节表中的 Qwen3-VL-4B 只作为备选。V0 的第一件事改为：用一小时在 A6000 上实测 2B 全量微调的显存和吞吐，据此重算第 11.3 节的估计。
 
 ### 11.3 R2：评测协议与算力的重新估计
 
