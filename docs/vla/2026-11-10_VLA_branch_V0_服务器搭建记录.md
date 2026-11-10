@@ -22,7 +22,7 @@
 | --- | --- |
 | `repos/starVLA` | starVLA，分支 `starVLA_dev`，commit `13d8ad4`（浅克隆） |
 | `repos/LIBERO` | LIBERO 官方仓库（浅克隆，640MB） |
-| `data/libero_lerobot/` | LIBERO 四个 suite 的 LeRobot 格式数据（`IPEC-COMMUNITY/libero_*_no_noops_1.0.0_lerobot`），starVLA 的官方训练数据 |
+| `data/libero_lerobot/` | LIBERO 四个 suite 的 LeRobot 格式数据，也就是 starVLA 官方训练用的 `IPEC-COMMUNITY/libero_*_no_noops_1.0.0_lerobot`。从 ModelScope 上的同名转存（`adamzhuo/...`）下载：抽样文件与 HF 原版逐字节一致，每个文件都按 ModelScope 列表里的 sha256 校验 |
 | `models/Qwen3-VL-2B-Instruct` | Qwen3-VL-2B 权重（4.26GB），从 ModelScope 下载 |
 | `cache/` | conda、pip、HF 的缓存，避免写到 `/home` |
 | `scripts/` | 从本仓库 `scripts/remote/` 拷过去的脚本 |
@@ -47,7 +47,8 @@ nohup bash $W/scripts/download_assets.sh   > $W/logs/download_assets.log   2>&1 
 | 脚本 | 用途 | 占 GPU |
 | --- | --- | --- |
 | `setup_starvla_env.sh` | 建 conda 前缀环境，装 starVLA 依赖 | 否 |
-| `download_assets.sh` | 下载模型（ModelScope）和 LIBERO 数据（hf-mirror，自动重试），可断点续传 | 否 |
+| `download_assets.sh` | 下载模型和 LIBERO 数据（都走 ModelScope），可断点续传 | 否 |
+| `fetch_modelscope_dataset.py` | 用 curl 并行下载一个 ModelScope 数据集，逐个校验 sha256；有文件缺失或不一致就以非零状态退出 | 否 |
 | `smoke_starvla_cpu.py` | 在 CPU 上建模型、取一个训练 batch，打印各模块参数量。用来在占用 GPU 之前查出路径、配置和依赖问题 | 否 |
 | `probe_starvla.sh` | V0 探测：用 starVLA 原版训练器在一张卡上各跑几十步（batch 16 / 8 / 4），记录显存峰值和每步时间 | 是，只能通过队列启动 |
 | `submit_queue_job.sh` | 往共享 GPU 队列里放一个作业 | 间接 |
