@@ -137,3 +137,58 @@ def test_chunk_endpoint_errors_validate_lengths_and_step_sizes():
         chunk_endpoint_errors(np.zeros((10, 3)), np.zeros((10, 3)), scale=0.01, horizon=4, stride=0)
     with pytest.raises(ValueError, match="horizon"):
         chunk_endpoint_errors(np.zeros((10, 3)), np.zeros((10, 3)), scale=0.01, horizon=0)
+
+
+def test_caw_label_records_its_segment_start_and_the_step_of_each_waypoint():
+    # Arrange: grasp at step 4, release at step 10
+    ee = np.stack([np.arange(12.0), np.zeros(12), np.zeros(12)], axis=1)
+    events = [GripperEvent(step=4, closing=True), GripperEvent(step=10, closing=False)]
+
+    # Act
+    grasp, release = caw_labels(ee, events, n_waypoints=2)
+
+    # Assert
+    assert (grasp.start, release.start) == (0, 4)
+    np.testing.assert_array_equal(grasp.waypoint_steps, [2, 4])
+    np.testing.assert_array_equal(release.waypoint_steps, [7, 10])
+    np.testing.assert_allclose(release.waypoints[:, 0], ee[release.waypoint_steps, 0])
+
+
+def test_contact_events_mark_the_start_and_end_of_each_lasting_grasp():
+    from affordance3d.caw_labels import contact_events
+
+    # Arrange: a 2-step brush at step 1, then a grasp over steps 5–11
+    grasped = np.zeros(15, dtype=bool)
+    grasped[1:3] = True
+    grasped[5:12] = True
+
+    # Act
+    events = contact_events(grasped, min_steps=5)
+
+    # Assert
+    assert events == [GripperEvent(step=5, closing=True), GripperEvent(step=12, closing=False)]
+
+
+def test_contact_events_have_no_release_when_the_grasp_lasts_to_the_end():
+    from affordance3d.caw_labels import contact_events
+
+    grasped = np.zeros(10, dtype=bool)
+    grasped[4:] = True
+
+    assert contact_events(grasped, min_steps=5) == [GripperEvent(step=4, closing=True)]
+    assert contact_events(np.zeros(10, dtype=bool)) == []
+
+
+def test_contact_events_count_a_run_of_exactly_the_minimum_length_and_drop_a_short_one_at_the_end():
+    from affordance3d.caw_labels import contact_events
+
+    # Arrange: steps 2–6 are grasped (exactly 5 steps); steps 10–11 are a short touch that runs to the end
+    grasped = np.zeros(12, dtype=bool)
+    grasped[2:7] = True
+    grasped[10:] = True
+
+    # Act
+    events = contact_events(grasped, min_steps=5)
+
+    # Assert
+    assert events == [GripperEvent(step=2, closing=True), GripperEvent(step=7, closing=False)]

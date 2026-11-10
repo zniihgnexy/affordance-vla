@@ -3,7 +3,8 @@
 A CAW label summarises how the end effector reaches one gripper event (a grasp or a release):
 the position where the gripper command changes (a proxy for the contact point), the unit
 direction of motion just before it, and a few waypoints along the path since the previous event.
-These are proxies computed from proprioception only; true contact points need simulator replay.
+Events come either from the gripper command (`gripper_events`: a proxy that needs proprioception
+only) or from simulator contact flags of a replayed episode (`contact_events`).
 """
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ import numpy as np
 
 DEFAULT_WAYPOINTS = 4
 DEFAULT_APPROACH_STEPS = 10
+DEFAULT_MIN_CONTACT_STEPS = 5  # two-finger contact must last this long to count as a grasp (0.25 s at 20 Hz)
 MIN_MOTION_M = 1e-6  # below this the end effector is treated as stationary
 
 
@@ -28,6 +30,8 @@ class CawLabel:
     contact: np.ndarray  # (3,) end-effector position at the event step
     approach: np.ndarray  # (3,) unit motion direction before the event; zeros if it did not move
     waypoints: np.ndarray  # (K, 3) evenly spaced in time from the segment start, ending at `contact`
+    start: int  # first step of the segment: the previous event's step, or 0
+    waypoint_steps: np.ndarray  # (K,) step of each waypoint; the last one is the event step
 
 
 @dataclass(frozen=True)
@@ -51,6 +55,27 @@ def gripper_events(command: np.ndarray) -> list[GripperEvent]:
     return events
 
 
+def contact_events(grasped: np.ndarray, min_steps: int = DEFAULT_MIN_CONTACT_STEPS) -> list[GripperEvent]:
+    """Grasp and release events from per-step grasp flags (simulator contact), ignoring short touches.
+
+    A grasp starts at the first step of a run of at least `min_steps` grasped steps and the release
+    is the first step after that run. A run that lasts until the end has no release.
+    """
+    grasped = np.asarray(grasped, dtype=bool)
+    events: list[GripperEvent] = []
+    start = None
+    for step, flag in enumerate(np.append(grasped, False)):
+        if flag and start is None:
+            start = step
+        elif not flag and start is not None:
+            if step - start >= min_steps:
+                events.append(GripperEvent(step=start, closing=True))
+                if step < len(grasped):
+                    events.append(GripperEvent(step=step, closing=False))
+            start = None
+    return events
+
+
 def _approach(ee_pos: np.ndarray, start: int, step: int, approach_steps: int) -> np.ndarray:
     motion = ee_pos[step] - ee_pos[max(start, step - approach_steps)]
     norm = float(np.linalg.norm(motion))
@@ -71,7 +96,7 @@ def caw_labels(ee_pos: np.ndarray, events: list[GripperEvent], n_waypoints: int 
         steps = np.rint(np.linspace(start, event.step, n_waypoints + 1)[1:]).astype(int)
         labels.append(CawLabel(event=event, contact=ee_pos[event.step].copy(),
                                approach=_approach(ee_pos, start, event.step, approach_steps),
-                               waypoints=ee_pos[steps].copy()))
+                               waypoints=ee_pos[steps].copy(), start=start, waypoint_steps=steps))
         start = event.step
     return labels
 
