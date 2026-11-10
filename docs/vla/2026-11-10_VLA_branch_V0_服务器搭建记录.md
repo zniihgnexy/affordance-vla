@@ -12,7 +12,7 @@
 | 可用的卡 | 只能用 0、1、4、5、6、7；2 和 3 不能碰 |
 | 当时的占用 | 卡 0、4 被另一位用户的 vLLM 占着（43GB、38GB）；卡 1、5、6、7 各跑着两个 `vid_tokenizer` 队列作业（每张约 12GB，利用率 99–100%） |
 | 存储 | `/home` 已用 97%，只剩 117GB；`/data` 剩 3.5TB。所以本分支的东西全部放 `/data` |
-| 网络 | huggingface.co 0.05–0.1 MB/s 且不稳定；hf-mirror.com 约 0.3 MB/s；modelscope.cn 约 25 MB/s；pypi.org 很慢，阿里云镜像可用；GitHub 能连但慢 |
+| 网络 | huggingface.co 0.05–0.1 MB/s 且不稳定；hf-mirror.com 约 0.3 MB/s；modelscope.cn 约 25 MB/s；pypi.org 很慢，阿里云镜像可用；GitHub 能连但慢。**HTTP/1.1 连接被限速到约 0.8 MB/s，HTTP/2 约 20 MB/s**，而 pip 只用 HTTP/1.1，所以大文件要先用 curl 下载 |
 
 ## 2. 在服务器上建了什么
 
