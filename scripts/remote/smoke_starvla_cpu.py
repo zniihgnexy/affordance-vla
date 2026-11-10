@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import time
+from pathlib import Path
 
 from omegaconf import OmegaConf
 
@@ -30,6 +31,7 @@ def build_config(args: argparse.Namespace):
         f"datasets.vla_data.data_mix={args.data_mix}",
         f"datasets.vla_data.per_device_batch_size={args.batch_size}",
         "trainer.vla_data.video_backend=torchvision_av",
+        f"output_dir={args.out}",  # the trainer sets this in setup_directories(); the dataloader writes stats there
     ])
     cfg = OmegaConf.merge(OmegaConf.load(CONFIG_YAML), overrides)
     return wrap_config(apply_config_compat(cfg))
@@ -62,12 +64,14 @@ def main() -> None:
     parser.add_argument("--framework", default="QwenPI")
     parser.add_argument("--data-mix", default="libero_all")
     parser.add_argument("--batch-size", type=int, default=2)
+    parser.add_argument("--out", default="/data/xinyizheng/affordance3d_vla/runs/smoke_cpu")
     parser.add_argument("--skip-data", action="store_true")
     args = parser.parse_args()
 
     from starVLA.dataloader import build_dataloader
     from starVLA.model.framework.base_framework import build_framework
 
+    Path(args.out).mkdir(parents=True, exist_ok=True)
     cfg = build_config(args)
     started = time.perf_counter()
     model = build_framework(cfg)
