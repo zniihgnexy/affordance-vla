@@ -1,0 +1,25 @@
+# LIBERO simulator env on the A6000 server (see setup_libero_env.sh). torch (CPU build) is installed
+# separately from a prefetched wheel. Pins follow LIBERO's requirements.txt and starVLA's LIBERO README.
+numpy==1.24.4
+mujoco==3.2.3
+robosuite==1.4.0
+bddl==1.0.1
+gym==0.25.2
+easydict==1.9
+future==0.18.2
+cloudpickle==2.1.0
+PyOpenGL==3.1.7
+# robosuite asks for opencv-python without a version; newer releases need numpy 2 and make pip try
+# (and download) one release after another
+opencv-python==4.11.0.86
+h5py==3.16.0
+imageio==2.38.0
+imageio-ffmpeg==0.8.1
+matplotlib==3.10.9
+pillow==12.3.0
+pyyaml==6.0.3
+termcolor==3.3.0
+tqdm==4.70.1
+# client side of starVLA's policy server
+websockets==16.1.1
+msgpack==1.2.4
