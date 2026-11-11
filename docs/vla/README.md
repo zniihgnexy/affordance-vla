@@ -38,6 +38,14 @@
 
 ## 汇报 notebook
 
+- [加入 affordance map 后的流程逐步演示（2026-11-11）](../../report/2026-11-11_affordance_pipeline_walkthrough.ipynb)：取一条真实的闭环，在其中一个时刻把流程的 9 步逐个画出输入和输出，再给出整条 episode 的画面、曲线和视频。用来讨论，不是实验结果。
+  - **内容：** 观察（两路图像、深度、相机）；VLM（每张图 8×8 个 token）；affordance map；从 map 取 3D 点；接近方向；计划的 10 个数；动作块；控制器执行；episode 状态。
+  - **哪些是真的：** 图像、深度和相机、VLM 和动作头、每次查询送入的计划、动作块、机器人的运动。
+  - **哪些是 ORACLE：** affordance map、计划的接触点、接近方向、抓还是放、episode 状态，都由仿真真值算出。闭环是由真值接触点驱动的，map 只是画在旁边，没有参与控制。
+  - **看到的事：** map 给出的是物体表面上的点，计划要的是夹爪中心；抓取时两者水平相差 0.9–2.1 厘米，释放时计划点在 map 的点上方约 8.4–9.3 厘米。VLM 的一个图像 token 覆盖 32×32 像素，比 tomato sauce 罐子（18×25 像素）还大。
+  - **引出的问题：** map 标什么、3D 接触点从哪来、谁决定抓和放的切换、8×8 个 token 够不够。见 notebook 最后一节。
+  - **重新运行：** 按 `scripts/build_affordance_pipeline_walkthrough.py` 文件头的说明，先通过队列跑一次带深度的评测（`run_plan_following_gpu.sh`，`DEPTH=1 SUFFIX=_depth`），再构建并执行 notebook。
+  - **对应代码：** `affordance3d/affordance_map.py`（由真值生成的 map，以及 map 对应的 3D 点）、`affordance3d/libero_camera.py` 的 `unproject_depth`（深度图反投影）、`report/affordance_pipeline_helpers.py`（图和表）。
 - [计划跟随实验（2026-11-11）](../../report/2026-11-11_plan_following_experiment.ipynb)：把真值计划交给官方权重的动作头，看它是否跟随。
   - **内容：** 示范的状态回放；计划输入；换过的计划和目标路径；训练曲线；开环指标；闭环结果（三个模型，各 5 条标准、18 条目标挪动、30 条换物体）；分阶段统计；指令的抖动；结论和要决定的事。
   - **哪些是真的：** 示范、开源模型、训练、开环数字、闭环 rollout。

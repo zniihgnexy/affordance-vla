@@ -73,7 +73,7 @@ nohup bash scripts/remote/download_assets.sh   > $W/logs/download_assets.log   2
 | `submit_queue_job.sh` | 往共享 GPU 队列里放一个作业 | 间接 |
 | `fetch_modelscope_model.sh` | 用 curl 下载一个 ModelScope 模型仓库，按大小和 sha256 逐文件校验，可断点续传 | 否 |
 | `setup_libero_env.sh`、`libero_env.sh`、`requirements_libero_env.txt` | 建 LIBERO 仿真环境；`libero_env.sh` 设置软件渲染和路径变量，运行仿真前先 `source` 它 | 否 |
-| `rollout_libero_logged.py` | 在仿真里跑闭环 rollout 或回放一条示范，逐步记录末端、物体位置、接触、可见像素和目标判定 | 否（只连策略服务） |
+| `rollout_libero_logged.py` | 在仿真里跑闭环 rollout 或回放一条示范，逐步记录末端、物体位置、接触、可见像素和目标判定；加 `--depth` 还会记录主相机每一步的深度图（米） | 否（只连策略服务） |
 | `probe_vla_demo.py` | 加载官方权重，测模型的 token 数、去噪过程、开环预测和训练损失 | 是，只能通过队列启动 |
 | `run_vla_demo_gpu.sh` | 流程 demo 的 GPU 作业：先跑 `probe_vla_demo.py`，再起 starVLA 的策略服务并行跑 21 条 rollout | 是，只能通过队列启动 |
 | `fetch_libero_states.py` | 从 Hugging Face 上的 LIBERO 原始 HDF5 里只取每条示范的 `states` 和 `actions`（HTTP 字节范围，可断点续传），写成精简的 HDF5 | 否 |
@@ -185,5 +185,6 @@ nohup bash scripts/remote/download_assets.sh   > $W/logs/download_assets.log   2
 | 训练 | VLM 冻结，训练约 3075 万参数，2400 步。只用示范（每步 8 个样本）峰值 18.1 GiB，用时 49 分钟；加换计划样本（每步约 20 个样本）峰值 24.0 GiB，用时 37 和 74 分钟。三次训练所在的卡负载不同，时间不能直接比较 |
 | 训练出的参数 | 每个模型一个 `adapter.pt`，约 123 MB |
 | 评测 | 只评测的作业用 `minmb=14000 share=3`。21 条闭环（9 个仿真进程）约 10 分钟，32 条（8 个仿真进程，每个 4 条）也约 10 分钟，其中加载模型约 1 分钟 |
-| 队列 | 训练加评测的作业用 `minmb=26000 share=3 cards=1 7 5`。`cards=` 写明之后可以用 2、3 号卡；这次用的都是当时空着的 1、5、7 号卡 |
+| 队列 | 训练加评测的作业用 `minmb=26000 share=3 cards=1 7 5`。`cards=` 写明之后可以用 2、3 号卡；这次用的都是当时空着的 1、5、7 号卡。提交前先看 `queue/deny_cards.txt`：只指定了被拒绝的卡的作业会一直排着不启动（6 号卡遇到过一次） |
+| 带深度的日志 | 13 条闭环连同深度图共约 0.5 GB（`runs/plan_following/s2_actions/rollouts_oracle_depth`）；深度反投影后各物体可见表面的中心与真实位置相差 1–4 厘米 |
 
