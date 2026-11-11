@@ -1,6 +1,6 @@
 # VLA branch V0：A6000 服务器搭建记录
 
-**日期：2026-11-10｜状态：训练环境、仿真环境、数据、模型已就绪；官方权重的推理探测和闭环 rollout 已通过队列跑完（第 9 节）；QwenPI-2B 的训练显存探测还没做，backbone 配置暂时搁置｜对应 [Pipeline v2](2026-11-10_VLA_branch_Pipeline_v2.md) 第 7 节 V0**
+**日期：2026-11-10｜状态：训练环境、仿真环境、数据、模型已就绪；官方权重的推理探测和闭环 rollout 已通过队列跑完（第 9 节）；QwenPI-2B 的训练显存探测还没做，backbone 配置暂时搁置；2026-11-11 增加了计划跟随实验用的数据和脚本（第 10 节）｜对应 [Pipeline v2](2026-11-10_VLA_branch_Pipeline_v2.md) 第 7 节 V0**
 
 服务器是共享的 `estar`，从项目负责人的 Mac 上用 `ssh estar` 连接。所有查询和执行都走 SSH。本文记录在服务器上建了什么、怎么复现，以及提交 GPU 探测之前需要项目负责人决定的事。
 
@@ -9,10 +9,10 @@
 | 项目 | 情况 |
 | --- | --- |
 | 硬件 | x86-64，8 × RTX A6000（每张 48GB），144 核，1TB 内存，驱动 580 / CUDA 13.0，没有 `nvcc` |
-| 可用的卡 | 原规定只能用 0、1、4、5、6、7，2 和 3 不能碰。2026-11-10 项目负责人更新为：优先用 0–3 号卡里的空卡，卡上有别的作业但显存够也可以放（见第 7 节）。队列运行器默认的可用卡和 `submit_queue_job.sh` 接受的卡仍是 0、1、4、5、6、7 |
+| 可用的卡 | 原规定只能用 0、1、4、5、6、7，2 和 3 不能碰。2026-11-10 项目负责人更新为：优先用 0–3 号卡里的空卡，卡上有别的作业但显存够也可以放（见第 7 节）。**2026-11-11 再次更新：目前空的卡都可以用。** `submit_queue_job.sh` 现在接受 0–7 号卡；不写 `cards=` 时队列运行器仍用它默认的 0、1、4、5、6、7，运行器的 `queue/deny_cards.txt` 仍然生效 |
 | 当时的占用 | 卡 0、4 被另一位用户的 vLLM 占着（43GB、38GB）；卡 1、5、6、7 各跑着两个 `vid_tokenizer` 队列作业（每张约 12GB，利用率 99–100%） |
 | 存储 | `/home` 已用 97%，只剩 117GB，只放代码等小文件；NAS（`/mnt/nas/xinyizheng/`，NFS）剩 7.9TB，放数据和模型；本地盘 `/data` 剩 3.5TB，只放 conda 环境 |
-| 网络 | huggingface.co 0.05–0.1 MB/s 且不稳定；hf-mirror.com 约 0.3 MB/s；modelscope.cn 约 25 MB/s；pypi.org 很慢，阿里云镜像可用；GitHub 能连但慢。**HTTP/1.1 连接被限速到约 0.8 MB/s，HTTP/2 约 20 MB/s**，而 pip 只用 HTTP/1.1，所以大文件要先用 curl 下载 |
+| 网络 | huggingface.co 0.05–0.1 MB/s 且不稳定；hf-mirror.com 约 0.3 MB/s；modelscope.cn 约 25 MB/s；pypi.org 很慢，阿里云镜像可用；GitHub 能连但慢。**HTTP/1.1 连接被限速到约 0.8 MB/s，HTTP/2 约 20 MB/s**，而 pip 只用 HTTP/1.1，所以大文件要先用 curl 下载。2026-11-11 实测 huggingface.co 总共只有 0.2–0.9 MB/s，开多个连接也不变；只在 Hugging Face 上有的大文件，先看能不能只取需要的那部分（第 10 节） |
 
 ## 2. 在服务器上建了什么
 
@@ -33,6 +33,8 @@ NAS 目录里的内容：
 | `repos/LIBERO` | LIBERO 官方仓库（浅克隆，640MB） |
 | `data/libero_lerobot/` | LIBERO 四个 suite 的 LeRobot 格式数据，也就是 starVLA 官方训练用的 `IPEC-COMMUNITY/libero_*_no_noops_1.0.0_lerobot`。从 ModelScope 上的同名转存（`adamzhuo/...`）下载：抽样文件与 HF 原版逐字节一致，每个文件都按 ModelScope 列表里的 sha256 校验 |
 | `data/libero/` | LIBERO 原始 HDF5 的一个任务文件（汇报 notebook 用） |
+| `data/libero_states/libero_object/` | LIBERO-Object 六个任务的精简文件，只有每条示范的 `states` 和 `actions`（每个 6–8 MB），由 `fetch_libero_states.py` 按字节范围从 Hugging Face 取回 |
+| `runs/plan_following/` | 计划跟随实验：`demos`（300 条示范的逐步日志）、`dataset`（六任务训练集）、`dataset_salad`（单任务训练集）和各次训练的文件夹（训练出的参数、训练记录、闭环日志） |
 | `models/Qwen3-VL-2B-Instruct` | Qwen3-VL-2B 权重（4.26GB），从 ModelScope 下载 |
 | `models/Qwen3-VL-PI-LIBERO-4in1` | starVLA 官方的 QwenPI LIBERO 权重（16.4GB，底座是 Qwen3-VL-4B），从 ModelScope 的官方镜像 `starVLA/...` 下载并逐文件校验 sha256 |
 | `models/Qwen3-VL-4B-Instruct` | 上面这份权重建模型时要用的 Qwen3-VL-4B 底座（8.9GB） |
@@ -74,6 +76,12 @@ nohup bash scripts/remote/download_assets.sh   > $W/logs/download_assets.log   2
 | `rollout_libero_logged.py` | 在仿真里跑闭环 rollout 或回放一条示范，逐步记录末端、物体位置、接触、可见像素和目标判定 | 否（只连策略服务） |
 | `probe_vla_demo.py` | 加载官方权重，测模型的 token 数、去噪过程、开环预测和训练损失 | 是，只能通过队列启动 |
 | `run_vla_demo_gpu.sh` | 流程 demo 的 GPU 作业：先跑 `probe_vla_demo.py`，再起 starVLA 的策略服务并行跑 21 条 rollout | 是，只能通过队列启动 |
+| `fetch_libero_states.py` | 从 Hugging Face 上的 LIBERO 原始 HDF5 里只取每条示范的 `states` 和 `actions`（HTTP 字节范围，可断点续传），写成精简的 HDF5 | 否 |
+| `replay_libero_states.sh` | 用 `rollout_libero_logged.py --replay-states` 并行回放示范记录的仿真状态，每条示范写一个逐步日志；`MAX_JOBS` 限制同时运行的仿真进程数 | 否 |
+| `build_plan_dataset.py` | 把示范日志做成计划跟随实验的训练集：轨迹、224×224 图像、各物体的平均抓取和释放偏移、统计 | 否 |
+| `train_plan_following.py` | 在冻结的官方权重上训练计划编码网络和动作头的低秩更新 | 是，只能通过队列启动 |
+| `serve_plan_policy.py` | 带计划输入的策略服务（只监听本机） | 是，由下面的作业脚本启动 |
+| `run_plan_following_gpu.sh` | 计划跟随实验的 GPU 作业：训练，然后起策略服务并行跑闭环 rollout；可以只跑其中一个阶段 | 是，只能通过队列启动 |
 
 ## 4. GPU 队列是怎么工作的
 
@@ -147,6 +155,7 @@ nohup bash scripts/remote/download_assets.sh   > $W/logs/download_assets.log   2
 - [x] CPU 冒烟测试：模型和数据都能建，得到参数量和显存下限
 - [x] LIBERO 仿真环境（CPU 软件渲染），渲染出第一帧
 - [x] 官方权重的推理探测和 21 条闭环 rollout，都通过队列跑在 1 号卡上（第 9 节）
+- [x] 计划跟随实验（2026-11-11）：六个任务的示范状态回放、6 次训练、闭环评测，都通过队列（第 10 节）
 - [ ] QwenPI-2B 的训练显存探测（backbone 配置搁置，暂不做）
 
 ## 9. 流程 demo 的实测数字（2026-11-10）
@@ -162,3 +171,19 @@ nohup bash scripts/remote/download_assets.sh   > $W/logs/download_assets.log   2
 | 并行 | 9 个仿真进程共用一个策略服务。服务一次只处理一个请求，每个动作块要等约 9 秒，所以这次的总时间主要花在排队等策略上 |
 | 示范回放 | 这个任务的前 6 条示范里，5 条回放后能再次达到目标（去掉开头 10 步静止则是 4 条）；其中 4 条的末端路径与原始记录相差约 10–15 毫米，另一条偏差明显更大。做标签时要按回放是否成功筛选 |
 | 装环境 | 服务器上 pip 只有约 0.3 MB/s；conda 默认求解器在 conda-forge 上要算很久，要加 `--solver libmamba`；robosuite 不限定 opencv 版本，pip 会逐个版本试，要固定 `opencv-python==4.11.0.86` |
+
+## 10. 计划跟随实验的实测数字（2026-11-11）
+
+结果在[计划跟随实验](2026-11-11_VLA_branch_计划跟随实验.md)和它的 notebook 里，这里只记以后排作业会用到的数字。
+
+| 项目 | 实测 |
+| --- | --- |
+| 只取 `states` 和 `actions` | LIBERO-Object 的原始文件每个约 650 MB；每条示范的 `states` 和 `actions` 合起来每个文件只有 6–8 MB。按 HTTP 字节范围读取（h5py 接一个按需取块的文件对象，保持一个到 CDN 的连接，每块 32 KiB）。取回的沙拉酱任务与完整文件逐条比对一致。hf-mirror 对这种范围请求返回 308，只能直接连 huggingface.co |
+| 状态回放 | 逐步载入记录的仿真状态再渲染，每步约 0.3 秒（软件渲染）。夹爪位置与录制值相差不到 0.5 毫米，抓取和释放的步数与重新执行动作的结果相同。六个任务 300 条示范的逐步日志约 8 GB |
+| CPU 负载 | 同时开 50 个回放进程，再加上闭环评测，服务器负载到过约 330，所有作业都明显变慢。`replay_libero_states.sh` 用 `MAX_JOBS` 限制同时运行的仿真进程数 |
+| 训练集 | 300 条示范里 267 条的目标物体恰好有一次抓取和一次释放，共 39,273 帧；连同 224×224 的图像约 12 GB。训练时要先把图像读进内存，直接从 NAS 按帧读每步要 2 秒以上 |
+| 训练 | VLM 冻结，训练约 3075 万参数，2400 步。只用示范（每步 8 个样本）峰值 18.1 GiB，用时 49 分钟；加换计划样本（每步约 20 个样本）峰值 24.0 GiB，用时 37 和 74 分钟。三次训练所在的卡负载不同，时间不能直接比较 |
+| 训练出的参数 | 每个模型一个 `adapter.pt`，约 123 MB |
+| 评测 | 只评测的作业用 `minmb=14000 share=3`。21 条闭环（9 个仿真进程）约 10 分钟，32 条（8 个仿真进程，每个 4 条）也约 10 分钟，其中加载模型约 1 分钟 |
+| 队列 | 训练加评测的作业用 `minmb=26000 share=3 cards=1 7 5`。`cards=` 写明之后可以用 2、3 号卡；这次用的都是当时空着的 1、5、7 号卡 |
+
