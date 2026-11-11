@@ -5,21 +5,28 @@ This is the loop of starVLA's `eval_libero.py` with three additions:
      contacts, visible pixels per object (instance segmentation), and the goal check per object;
   2. optional home-made perturbations: another instruction for the same scene, or a shifted object;
   3. a replay mode that re-executes a recorded demonstration instead of asking a policy, which gives
-     the same log for training data (and tests this script without a GPU).
+     the same log for training data (and tests this script without a GPU);
+  4. a state-replay mode that loads the recorded simulator states of demonstrations one by one, with
+     no dynamics: the log is then exactly the demonstration, and every demonstration can be used;
+  5. an optional plan input sent to the policy server with every query: the oracle plan from simulator
+     ground truth (affordance3d/plan_input.py; needs this repo on PYTHONPATH), or an empty plan.
 
 Usage (on the server, after `source scripts/remote/libero_env.sh`, with starVLA on PYTHONPATH):
     $LIBERO_PYTHON rollout_libero_logged.py --out DIR --tag standard --episodes 0 1 2 --port 6694
     $LIBERO_PYTHON rollout_libero_logged.py --out DIR --tag demo_replay --replay-demo FILE.hdf5 --demo demo_1
+    $LIBERO_PYTHON rollout_libero_logged.py --out DIR --tag salad_dressing --replay-states FILE.hdf5 --demos 0 1 2
+    $LIBERO_PYTHON rollout_libero_logged.py --out DIR --tag standard --port 6694 --plan oracle --plan-offsets F.json
 
-One `<tag>_ep<k>.npz` is written per episode. Arrays that describe a state have T + 1 rows (before each
-of the T actions, plus the final state); `actions` has T rows. Images are stored the way the policy
-sees them (simulator frame rotated by 180°).
+One `<tag>_ep<k>.npz` is written per episode (`<tag>_demo<k>.npz` in state-replay mode). Arrays that
+describe a state have T + 1 rows (before each of the T actions, plus the final state); `actions` has
+T rows. Images are stored the way the policy sees them (simulator frame rotated by 180°).
 """
 from __future__ import annotations
 
 import argparse
 import json
 import time
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +39,7 @@ CAMERA = "agentview"
 ROBOT_SEG_ID = 255  # keep in step with affordance3d/rollout_log.py (this script runs in another environment)
 ROBOT_INSTANCES = ("Panda0", "RethinkMount0", "PandaGripper0")
 GRIPPER_OPEN_THRESHOLD = 0.5  # the policy's gripper output is 1 for open and 0 for close
+HOLD_STEPS = 5  # the oracle plan treats the target as held until contact has been absent this long
 
 
 def model_view(image: np.ndarray) -> np.ndarray:
@@ -91,15 +99,21 @@ class ServerPolicy:
         self.chunk_steps: list[int] = []
         self.chunks: list[np.ndarray] = []
         self.seconds: list[float] = []
+        self.plans: list[np.ndarray] = []
 
-    def act(self, image: np.ndarray, wrist: np.ndarray, step: int) -> np.ndarray:
+    def act(self, image: np.ndarray, wrist: np.ndarray, step: int, plan: np.ndarray | None = None) -> np.ndarray:
         fresh = step % self.client.action_chunk_size == 0
         started = time.perf_counter()
-        raw = self.client.step(example={"image": [image, wrist], "lang": self.instruction}, step=step)["raw_action"]
+        example = {"image": [image, wrist], "lang": self.instruction}
+        if plan is not None:
+            example["plan"] = np.asarray(plan, dtype=np.float32)
+        raw = self.client.step(example=example, step=step)["raw_action"]
         if fresh:
             self.chunk_steps.append(step)
             self.chunks.append(np.asarray(self.client.raw_actions, dtype=np.float32).copy())
             self.seconds.append(time.perf_counter() - started)
+            if plan is not None:
+                self.plans.append(example["plan"])
         gripper = env_gripper_command(float(np.asarray(raw["open_gripper"]).reshape(-1)[0]))
         return np.concatenate([np.asarray(raw["world_vector"], dtype=float).reshape(3),
                                np.asarray(raw["rotation_delta"], dtype=float).reshape(3), [gripper]])
@@ -114,12 +128,12 @@ class ReplayPolicy:
         self.actions = np.asarray(actions, dtype=float)
         self.name = name
         self.max_steps: int | None = len(self.actions)
-        self.chunk_steps, self.chunks, self.seconds = [], [], []
+        self.chunk_steps, self.chunks, self.seconds, self.plans = [], [], [], []
 
     def reset(self, instruction: str) -> None:
         self.instruction = instruction
 
-    def act(self, image: np.ndarray, wrist: np.ndarray, step: int) -> np.ndarray:
+    def act(self, image: np.ndarray, wrist: np.ndarray, step: int, plan: np.ndarray | None = None) -> np.ndarray:
         return self.actions[step]
 
 
@@ -177,11 +191,12 @@ class StepLog:
 
 
 def run_episode(env, policy, instruction: str, init_state: np.ndarray, names: list[str], target: str,
-                max_steps: int) -> tuple[dict[str, np.ndarray], bool]:
+                max_steps: int, planner=None) -> tuple[dict[str, np.ndarray], bool]:
     """One episode from `init_state`; returns the log arrays and whether the task's own goal was reached.
 
     A policy episode ends when the task's goal is met (as in starVLA's evaluation) or when the object named
     by the instruction satisfies the goal, which differs from the task's goal under a swapped instruction.
+    `planner` maps the log rows so far to the plan input sent with the query (None: no plan is sent).
     """
     env.reset()
     obs = env.set_init_state(init_state)
@@ -192,7 +207,8 @@ def run_episode(env, policy, instruction: str, init_state: np.ndarray, names: li
     success = False
     for step in range(max_steps):
         log.record(obs)
-        action = policy.act(log.rows["agentview"][-1], log.rows["wrist"][-1], step)
+        plan = planner(log.rows) if planner else None
+        action = policy.act(log.rows["agentview"][-1], log.rows["wrist"][-1], step, plan)
         log.actions.append(np.asarray(action, dtype=float))
         obs, _, done, _ = env.step(action.tolist())  # LIBERO returns its goal check as `done`
         success = success or bool(done)
@@ -200,6 +216,53 @@ def run_episode(env, policy, instruction: str, init_state: np.ndarray, names: li
             break
     log.record(obs)
     return log.arrays(), success
+
+
+def replay_states(env, states: np.ndarray, actions: np.ndarray, names: list[str],
+                  target: str) -> tuple[dict[str, np.ndarray], bool]:
+    """The log of a demonstration read off its recorded simulator states; no dynamics are run.
+
+    State t is the one in which action t was issued, so T states give T rows and T - 1 actions.
+    Returns the arrays and whether the task's goal holds in the last state.
+    """
+    log = StepLog(env, names, target)
+    for state in states:
+        log.record(env.set_init_state(state))
+    log.actions = [np.asarray(action, dtype=float) for action in actions[:len(states) - 1]]
+    return log.arrays(), bool(env.check_success())
+
+
+def goal_container(env, names: list[str]) -> str:
+    """The object that owns the goal region, e.g. basket_1 for basket_1_contain_region."""
+    template = goal_template(env)
+    owners = [name for name in names if template and template[1].startswith(f"{name}_")]
+    if len(owners) != 1:
+        raise SystemExit(f"cannot tell which object the goal region belongs to (goal: {template})")
+    return owners[0]
+
+
+def build_planner(args: argparse.Namespace, env, names: list[str],
+                  target: str) -> Callable[[dict[str, list]], np.ndarray] | None:
+    """None, or a function from the log rows so far to the plan input for the next query."""
+    if args.plan == "none":
+        return None
+    from affordance3d.plan_input import no_plan_features, offsets_from_json, oracle_plan
+
+    if args.plan == "zero":
+        return lambda rows: no_plan_features()
+    if not args.plan_offsets:
+        raise SystemExit("--plan oracle needs --plan-offsets (written by build_plan_dataset.py)")
+    offsets = offsets_from_json(args.plan_offsets.read_text())
+    target_index, container_index = names.index(target), names.index(goal_container(env, names))
+
+    def planner(rows: dict[str, list]) -> np.ndarray:
+        positions = rows["object_pos"][-1]
+        # a one-step loss of finger contact while carrying must not switch the plan back to the grasp
+        held = any(bool(row[target_index]) for row in rows["grasped"][-HOLD_STEPS:])
+        return oracle_plan(offsets, rows["ee_pos"][-1], positions[target_index], positions[container_index], target,
+                           grasped=held, delivered=bool(rows["in_goal"][-1][target_index]))
+
+    return planner
 
 
 def camera_matrices(env) -> tuple[np.ndarray, np.ndarray]:
@@ -227,11 +290,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--replay-demo", type=Path, help="LIBERO HDF5 file: replay a demonstration instead of a policy")
     parser.add_argument("--demo", default="demo_1",
                         help="demo_0 of the salad dressing file does not reproduce on replay")
+    parser.add_argument("--replay-states", type=Path,
+                        help="LIBERO HDF5 file: log demonstrations from their recorded simulator states")
+    parser.add_argument("--demos", type=int, nargs="*", help="demonstration indices for --replay-states (default: all)")
+    parser.add_argument("--summary-suffix", default="",
+                        help="appended to the summary file name, for processes that share a tag")
+    parser.add_argument("--plan", choices=("none", "oracle", "zero"), default="none",
+                        help="plan input sent with every query: none, the oracle plan, or an empty plan")
+    parser.add_argument("--plan-offsets", type=Path, help="contact offsets (JSON) for --plan oracle")
     parser.add_argument("--seed", type=int, default=7)
     return parser.parse_args()
 
 
-def build_policy(args: argparse.Namespace, suite, task_id: int):
+def build_policy(args: argparse.Namespace, suite,
+                 task_id: int) -> tuple[ServerPolicy | ReplayPolicy, dict[int, np.ndarray]]:
     """(policy, {episode: initial state}): a replay of one demonstration, or a policy server on LIBERO's starts."""
     if args.replay_demo:
         if args.shift:
@@ -249,19 +321,52 @@ def build_policy(args: argparse.Namespace, suite, task_id: int):
 
 def save_episode(path: Path, meta: dict, arrays: dict[str, np.ndarray], policy, intrinsics: np.ndarray,
                  cam_to_world: np.ndarray) -> None:
+    """Write the log under a temporary name and rename it, so an interrupted run leaves no half-written file."""
+    partial = path.with_name(f".{path.stem}.partial.npz")
     np.savez_compressed(
-        path, meta=json.dumps(meta), intrinsics=intrinsics, cam_to_world=cam_to_world,
+        partial, meta=json.dumps(meta), intrinsics=intrinsics, cam_to_world=cam_to_world,
         chunk_steps=np.asarray(policy.chunk_steps, dtype=int),
         chunks=np.stack(policy.chunks) if policy.chunks else np.zeros((0, 0, 7), dtype=np.float32),
-        infer_seconds=np.asarray(policy.seconds, dtype=float), **arrays)
+        infer_seconds=np.asarray(policy.seconds, dtype=float),
+        plans=np.stack(policy.plans) if policy.plans else np.zeros((0, 0), dtype=np.float32), **arrays)
+    partial.replace(path)
 
 
-def main() -> None:
-    args = parse_args()
+Episode = tuple[str, dict, dict[str, np.ndarray], "ServerPolicy | ReplayPolicy"]  # label, meta, arrays, policy
+
+
+def policy_episodes(args: argparse.Namespace, env, suite, task_id: int, names: list[str], target: str,
+                    instruction: str) -> Iterator[Episode]:
+    """Yields (file label, meta, arrays, policy) for each requested start, driven by a policy or a replay."""
+    shifts = {name: (float(dx), float(dy)) for name, dx, dy in args.shift}
+    policy, starts = build_policy(args, suite, task_id)
+    planner = build_planner(args, env, names, target)
+    for episode, start in starts.items():
+        arrays, success = run_episode(env, policy, instruction, shifted_state(env, start, shifts), names, target,
+                                      policy.max_steps or MAX_STEPS[args.suite], planner)
+        yield f"ep{episode}", {"episode": episode, "shifts": shifts, "success": success}, arrays, policy
+
+
+def state_replays(args: argparse.Namespace, env, names: list[str], target: str) -> Iterator[Episode]:
+    """Yields (file label, meta, arrays, policy stand-in) for each requested demonstration of the HDF5 file."""
+    import h5py
+
+    with h5py.File(args.replay_states, "r") as f:
+        count = len(f["data"])
+        for demo in (args.demos if args.demos is not None else range(count)):
+            if not 0 <= demo < count:
+                raise SystemExit(f"demonstration {demo} is not in {args.replay_states.name} (it has {count})")
+            group = f["data"][f"demo_{demo}"]
+            arrays, success = replay_states(env, group["states"][:], group["actions"][:], names, target)
+            stand_in = ReplayPolicy(arrays["actions"], name=f"states:{args.replay_states.name}/demo_{demo}")
+            yield f"demo{demo}", {"episode": demo, "shifts": {}, "success": success}, arrays, stand_in
+
+
+def make_env(args: argparse.Namespace) -> tuple:
+    """(suite, task index, task, simulator) for the task named on the command line."""
     from libero.libero import benchmark, get_libero_path
     from libero.libero.envs import SegmentationRenderEnv
 
-    np.random.seed(args.seed)
     suite = benchmark.get_benchmark_dict()[args.suite]()
     task_id = find_task(suite, args.task)
     task = suite.get_task(task_id)
@@ -270,33 +375,41 @@ def main() -> None:
         camera_heights=RESOLUTION, camera_widths=RESOLUTION)
     env.seed(args.seed)  # the seed affects object placement even with a fixed initial state
     env.reset()
+    return suite, task_id, task, env
+
+
+def main() -> None:
+    args = parse_args()
+    if args.replay_states and (args.replay_demo or args.shift or args.plan != "none"):
+        raise SystemExit("--replay-states reads recorded states: it takes no policy, shift or plan")
+    np.random.seed(args.seed)
+    suite, task_id, task, env = make_env(args)
     names = sorted(env.env.objects_dict)
     target = args.target or env.obj_of_interest[0]
     if target not in names:
         raise SystemExit(f"target {target!r} is not a movable object; choose one of {names}")
-    instruction = args.instruction or task.language
-    shifts = {name: (float(dx), float(dy)) for name, dx, dy in args.shift}
+    instruction = task.language if args.replay_states else (args.instruction or task.language)
     intrinsics, cam_to_world = camera_matrices(env)
-    policy, starts = build_policy(args, suite, task_id)
     args.out.mkdir(parents=True, exist_ok=True)
+    episodes = (state_replays(args, env, names, target) if args.replay_states
+                else policy_episodes(args, env, suite, task_id, names, target, instruction))
     summary = []
+    started = time.perf_counter()
     try:
-        for episode, start in starts.items():
-            started = time.perf_counter()
-            arrays, success = run_episode(env, policy, instruction, shifted_state(env, start, shifts), names, target,
-                                          policy.max_steps or MAX_STEPS[args.suite])
+        for label, extra, arrays, policy in episodes:
             meta = {"suite": args.suite, "task": task.language, "instruction": instruction, "target": target,
-                    "objects_of_interest": list(env.obj_of_interest), "episode": episode, "shifts": shifts,
-                    "seed": args.seed, "names": names, "policy": policy.name, "steps": int(len(arrays["actions"])),
-                    "success": success, "delivered": bool(arrays["in_goal"][-1, names.index(target)]),
-                    "wall_seconds": round(time.perf_counter() - started, 1)}
-            path = args.out / f"{args.tag}_ep{episode}.npz"
+                    "objects_of_interest": list(env.obj_of_interest), "seed": args.seed, "names": names,
+                    "policy": policy.name, "plan": args.plan, "steps": int(len(arrays["actions"])),
+                    "delivered": bool(arrays["in_goal"][-1, names.index(target)]),
+                    "wall_seconds": round(time.perf_counter() - started, 1), **extra}
+            path = args.out / f"{args.tag}_{label}.npz"
             save_episode(path, meta, arrays, policy, intrinsics, cam_to_world)
             summary.append({**meta, "file": path.name})
-            print(f"[{args.tag} ep{episode}] steps={meta['steps']} success={success} "
+            print(f"[{args.tag} {label}] steps={meta['steps']} success={meta['success']} "
                   f"delivered({target})={meta['delivered']} wall={meta['wall_seconds']}s -> {path}", flush=True)
+            started = time.perf_counter()
     finally:  # keep what finished, and release the simulator, even if an episode fails
-        (args.out / f"{args.tag}_summary.json").write_text(json.dumps(summary, indent=2))
+        (args.out / f"{args.tag}_summary{args.summary_suffix}.json").write_text(json.dumps(summary, indent=2))
         env.close()
 
 if __name__ == "__main__":
