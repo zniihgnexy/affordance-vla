@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from affordance3d.libero_camera import project_points
+from affordance3d.libero_camera import project_points, unproject_depth
 
 K = np.array([[100.0, 0.0, 32.0], [0.0, 100.0, 24.0], [0.0, 0.0, 1.0]])
 
@@ -67,3 +67,49 @@ def test_a_rotated_and_shifted_camera_pose_is_inverted_before_projecting():
     # Assert
     np.testing.assert_allclose(depth, [2.0])
     np.testing.assert_allclose(uv, [[32.0 + 100 * 0.2 / 2, 24.0 - 100 * 0.1 / 2]])
+
+
+@pytest.mark.parametrize("mirrored", [False, True])
+def test_unprojecting_a_depth_image_and_projecting_it_back_gives_the_pixel_grid(mirrored):
+    # Arrange: a camera that is not axis-aligned, and a depth image with a different depth in every pixel
+    pose = np.eye(4)
+    pose[:3, :3] = [[0.0, 0.0, 1.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]]
+    pose[:3, 3] = [1.0, 2.0, 0.5]
+    height, width = 48, 64
+    depth = 1.0 + 0.01 * np.arange(height * width, dtype=float).reshape(height, width)
+
+    # Act
+    points = unproject_depth(depth, K, pose, mirrored=mirrored)
+    uv, back = project_points(points.reshape(-1, 3), K, pose, width=width, mirrored=mirrored)
+
+    # Assert: pixel (u, v) = (column, row) and the same depth along the optical axis
+    columns, rows = np.meshgrid(np.arange(width), np.arange(height))
+    assert points.shape == (height, width, 3)
+    np.testing.assert_allclose(uv[:, 0].reshape(height, width), columns, atol=1e-9)
+    np.testing.assert_allclose(uv[:, 1].reshape(height, width), rows, atol=1e-9)
+    np.testing.assert_allclose(back.reshape(height, width), depth)
+
+
+def test_the_centre_pixel_of_a_camera_looking_down_unprojects_to_the_point_below_it():
+    depth = np.full((49, 65), 2.0)  # principal point (32, 24) is a pixel of this image
+
+    points = unproject_depth(depth, K, looking_down_from(2.0))
+
+    np.testing.assert_allclose(points[24, 32], [0.0, 0.0, 0.0], atol=1e-12)
+
+
+def test_unproject_depth_needs_a_two_dimensional_image():
+    with pytest.raises(ValueError, match="depth"):
+        unproject_depth(np.ones((4, 4, 1)), K, looking_down_from(2.0))
+
+
+def test_in_a_mirrored_image_a_point_to_the_right_of_the_camera_sits_left_of_the_centre():
+    # Arrange: the world point (0.2, 0, 0) projects to column 42 of the upright image (see above),
+    # which is column 64 - 42 = 22 of the mirrored image of width 65
+    depth = np.full((49, 65), 2.0)
+
+    # Act
+    points = unproject_depth(depth, K, looking_down_from(2.0), mirrored=True)
+
+    # Assert
+    np.testing.assert_allclose(points[24, 22], [0.2, 0.0, 0.0], atol=1e-12)

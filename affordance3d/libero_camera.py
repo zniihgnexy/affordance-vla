@@ -30,3 +30,22 @@ def project_points(points_world: np.ndarray, intrinsics: np.ndarray, cam_to_worl
         uv[:, 0] = (width - 1) - uv[:, 0]
     uv[~in_front] = np.nan
     return uv, depth
+
+
+def unproject_depth(depth: np.ndarray, intrinsics: np.ndarray, cam_to_world: np.ndarray,
+                    mirrored: bool = False) -> np.ndarray:
+    """World points (H, W, 3) of a depth image; the inverse of project_points for every pixel.
+
+    `depth` (H, W) is the distance along the optical axis in metres, laid out like the image it belongs
+    to: pass `mirrored=True` for the images the policy sees.
+    """
+    depth = np.asarray(depth, dtype=float)
+    if depth.ndim != 2:
+        raise ValueError(f"depth must be an (H, W) image, got {depth.shape}")
+    height, width = depth.shape
+    columns, rows = np.meshgrid(np.arange(width, dtype=float), np.arange(height, dtype=float))
+    if mirrored:
+        columns = (width - 1) - columns
+    pixels = np.stack([columns, rows, np.ones_like(columns)], axis=-1).reshape(-1, 3)
+    camera = (pixels @ np.linalg.inv(np.asarray(intrinsics, dtype=float)).T) * depth.reshape(-1, 1)
+    return transform_points(np.asarray(cam_to_world, dtype=float), camera).reshape(height, width, 3)

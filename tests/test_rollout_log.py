@@ -86,3 +86,30 @@ def test_the_target_must_be_one_of_the_logged_objects(tmp_path):
 
     with pytest.raises(ValueError, match="target"):
         load_rollout_log(tmp_path / "ep.npz")
+
+
+def test_a_log_without_depth_has_none(tmp_path):
+    write_log(tmp_path / "ep.npz")
+
+    assert load_rollout_log(tmp_path / "ep.npz").depth is None
+
+
+def test_depth_is_read_with_the_images_when_the_log_has_it(tmp_path):
+    # Arrange: one depth image per state row, in metres
+    depth = np.full((5, 8, 8), 1.5, np.float32)
+    write_log(tmp_path / "ep.npz", depth=depth)
+
+    # Act
+    with_images = load_rollout_log(tmp_path / "ep.npz")
+    without = load_rollout_log(tmp_path / "ep.npz", images=False)
+
+    # Assert
+    np.testing.assert_array_equal(with_images.depth, depth)
+    assert without.depth is None
+
+
+def test_depth_needs_one_more_row_than_actions_too(tmp_path):
+    write_log(tmp_path / "ep.npz", depth=np.zeros((4, 8, 8), np.float32))
+
+    with pytest.raises(ValueError, match="depth"):
+        load_rollout_log(tmp_path / "ep.npz")

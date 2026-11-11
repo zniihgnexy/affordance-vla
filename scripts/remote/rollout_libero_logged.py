@@ -47,6 +47,13 @@ def model_view(image: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(image[::-1, ::-1])
 
 
+def metric_depth(sim, buffer: np.ndarray) -> np.ndarray:
+    """The simulator's depth buffer (0 = near plane, 1 = far plane) as metres along the optical axis."""
+    from robosuite.utils.camera_utils import get_real_depth_map
+
+    return get_real_depth_map(sim, buffer).astype(np.float32)
+
+
 def env_gripper_command(open_value: float) -> float:
     """Policy output (1 = open, 0 = close) to the simulator's command (-1 = open, +1 = close)."""
     return 1.0 - 2.0 * float(open_value > GRIPPER_OPEN_THRESHOLD)
@@ -181,8 +188,10 @@ class StepLog:
             "visible_px": np.array([(seg == k + 1).sum() for k in range(len(self.names))]),
             "in_goal": np.array([self.in_goal(name) for name in self.names]),
         }
+        if f"{CAMERA}_depth" in obs:  # only when the simulator renders depth (--depth)
+            row["depth"] = model_view(metric_depth(inner.sim, obs[f"{CAMERA}_depth"][..., 0]))
         for key, value in row.items():
-            self.rows[key].append(value)
+            self.rows.setdefault(key, []).append(value)
 
     def arrays(self) -> dict[str, np.ndarray]:
         out = {key: np.stack(values) for key, values in self.rows.items()}
@@ -298,6 +307,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--plan", choices=("none", "oracle", "zero"), default="none",
                         help="plan input sent with every query: none, the oracle plan, or an empty plan")
     parser.add_argument("--plan-offsets", type=Path, help="contact offsets (JSON) for --plan oracle")
+    parser.add_argument("--depth", action="store_true",
+                        help="also log the agent view's depth image (metres) at every step, as `depth`")
     parser.add_argument("--seed", type=int, default=7)
     return parser.parse_args()
 
@@ -372,7 +383,7 @@ def make_env(args: argparse.Namespace) -> tuple:
     task = suite.get_task(task_id)
     env = SegmentationRenderEnv(
         bddl_file_name=str(Path(get_libero_path("bddl_files")) / task.problem_folder / task.bddl_file),
-        camera_heights=RESOLUTION, camera_widths=RESOLUTION)
+        camera_heights=RESOLUTION, camera_widths=RESOLUTION, camera_depths=args.depth)
     env.seed(args.seed)  # the seed affects object placement even with a fixed initial state
     env.reset()
     return suite, task_id, task, env

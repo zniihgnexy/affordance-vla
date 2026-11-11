@@ -15,6 +15,7 @@
 #                              A second folder for the same adapter must hold other rollouts than the first:
 #                              leave "standard" out of SETS and give EPISODES that were not run before
 #                              (the notebook refuses a rollout that appears in two folders).
+#   DEPTH [0]                  1 = the rollout logs also hold the agent view's depth image at every step
 #
 # Before submitting (CPU, no queue):  replay_libero_states.sh, then build_plan_dataset.py.
 # Submit (never run directly; the queue sets CUDA_VISIBLE_DEVICES):
@@ -38,6 +39,7 @@ PLAN="${PLAN:-oracle}"
 SETS="${SETS:-standard shift}"
 EPISODES="${EPISODES:-0 1}"
 SUFFIX="${SUFFIX:-}"
+DEPTH="${DEPTH:-0}"
 OUT="$W/runs/plan_following/$RUN"
 TASK="pick up the salad dressing and place it in the basket"
 SERVER_START_TRIES=240   # x 5 s: loading 16 GB from the NAS takes a few minutes
@@ -90,6 +92,7 @@ if [[ " $STAGES " == *" eval "* ]]; then
   source "$REPO/scripts/remote/libero_env.sh"
   plan_args=(--plan "$PLAN")
   [ "$PLAN" = oracle ] && plan_args+=(--plan-offsets "$DATA/offsets.json")
+  [ "$DEPTH" = 1 ] && plan_args+=(--depth)  # plan_args goes to every rollout below
   rollout() {  # rollout <tag> [options of rollout_libero_logged.py ...]; simulator side, CPU only
     local tag="$1"; shift
     CUDA_VISIBLE_DEVICES='' PYTHONPATH="$STARVLA:$REPO:$PYTHONPATH" "$LIBERO_PYTHON" \

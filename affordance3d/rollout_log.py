@@ -13,6 +13,7 @@ import numpy as np
 
 STATE_KEYS = ("ee_pos", "object_pos", "grasped", "touched", "visible_px", "in_goal")
 IMAGE_KEYS = ("agentview", "wrist", "seg")
+OPTIONAL_IMAGE_KEYS = ("depth",)  # only in logs written with --depth
 OTHER_KEYS = ("meta", "actions", "chunk_steps", "chunks", "intrinsics", "cam_to_world")
 ROBOT_SEG_ID = 255
 
@@ -36,6 +37,7 @@ class RolloutLog:
     agentview: np.ndarray | None  # (T + 1, H, W, 3) uint8; None when read with images=False
     wrist: np.ndarray | None
     seg: np.ndarray | None  # (T + 1, H, W) uint8: 0 background, k + 1 = names[k], 255 robot
+    depth: np.ndarray | None = None  # (T + 1, H, W) metres along the optical axis of the agent view, if logged
 
     @property
     def steps(self) -> int:
@@ -63,10 +65,11 @@ def load_rollout_log(path: Path | str, images: bool = True) -> RolloutLog:
         missing = [key for key in wanted if key not in data.files]
         if missing:
             raise KeyError(f"{path.name} is missing {', '.join(missing)}")
-        arrays = {key: data[key] for key in wanted if key != "meta"}
+        optional = tuple(key for key in OPTIONAL_IMAGE_KEYS if images and key in data.files)
+        arrays = {key: data[key] for key in wanted + optional if key != "meta"}
         meta = json.loads(str(data["meta"]))
     steps = len(arrays["actions"])
-    wrong = {key: len(arrays[key]) for key in STATE_KEYS + (IMAGE_KEYS if images else ())
+    wrong = {key: len(arrays[key]) for key in STATE_KEYS + (IMAGE_KEYS if images else ()) + optional
              if len(arrays[key]) != steps + 1}
     if wrong:
         raise ValueError(f"{path.name}: expected {steps + 1} state rows for {steps} actions, got {wrong}")
@@ -78,4 +81,4 @@ def load_rollout_log(path: Path | str, images: bool = True) -> RolloutLog:
     return RolloutLog(path=path, meta=meta, names=names, grasped=arrays.pop("grasped").astype(bool),
                       touched=arrays.pop("touched").astype(bool), in_goal=arrays.pop("in_goal").astype(bool),
                       agentview=arrays.pop("agentview", None), wrist=arrays.pop("wrist", None),
-                      seg=arrays.pop("seg", None), **arrays)
+                      seg=arrays.pop("seg", None), depth=arrays.pop("depth", None), **arrays)
