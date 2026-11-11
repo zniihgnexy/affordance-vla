@@ -217,7 +217,7 @@ display(A.gap_table(views))
 """)
 
 code("""
-CLIP = ROOT / "report" / "assets" / "affordance_pipeline_walkthrough.mp4"
+CLIP = ROOT / "report" / "media" / "affordance_pipeline_walkthrough.mp4"  # tracked in git
 A.render_overlay_video(log, plans, CONTAINER, SCALE, CLIP)
 Video(str(CLIP), embed=True, width=560)
 """)

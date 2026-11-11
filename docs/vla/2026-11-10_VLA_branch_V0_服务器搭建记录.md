@@ -20,7 +20,7 @@
 
 | 位置 | 内容 |
 | --- | --- |
-| `~/affordance-vla` | 本仓库的工作副本，`origin` 是 `git@github.com:zniihgnexy/affordance-vla.git`（服务器的 SSH 密钥已绑定 GitHub 账号）。其中 `data`、`runs`、`report/assets` 是指向 NAS 的符号链接，不进 git |
+| `~/affordance-vla` | 本仓库的工作副本，`origin` 是 `git@github.com:zniihgnexy/affordance-vla.git`（服务器的 SSH 密钥已绑定 GitHub 账号）。其中 `data`、`runs`、`report/assets` 是指向 NAS 的符号链接，不进 git。notebook 自己生成的视频放在 `report/media/`，进 git（每个 0.4–2.3 MB），这样在别的机器上 `git pull` 就能拿到 |
 | `/mnt/nas/xinyizheng/affordance_vla/` | NAS 上的大文件目录，下面分 `models`、`data`、`repos`、`cache`、`runs`、`logs` |
 | `/data/xinyizheng/envs/starvla` | conda 前缀环境，留在本地盘（导入快；conda 环境不能直接搬，换位置要重建） |
 | `/data/xinyizheng/envs/libero` | LIBERO 仿真环境（MuJoCo 3.2.3、robosuite 1.4.0），只用 CPU，软件渲染。和 starVLA 环境分开，因为 LIBERO 需要较旧的 numpy、gym 和 torch |

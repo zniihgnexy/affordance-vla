@@ -69,7 +69,7 @@ plt.rcParams.update({"figure.dpi": 90})
 pd.set_option("display.max_colwidth", 140)
 
 RUNS = ROOT / "runs" / "plan_following"
-ASSETS = ROOT / "report" / "assets"
+MEDIA = ROOT / "report" / "media"  # videos made by this notebook; tracked in git so a pull brings them
 DATASET = RUNS / "dataset"                                  # six tasks of LIBERO-Object
 BASELINE = ROOT / "runs" / "vla_pipeline_demo" / "rollouts"  # the released policy, 10 Nov 2026
 MAIN = "+ moved plans (path loss)"
@@ -253,7 +253,7 @@ clip_logs = {"released policy, no plan": (BASELINE, "shift_16cm", 0)}
 clip_logs |= {name: (folder / "rollouts_oracle", "shift_16cm", 0) for name, folder in FOLDERS.items()}
 clip_logs |= {"moved plans (path loss): asked for the milk": (FOLDERS[MAIN] / "rollouts_oracle", "ask_milk", 0)}
 logs = [H.load_rollout_log(folder / f"{tag}_ep{start}.npz") for folder, tag, start in clip_logs.values()]
-CLIP = ASSETS / "plan_following_rollouts.mp4"
+CLIP = MEDIA / "plan_following_rollouts.mp4"
 H.render_rollout_grid(logs, list(clip_logs), CLIP)
 Video(str(CLIP), embed=True, width=1100)
 """)

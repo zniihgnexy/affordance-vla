@@ -69,7 +69,7 @@ plt.rcParams.update({"figure.dpi": 90})
 pd.set_option("display.max_colwidth", 140)
 
 RUN = ROOT / "runs" / "vla_pipeline_demo"  # outputs of the probe and the rollouts (on the NAS)
-ASSETS = ROOT / "report" / "assets"
+MEDIA = ROOT / "report" / "media"  # videos made by this notebook; tracked in git so a pull brings them
 probe = H.load_probe(RUN / "probe")
 demo = H.load_rollout_log(RUN / "rollouts" / "demo_replay_ep0.npz")
 contact_ev = contact_events(demo.grasped[:, demo.target_index])  # grasp / release from simulator contact
@@ -173,7 +173,7 @@ H.outcome_summary(all_rollouts)
 md("### Three rollouts side by side (agent view): as trained · asked for another object · target moved")
 code("""
 shown = [rollouts["standard"][0], rollouts["ask_cream_cheese"][0], rollouts["shift_16cm"][0]]
-CLIP = ASSETS / "vla_pipeline_demo_rollouts.mp4"
+CLIP = MEDIA / "vla_pipeline_demo_rollouts.mp4"
 H.render_rollout_grid(shown, [f"{H.condition_of(log)}: {H.outcome_table([log])['outcome'][0]}" for log in shown], CLIP)
 Video(str(CLIP), embed=True, width=1100)
 """)
