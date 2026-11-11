@@ -10,6 +10,11 @@
 #   COUNTERFACTUAL [shift]     none | shift | shift+other
 #   SUPERVISION [path]         path | actions
 #   STEPS [1500]  STAGES ["train eval"]  PLAN [oracle]  SETS ["standard shift"]  (ask needs offsets of all objects)
+#   EPISODES ["0 1"]           start states of the perturbed sets (ask, shift); the standard set keeps 0-4
+#   SUFFIX []                  appended to the rollout folder: $OUT/rollouts_$PLAN$SUFFIX (e.g. _more)
+#                              A second folder for the same adapter must hold other rollouts than the first:
+#                              leave "standard" out of SETS and give EPISODES that were not run before
+#                              (the notebook refuses a rollout that appears in two folders).
 #
 # Before submitting (CPU, no queue):  replay_libero_states.sh, then build_plan_dataset.py.
 # Submit (never run directly; the queue sets CUDA_VISIBLE_DEVICES):
@@ -31,11 +36,16 @@ STEPS="${STEPS:-1500}"
 STAGES="${STAGES:-train eval}"
 PLAN="${PLAN:-oracle}"
 SETS="${SETS:-standard shift}"
+EPISODES="${EPISODES:-0 1}"
+SUFFIX="${SUFFIX:-}"
 OUT="$W/runs/plan_following/$RUN"
 TASK="pick up the salad dressing and place it in the basket"
 SERVER_START_TRIES=240   # x 5 s: loading 16 GB from the NAS takes a few minutes
 
 [[ "$RUN" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "RUN may contain only letters, digits, _ and -" >&2; exit 2; }
+[[ "$SUFFIX" =~ ^[A-Za-z0-9_-]*$ ]] || { echo "SUFFIX may contain only letters, digits, _ and -" >&2; exit 2; }
+[[ "$EPISODES" =~ ^[0-9]+(\ [0-9]+)*$ ]] || { echo "EPISODES must be start indices separated by spaces" >&2; exit 2; }
+read -r -a episodes <<< "$EPISODES"
 [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "CUDA_VISIBLE_DEVICES is not set: submit this through the queue" >&2; exit 2; }
 mkdir -p "$OUT"
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
@@ -52,9 +62,9 @@ if [[ " $STAGES " == *" train "* ]]; then
 fi
 
 if [[ " $STAGES " == *" eval "* ]]; then
-  ROLLOUTS="$OUT/rollouts_$PLAN"
+  ROLLOUTS="$OUT/rollouts_$PLAN$SUFFIX"
   mkdir -p "$ROLLOUTS"
-  echo "=== eval: $RUN with plan=$PLAN, sets: $SETS ($(date '+%F %T')) ==="
+  echo "=== eval: $RUN with plan=$PLAN, sets: $SETS, starts of the perturbed sets: $EPISODES ($(date '+%F %T')) ==="
   PORT="$("$STARVLA_PYTHON" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
   server_args=(--ckpt_path "$CKPT" --adapter "$OUT/adapter.pt" --port "$PORT" --seed 7)
   for override in "${OVERRIDES[@]}"; do server_args+=(--config_override "$override"); done
@@ -87,18 +97,18 @@ if [[ " $STAGES " == *" eval "* ]]; then
       --tag "$tag" "${plan_args[@]}" "$@" > "$ROLLOUTS/$tag.log" 2>&1 &
     pids+=("$!"); tags+=("$tag")
   }
-  # the same 21 rollouts as the pipeline demo of 2026-11-10 (run_vla_demo_gpu.sh), in three sets
+  # with the default starts: the same 21 rollouts as the pipeline demo of 2026-11-10 (run_vla_demo_gpu.sh)
   if [[ " $SETS " == *" standard "* ]]; then rollout standard --episodes 0 1 2 3 4; fi
   if [[ " $SETS " == *" ask "* ]]; then
     for object in cream_cheese milk alphabet_soup ketchup tomato_sauce; do
-      rollout "ask_${object}" --episodes 0 1 --target "${object}_1" \
+      rollout "ask_${object}" --episodes "${episodes[@]}" --target "${object}_1" \
         --instruction "pick up the ${object//_/ } and place it in the basket"
     done
   fi
   if [[ " $SETS " == *" shift "* ]]; then
-    rollout shift_4cm --episodes 0 1 --shift salad_dressing_1 0.03 0.03
-    rollout shift_9cm --episodes 0 1 --shift salad_dressing_1 -0.08 0.05
-    rollout shift_16cm --episodes 0 1 --shift salad_dressing_1 -0.10 0.12
+    rollout shift_4cm --episodes "${episodes[@]}" --shift salad_dressing_1 0.03 0.03
+    rollout shift_9cm --episodes "${episodes[@]}" --shift salad_dressing_1 -0.08 0.05
+    rollout shift_16cm --episodes "${episodes[@]}" --shift salad_dressing_1 -0.10 0.12
   fi
   for k in "${!pids[@]}"; do
     if wait "${pids[$k]}"; then grep -F "[${tags[$k]} ep" "$ROLLOUTS/${tags[$k]}.log"
