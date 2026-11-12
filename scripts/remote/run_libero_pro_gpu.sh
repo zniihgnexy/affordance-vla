@@ -8,6 +8,7 @@
 #                       empty = the released checkpoint in starVLA's own server, without any plan
 #   PLAN [none]         none | oracle | zero | predicted   (all but none need ADAPTER)
 #   PREDICTOR []        run under runs/plan_predictor whose predictor.pt makes the plan (PLAN=predicted)
+#   CAMERA_LOG [...]    a rollout log whose camera calibration a grid predictor uses
 #   DATA [.../dataset10]  training set whose offsets.json the oracle plan reads
 #   SUITES ["libero_object_swap libero_object_task"]   position and task perturbation of LIBERO-Object
 #   TASKS ["0 1 2 3 4 5 6 7 8 9"]   TRIALS [20] start states 0..TRIALS-1 per task (the paper uses 50)
@@ -31,6 +32,7 @@ NAME="${NAME:-}"
 ADAPTER="${ADAPTER:-}"
 PLAN="${PLAN:-none}"
 PREDICTOR="${PREDICTOR:-}"
+CAMERA_LOG="${CAMERA_LOG:-$W/runs/plan_following/demos/pick_up_the_salad_dressing_and_place_it_in_the_basket_demo0.npz}"
 DATA="${DATA:-$W/runs/plan_following/dataset10}"
 SUITES="${SUITES:-libero_object_swap libero_object_task}"
 TASKS="${TASKS:-0 1 2 3 4 5 6 7 8 9}"
@@ -68,7 +70,8 @@ PORT="$("$STARVLA_PYTHON" -c 'import socket; s = socket.socket(); s.bind(("127.0
 server_args=(--ckpt_path "$CKPT" --port "$PORT" --seed 7)
 for override in "${OVERRIDES[@]}"; do server_args+=(--config_override "$override"); done
 if [ -n "$ADAPTER" ]; then
-  [ "$PLAN" = predicted ] && server_args+=(--predictor "$W/runs/plan_predictor/$PREDICTOR/predictor.pt")
+  [ "$PLAN" = predicted ] && server_args+=(--predictor "$W/runs/plan_predictor/$PREDICTOR/predictor.pt"
+                                           --camera-log "$CAMERA_LOG")
   PYTHONPATH="$STARVLA:$REPO" "$STARVLA_PYTHON" "$REPO/scripts/remote/serve_plan_policy.py" "${server_args[@]}" \
     --adapter "$W/runs/plan_following/$ADAPTER/adapter.pt" > "$OUT/server.log" 2>&1 &
 else

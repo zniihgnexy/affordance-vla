@@ -1,21 +1,26 @@
-"""Train the plan predictor on the frozen VLM of the released checkpoint (GPU: submit through the queue).
+"""Train a plan predictor on the frozen VLM of the released checkpoint (GPU: submit through the queue).
 
-The predictor (affordance3d/plan_predictor.py) reads the VLM's hidden states and outputs the next
-gripper event, the contact point and the approach direction. Its targets are the oracle plans of the
-demonstration frames (affordance3d/plan_targets.py). Frames before the grasp are also paired with an
-instruction that names another object of the scene, whose grasp point is then the target: this is what
-ties the prediction to the instruction, and it needs no extra demonstrations.
+A plan predictor reads the VLM's hidden states and outputs the next gripper event, the contact point and
+the approach direction. Two heads can be trained (--head):
+  regress  affordance3d/plan_predictor.py: the contact's coordinates are regressed from the whole sequence
+  grid     affordance3d/plan_grid.py: every image cell of the agent view is scored, with an offset inside
+           the cell and a depth; the 3D contact follows from the camera calibration (--camera-log)
+Targets are the oracle plans of the demonstration frames (affordance3d/plan_targets.py). Frames before
+the grasp are also paired with an instruction that names another object of the scene, whose grasp point
+is then the target; this needs no extra demonstrations. The grid head is also trained on shifted copies
+of the agent view (the target cell moves with the image), so that it cannot rely on where things stand.
 
-After training it is tested without the simulator on held-out demonstrations (the demonstration's own
+After training the predictor is tested without the simulator on held-out demonstrations (their own
 instruction, and every other object of the scene named instead) and, with --pro, on the first frames of
 LIBERO-PRO rollouts, where objects have traded places or another object is asked for.
 
 Usage (starvla env, from the starVLA repo root; PYTHONPATH = starVLA and this repo):
     python train_plan_predictor.py --ckpt .../steps_100000_pytorch_model.pt --base-vlm .../Qwen3-VL-4B-Instruct \
-        --data .../runs/plan_following/dataset10 --out .../runs/plan_predictor/p1 --pro .../runs/libero_pro/released
-Outputs in --out: predictor.pt (weights and sizes), train.jsonl, metrics.json, and predictions.npz
-(images, instructions, predicted and oracle contacts of the test items, for figures). With
---evaluate-only an existing predictor.pt is tested again and nothing is trained.
+        --data .../runs/plan_following/dataset10 --out .../runs/plan_predictor/g1 --head grid \
+        --camera-log .../runs/plan_following/demos/<any>_demo0.npz --pro .../runs/libero_pro/released
+Outputs in --out: predictor.pt (weights, sizes, head), train.jsonl, metrics.json, and predictions.npz
+(images, instructions, predicted and oracle contacts of the test items, cell scores of the grid head).
+With --evaluate-only an existing predictor.pt is tested again and nothing is trained.
 """
 from __future__ import annotations
 
@@ -23,7 +28,8 @@ import argparse
 import json
 import sys
 import time
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +41,9 @@ from probe_vla_demo import encode  # noqa: E402
 from train_plan_following import PlanData, learning_rate, object_words  # noqa: E402
 
 from affordance3d.plan_consistency import plan_ahead  # noqa: E402
+from affordance3d.plan_grid import (DEPTH_REFERENCE_M, DEPTH_SCALE_M, NO_CELL, Camera,  # noqa: E402
+                                    PlanGridPredictor, camera_of_log, contact_pixel, grid_contacts, grid_loss,
+                                    grid_target, image_token_cells, shifted_image)
 from affordance3d.plan_input import ContactOffsets  # noqa: E402
 from affordance3d.plan_predictor import CONTACT_SCALE_M, PlanPredictor, predictor_loss  # noqa: E402
 from affordance3d.plan_targets import GRASP, NONE, RELEASE, PlanTarget, oracle_target  # noqa: E402
@@ -43,6 +52,11 @@ from affordance3d.rollout_log import load_rollout_log  # noqa: E402
 APPROACH_SHARE = 0.5  # share of training frames drawn from the approach to a grasp
 EVENT_NAMES = {NONE: "none", GRASP: "grasp", RELEASE: "release"}
 EVAL_BATCH = 16
+IMAGE_TOKEN = "<|image_pad|>"  # placeholder of one image token in the VLM's input
+MAX_SHIFT_PX = 56  # the agent view is moved by up to two cells in training (grid head)
+SHIFT_SHARE = 0.5
+
+Infer = Callable[[list["Item"]], tuple[np.ndarray, np.ndarray, "np.ndarray | None"]]  # events, contacts, cell scores
 
 
 @dataclass(frozen=True)
@@ -51,6 +65,7 @@ class Item:
     target: PlanTarget
     kind: str  # "own": the demonstration's instruction; "other": another object named; "pro ...": LIBERO-PRO
     rivals: tuple[np.ndarray, ...]  # grasp points of the other objects of the scene
+    shift: tuple[int, int] = (0, 0)  # pixels by which the agent view was moved (training of the grid head)
 
 
 def grasp_points(names: tuple[str, ...], positions: np.ndarray, offsets: ContactOffsets) -> dict[str, np.ndarray]:
@@ -105,30 +120,91 @@ def pro_items(folders: list[Path], offsets: ContactOffsets) -> list[Item]:
     return items
 
 
-def predict(framework, predictor: PlanPredictor, items: list[Item]) -> dict[str, torch.Tensor]:
+def moved(item: Item, camera: Camera, rng: np.random.Generator) -> Item:
+    """The item with its agent view shifted by a random amount, if its contact stays inside the image."""
+    if rng.uniform() >= SHIFT_SHARE:
+        return item
+    dx, dy = (int(value) for value in rng.integers(-MAX_SHIFT_PX, MAX_SHIFT_PX + 1, size=2))
+    if item.target.event != NONE:
+        u, v, _ = contact_pixel(item.target.contact, camera)
+        if grid_target(u + dx, v + dy) is None:
+            return item
+    agent, wrist = item.example["image"]
+    return replace(item, example={**item.example, "image": [shifted_image(np.asarray(agent), dx, dy), wrist]},
+                   shift=(dx, dy))
+
+
+def encode_with_cells(framework, examples: list[dict]) -> tuple[list[torch.Tensor], torch.Tensor, torch.Tensor]:
+    """Hidden states and mask as probe_vla_demo.encode gives them, plus where the agent view's tokens sit."""
+    from deployment.model_server.tools.image_tools import to_pil_preserve
+
+    interface = framework.qwen_vl_interface
+    inputs = interface.build_qwenvl_inputs(images=[to_pil_preserve(example["image"]) for example in examples],
+                                           instructions=[example["lang"] for example in examples])
+    with torch.autocast("cuda", dtype=torch.bfloat16):
+        outputs = interface(**inputs, output_attentions=False, output_hidden_states=True, return_dict=True)
+    layers = len(framework.action_model.model.transformer_blocks)
+    image_id = interface.processor.tokenizer.convert_tokens_to_ids(IMAGE_TOKEN)
+    cells = image_token_cells(inputs["input_ids"], image_id)
+    return list(outputs.hidden_states[-layers:]), inputs["attention_mask"].to(dtype=torch.bool), cells
+
+
+def run_head(framework, predictor: torch.nn.Module, items: list[Item]) -> dict[str, torch.Tensor]:
+    """The predictor's output for a batch; the VLM runs without gradients."""
+    examples = [item.example for item in items]
+    if isinstance(predictor, PlanGridPredictor):
+        with torch.no_grad():
+            states, mask, cells = encode_with_cells(framework, examples)
+        return predictor([layer.detach() for layer in states], mask, cells)
     with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
-        states, mask = encode(framework, [item.example for item in items])
+        states, mask = encode(framework, examples)
     return predictor([layer.detach() for layer in states], mask)
 
 
-def targets(items: list[Item]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    event = torch.as_tensor([item.target.event for item in items], device="cuda")
-    contact = torch.as_tensor(np.stack([item.target.contact for item in items]), dtype=torch.float32, device="cuda")
-    approach = torch.as_tensor(np.stack([item.target.approach for item in items]), dtype=torch.float32, device="cuda")
-    return event, contact, approach
+def step_loss(output: dict[str, torch.Tensor], items: list[Item], camera: Camera | None) -> dict[str, torch.Tensor]:
+    """The training loss of a batch for either head (the grid head is the one with a camera)."""
+    def tensor(values: list, dtype: torch.dtype = torch.float32) -> torch.Tensor:
+        return torch.as_tensor(np.asarray(values), dtype=dtype, device="cuda")
+
+    events = [item.target.event for item in items]
+    approach = tensor([item.target.approach for item in items])
+    if camera is None:
+        return predictor_loss(output, tensor(events, torch.long), tensor([item.target.contact for item in items]),
+                              approach)
+    cell, offset, depth = [], [], []
+    for item in items:
+        placed = None
+        if item.target.event != NONE:
+            u, v, metres = contact_pixel(item.target.contact, camera)
+            placed = grid_target(u + item.shift[0], v + item.shift[1])
+        if placed is None:  # no event, or the contact lies outside the image: no cell is trained for this item
+            cell.append(NO_CELL), offset.append([0.0, 0.0]), depth.append(0.0)
+        else:
+            cell.append(placed[0]), offset.append(placed[1]), depth.append((metres - DEPTH_REFERENCE_M) / DEPTH_SCALE_M)
+    return grid_loss(output, tensor(events, torch.long), tensor(cell, torch.long), tensor(offset), tensor(depth),
+                     approach)
 
 
-@torch.no_grad()
-def evaluate(framework, predictor: PlanPredictor, items: list[Item]) -> dict[str, dict]:
+def make_infer(framework, predictor: torch.nn.Module, camera: Camera | None) -> Infer:
+    @torch.no_grad()
+    def infer(items: list[Item]) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+        output = run_head(framework, predictor, items)
+        events = output["event"].argmax(dim=-1).cpu().numpy()
+        if camera is None:
+            return events, output["contact"].float().cpu().numpy() * CONTACT_SCALE_M, None
+        return events, grid_contacts(output, camera), torch.softmax(output["cell"], dim=-1).float().cpu().numpy()
+
+    return infer
+
+
+def evaluate(infer: Infer, predictor: torch.nn.Module, items: list[Item]) -> dict[str, dict]:
     """Per kind of item and event: event accuracy, contact error (cm) and how often another object is nearer."""
     groups: dict[str, list[tuple[bool, float, bool]]] = {}
     predictor.eval()
     try:
         for start in range(0, len(items), EVAL_BATCH):
             chunk = items[start:start + EVAL_BATCH]
-            output = predict(framework, predictor, chunk)
-            events = output["event"].argmax(dim=-1).cpu().numpy()
-            contacts = output["contact"].float().cpu().numpy() * CONTACT_SCALE_M
+            events, contacts, _ = infer(chunk)
             for item, event, contact in zip(chunk, events, contacts):
                 error = np.linalg.norm(contact - item.target.contact) if item.target.event != NONE else np.nan
                 wrong = (item.target.event == GRASP and bool(item.rivals)
@@ -151,23 +227,23 @@ def evaluate(framework, predictor: PlanPredictor, items: list[Item]) -> dict[str
     return summary
 
 
-@torch.no_grad()
-def save_predictions(framework, predictor: PlanPredictor, items: list[Item], path: Path) -> None:
+def save_predictions(infer: Infer, predictor: torch.nn.Module, items: list[Item], path: Path) -> None:
     """Images, instructions, predictions and targets of the given items, for figures."""
     predictor.eval()
-    events, contacts = [], []
-    for start in range(0, len(items), EVAL_BATCH):
-        output = predict(framework, predictor, items[start:start + EVAL_BATCH])
-        events.append(output["event"].argmax(dim=-1).cpu().numpy())
-        contacts.append(output["contact"].float().cpu().numpy() * CONTACT_SCALE_M)
-    predictor.train()
-    np.savez_compressed(
-        path, kind=np.array([item.kind for item in items]),
-        instruction=np.array([item.example["lang"] for item in items]),
-        agentview=np.stack([np.asarray(item.example["image"][0]) for item in items]),
-        event=np.concatenate(events), contact=np.concatenate(contacts),
-        target_event=np.array([item.target.event for item in items]),
-        target_contact=np.stack([item.target.contact for item in items]))
+    try:
+        parts = [infer(items[start:start + EVAL_BATCH]) for start in range(0, len(items), EVAL_BATCH)]
+    finally:
+        predictor.train()
+    arrays = {"kind": np.array([item.kind for item in items]),
+              "instruction": np.array([item.example["lang"] for item in items]),
+              "agentview": np.stack([np.asarray(item.example["image"][0]) for item in items]),
+              "event": np.concatenate([part[0] for part in parts]),
+              "contact": np.concatenate([part[1] for part in parts]),
+              "target_event": np.array([item.target.event for item in items]),
+              "target_contact": np.stack([item.target.contact for item in items])}
+    if parts[0][2] is not None:
+        arrays["cell_scores"] = np.concatenate([part[2] for part in parts])
+    np.savez_compressed(path, **arrays)
 
 
 def test_items(data: PlanData, container: str, frames: int) -> list[Item]:
@@ -179,8 +255,8 @@ def test_items(data: PlanData, container: str, frames: int) -> list[Item]:
     return [item for demo, step in chosen for item in frame_items(data, demo, step, container, rng, "all")]
 
 
-def train(args: argparse.Namespace, framework, predictor: PlanPredictor, data: PlanData, container: str,
-          log) -> None:
+def train(args: argparse.Namespace, framework, predictor: torch.nn.Module, data: PlanData, container: str,
+          camera: Camera | None, log) -> None:
     optimizer = torch.optim.AdamW(predictor.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
     rng = np.random.default_rng(args.seed)
     started = time.perf_counter()
@@ -192,7 +268,9 @@ def train(args: argparse.Namespace, framework, predictor: PlanPredictor, data: P
             pool = data.train_approach if rng.uniform() < APPROACH_SHARE else data.train
             demo, frame = pool[rng.integers(len(pool))]
             items += frame_items(data, demo, frame, container, rng, args.other_share)
-        loss = predictor_loss(predict(framework, predictor, items), *targets(items))
+        if camera is not None:
+            items = [moved(item, camera, rng) for item in items]
+        loss = step_loss(run_head(framework, predictor, items), items, camera)
         optimizer.zero_grad(set_to_none=True)
         loss["total"].backward()
         torch.nn.utils.clip_grad_norm_(predictor.parameters(), 1.0)
@@ -212,12 +290,33 @@ def load_framework(args: argparse.Namespace):
     return wrapper._framework
 
 
+def build_predictor(args: argparse.Namespace, framework, example: dict) -> tuple[torch.nn.Module, dict]:
+    """The untrained head for --head, sized from one real example. For the grid head the two ways of running
+    the VLM are compared first: its cell positions are only right if both give the same states."""
+    with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
+        states, mask = encode(framework, [example])
+    config = {"head": args.head, "width": int(states[0].shape[-1]), "layers": len(states), "hidden": args.hidden}
+    if args.head == "regress":
+        return PlanPredictor(config["width"], config["layers"], config["hidden"]).to("cuda"), config
+    with torch.no_grad():
+        again, again_mask, _ = encode_with_cells(framework, [example])
+    same = (len(again) == len(states) and again[-1].shape == states[-1].shape
+            and (mask is None or torch.equal(again_mask, mask))
+            and torch.allclose(again[-1].float(), states[-1].float(), atol=1e-2))
+    if not same:
+        raise SystemExit("encode_with_cells does not reproduce probe_vla_demo.encode: cell positions cannot be trusted")
+    return PlanGridPredictor(config["width"], config["layers"], config["hidden"]).to("cuda"), config
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--ckpt", required=True)
     parser.add_argument("--base-vlm", required=True)
     parser.add_argument("--data", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--head", choices=("regress", "grid"), default="regress")
+    parser.add_argument("--camera-log", type=Path,
+                        help="any rollout log of the scenes: the grid head uses its camera calibration")
     parser.add_argument("--pro", type=Path, nargs="*", default=[],
                         help="run folders of run_libero_pro_gpu.sh; the first frames of their suites are an extra test")
     parser.add_argument("--steps", type=int, default=3000)
@@ -237,6 +336,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if not 0.0 <= args.other_share <= 1.0:
         parser.error(f"--other-share is a probability, got {args.other_share}")
+    if args.head == "grid" and args.camera_log is None:
+        parser.error("--head grid needs --camera-log")
     return args
 
 
@@ -246,14 +347,13 @@ def main() -> None:
     torch.manual_seed(args.seed)
     data = PlanData(args.data, horizon=8, holdout=args.holdout)
     container = json.loads((args.data / "stats.json").read_text())["container"]
+    camera = camera_of_log(load_rollout_log(args.camera_log)) if args.head == "grid" else None
     framework = load_framework(args)
     held_out = test_items(data, container, args.test_frames)
     benchmark = pro_items([suite for run in args.pro for suite in sorted(run.iterdir()) if suite.is_dir()],
                           data.contact)
-    with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
-        states, _ = encode(framework, [held_out[0].example])
-    config = {"width": int(states[0].shape[-1]), "layers": len(states), "hidden": args.hidden}
-    predictor = PlanPredictor(**config).to("cuda")
+    predictor, config = build_predictor(args, framework, held_out[0].example)
+    infer = make_infer(framework, predictor, camera)
     facts = {"args": {key: str(value) for key, value in vars(args).items()}, "config": config,
              "parameters_millions": round(sum(p.numel() for p in predictor.parameters()) / 1e6, 2),
              "train_frames": len(data.train), "held_out_items": len(held_out), "benchmark_items": len(benchmark)}
@@ -268,11 +368,11 @@ def main() -> None:
                 handle.flush()
                 print(record, flush=True)
 
-            train(args, framework, predictor, data, container, log)
+            train(args, framework, predictor, data, container, camera, log)
         torch.save({"config": config, "state": predictor.state_dict()}, args.out / "predictor.pt")
-    save_predictions(framework, predictor, benchmark + held_out[:args.figure_items], args.out / "predictions.npz")
-    facts["held_out"] = evaluate(framework, predictor, held_out)
-    facts["benchmark"] = evaluate(framework, predictor, benchmark) if benchmark else {}
+    save_predictions(infer, predictor, benchmark + held_out[:args.figure_items], args.out / "predictions.npz")
+    facts["held_out"] = evaluate(infer, predictor, held_out)
+    facts["benchmark"] = evaluate(infer, predictor, benchmark) if benchmark else {}
     facts["layer_mix"] = [round(float(w), 3) for w in torch.softmax(predictor.mix.detach(), dim=0).cpu()]
     facts["gpu_memory_peak_gib"] = round(torch.cuda.max_memory_allocated() / 2 ** 30, 2)
     (args.out / "metrics.json").write_text(json.dumps(facts, indent=2))

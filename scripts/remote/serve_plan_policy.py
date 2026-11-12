@@ -24,7 +24,12 @@ from probe_vla_demo import encode  # noqa: E402
 
 from affordance3d.plan_input import PLAN_DIM  # noqa: E402
 from affordance3d.plan_policy import PlanConditionedHead, dit_lora_match  # noqa: E402
+from affordance3d.plan_grid import (Camera, PlanGridPredictor, camera_of_log, grid_plan_inputs,  # noqa: E402
+                                    image_token_cells)
 from affordance3d.plan_predictor import PlanPredictor, plan_inputs  # noqa: E402
+from affordance3d.rollout_log import load_rollout_log  # noqa: E402
+
+IMAGE_TOKEN = "<|image_pad|>"  # placeholder of one image token in the VLM's input
 
 
 def plans_of(examples: list[dict]) -> np.ndarray:
@@ -48,6 +53,40 @@ def positions_of(examples: list[dict]) -> np.ndarray:
     return np.stack([np.asarray(example["ee_pos"], dtype=np.float32).reshape(3) for example in examples])
 
 
+def agent_cells(framework, examples: list[dict], tokens: int) -> torch.Tensor:
+    """Positions of the agent view's image tokens in the VLM input of each example (grid predictor).
+
+    `tokens` is the length of the hidden states the positions will index: the input built here must have
+    that length, or it is not the input the states were computed from.
+    """
+    from deployment.model_server.tools.image_tools import to_pil_preserve
+
+    interface = framework.qwen_vl_interface
+    inputs = interface.build_qwenvl_inputs(images=[to_pil_preserve(example["image"]) for example in examples],
+                                           instructions=[example["lang"] for example in examples])
+    if inputs["input_ids"].shape[1] != tokens:
+        raise ValueError(f"the VLM input has {inputs['input_ids'].shape[1]} tokens but its hidden states {tokens}: "
+                         "cell positions cannot be trusted")
+    return image_token_cells(inputs["input_ids"], interface.processor.tokenizer.convert_tokens_to_ids(IMAGE_TOKEN))
+
+
+def load_predictor(args: argparse.Namespace) -> tuple[torch.nn.Module | None, Camera | None]:
+    """The plan predictor named by --predictor (either head) and, for the grid head, its camera."""
+    if not args.predictor:
+        return None, None
+    saved = torch.load(args.predictor, map_location="cpu", weights_only=True)
+    config, camera = saved["config"], None
+    if config.get("head", "regress") == "grid":
+        if not args.camera_log:
+            raise SystemExit("a grid predictor needs --camera-log")
+        camera = camera_of_log(load_rollout_log(args.camera_log))
+        predictor = PlanGridPredictor(config["width"], config["layers"], config["hidden"])
+    else:
+        predictor = PlanPredictor(config["width"], config["layers"], config["hidden"])
+    predictor.load_state_dict(saved["state"])
+    return predictor.to("cuda").eval(), camera
+
+
 def make_wrapper(args: argparse.Namespace) -> "PolicyServerWrapper":  # noqa: F821 (imported inside)
     from deployment.model_server.policy_wrapper import PolicyServerWrapper
 
@@ -62,20 +101,21 @@ def make_wrapper(args: argparse.Namespace) -> "PolicyServerWrapper":  # noqa: F8
                                                   dit_lora_match)
             self._plan_head.load_adapter(adapter["state"])
             self._plan_head.eval()
-            self._predictor = None
-            if args.predictor:
-                saved = torch.load(args.predictor, map_location="cpu", weights_only=True)
-                self._predictor = PlanPredictor(**saved["config"])
-                self._predictor.load_state_dict(saved["state"])
-                self._predictor.to("cuda").eval()
+            self._predictor, self._camera = load_predictor(args)
 
         @torch.inference_mode()
         def predict_action(self, examples: list[dict], unnorm_key: str | None = None, **kwargs) -> dict:
             processor = self.get_norm_processor(unnorm_key)
             head = self._plan_head.head
             states, mask = encode(self._framework, examples)
-            given = (plans_of(examples) if self._predictor is None
-                     else plan_inputs(self._predictor(states, mask), positions_of(examples)))
+            if self._predictor is None:
+                given = plans_of(examples)
+            elif self._camera is None:
+                given = plan_inputs(self._predictor(states, mask), positions_of(examples))
+            else:
+                cells = agent_cells(self._framework, examples, states[0].shape[1])
+                scored = self._predictor(states, mask, cells)
+                given = grid_plan_inputs(scored, positions_of(examples), self._camera)
             plans = torch.as_tensor(given, device="cuda")
             noise = torch.randn((len(examples), head.action_horizon, head.action_dim), device="cuda")
             with torch.autocast("cuda", dtype=torch.bfloat16):
@@ -94,6 +134,8 @@ def main() -> None:
     parser.add_argument("--predictor", type=Path,
                         help="predictor.pt of train_plan_predictor.py: the plan is predicted from the VLM's hidden "
                              "states, and every example must carry `ee_pos` instead of `plan`")
+    parser.add_argument("--camera-log", type=Path,
+                        help="a rollout log of the scenes; its camera calibration is needed by a grid predictor")
     parser.add_argument("--port", type=int, default=10093)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--idle_timeout", type=int, default=1800)
