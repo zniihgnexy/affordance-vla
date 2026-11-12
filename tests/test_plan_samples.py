@@ -9,6 +9,7 @@ from affordance3d.plan_samples import (
     shifted_sample,
     single_pick_and_place,
     track_from_arrays,
+    without_plan,
 )
 
 SCALE = 0.0125  # metres of gripper motion per unit of translation action in these tests
@@ -299,3 +300,18 @@ def test_shifted_sample_adds_the_displacement_of_the_moved_path_to_the_demonstra
     # Assert: on top of its own commands, the lagging track asks for the displacement the moved path adds
     added = SCALE * np.cumsum(sample.actions[:, :3] - lagging.actions[10:18, :3], axis=0)
     np.testing.assert_allclose(added, plain.path_target - exact.ee_pos[11:19], atol=1e-9)
+
+
+def test_a_sample_without_its_plan_keeps_the_demonstrated_actions():
+    # Arrange: a sample on the way to the grasp, which has a plan
+    sample = demo_sample(make_track(), step=10, horizon=HORIZON)
+
+    # Act
+    dropped = without_plan(sample)
+
+    # Assert: the plan input is the "no plan" input, everything supervised stays, the original is untouched
+    np.testing.assert_array_equal(dropped.features, no_plan_features())
+    np.testing.assert_array_equal(dropped.actions, sample.actions)
+    np.testing.assert_array_equal(dropped.action_valid, sample.action_valid)
+    np.testing.assert_array_equal(dropped.start, sample.start)
+    assert np.abs(sample.features).sum() > 0

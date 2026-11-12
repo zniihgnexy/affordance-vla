@@ -37,7 +37,7 @@ from affordance3d.plan_consistency import plan_ahead  # noqa: E402
 from affordance3d.plan_dataset import frame_offsets, load_tracks  # noqa: E402
 from affordance3d.plan_input import PLAN_DIM, offsets_from_json  # noqa: E402
 from affordance3d.plan_policy import PlanConditionedHead, dit_lora_match  # noqa: E402
-from affordance3d.plan_samples import PlanSample, demo_sample, shifted_sample  # noqa: E402
+from affordance3d.plan_samples import PlanSample, demo_sample, shifted_sample, without_plan  # noqa: E402
 
 DEMO, SHIFT, OTHER = 0, 1, 2  # kinds of samples
 KIND_NAMES = {DEMO: "demo", SHIFT: "shift", OTHER: "other"}
@@ -102,11 +102,18 @@ class PlanData:
 
 
 def variants(data: PlanData, demo: int, step: int, mode: str, shift_radius: float, contact_noise: float,
-             rng: np.random.Generator) -> list[Item]:
-    """The demonstration sample of a frame and, on the way to a grasp, its counterfactual samples."""
+             rng: np.random.Generator, plan_dropout: float = 0.0) -> list[Item]:
+    """The demonstration sample of a frame and, on the way to a grasp, its counterfactual samples.
+
+    With probability `plan_dropout` (one draw per frame) the demonstration sample loses its plan input,
+    labels unchanged. The counterfactual samples always keep their plan.
+    """
     track = data.tracks[demo]
     noise = lambda: rng.normal(0.0, contact_noise, 3)  # noqa: E731
-    items = [Item(demo_sample(track, step, data.horizon, noise()), demo, step, track.instruction, DEMO)]
+    demonstrated = demo_sample(track, step, data.horizon, noise())
+    if plan_dropout > 0.0 and rng.uniform() < plan_dropout:
+        demonstrated = without_plan(demonstrated)
+    items = [Item(demonstrated, demo, step, track.instruction, DEMO)]
     plan = plan_ahead(track.labels, track.ee_pos[step], step)
     if mode == "none" or plan is None or not plan.closing:
         return items
@@ -155,7 +162,8 @@ def draw_batch(data: PlanData, args: argparse.Namespace, rng: np.random.Generato
     for _ in range(args.frames):
         pool = data.train_approach if (rng.uniform() < APPROACH_SHARE and data.train_approach) else data.train
         demo, step = pool[rng.integers(len(pool))]
-        items += variants(data, demo, step, args.counterfactual, args.shift_radius, args.contact_noise, rng)
+        items += variants(data, demo, step, args.counterfactual, args.shift_radius, args.contact_noise, rng,
+                          args.plan_dropout)
     return items
 
 
@@ -242,7 +250,7 @@ def fixed_test_items(data: PlanData, args: argparse.Namespace) -> list[Item]:
     approach = data.test_approach
     frames += [approach[i] for i in rng.choice(len(approach), min(args.test_frames, len(approach)), replace=False)]
     return [item for demo, step in frames
-            for item in variants(data, demo, step, mode, args.shift_radius, 0.0, rng)]
+            for item in variants(data, demo, step, mode, args.shift_radius, 0.0, rng, plan_dropout=0.0)]
 
 
 def learning_rate(step: int, args: argparse.Namespace) -> float:
@@ -282,11 +290,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--path-weight", type=float, default=0.2)
     parser.add_argument("--shift-radius", type=float, default=0.18, help="metres; contacts move within this disc")
     parser.add_argument("--contact-noise", type=float, default=0.01, help="std (m) of the noise on the plan's contact")
+    parser.add_argument("--plan-dropout", type=float, default=0.0,
+                        help="probability that a demonstration sample is given no plan (labels unchanged)")
     parser.add_argument("--holdout", type=int, default=5, help="demonstrations per instruction kept for testing")
     parser.add_argument("--test-frames", type=int, default=48)
     parser.add_argument("--log-every", type=int, default=20)
     parser.add_argument("--seed", type=int, default=7)
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not 0.0 <= args.plan_dropout <= 1.0:
+        parser.error(f"--plan-dropout is a probability, got {args.plan_dropout}")
+    return args
 
 
 def build(args: argparse.Namespace) -> tuple[torch.nn.Module, PlanConditionedHead, tuple[np.ndarray, np.ndarray],

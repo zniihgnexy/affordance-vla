@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -98,6 +98,15 @@ def demo_sample(track: DemoTrack, step: int, horizon: int, contact_noise: np.nda
     return PlanSample(features=features, actions=actions, path_target=np.zeros((horizon, 3)),
                       path_valid=np.zeros(horizon, dtype=bool), action_valid=np.ones((horizon, 7), dtype=bool),
                       start=track.ee_pos[step].copy())
+
+
+def without_plan(sample: PlanSample) -> PlanSample:
+    """The same sample with the plan input removed: the action labels stay, the policy is told nothing.
+
+    Used for plan dropout, the remedy of "Fast Plans, Faithful Actions" (arXiv 2609.30833): together
+    with noise on the plan it keeps the action labels unchanged, unlike a counterfactual sample.
+    """
+    return replace(sample, features=no_plan_features())
 
 
 def _flip_remaining(track: DemoTrack, step: int, event_step: int, arc: np.ndarray) -> float:

@@ -225,6 +225,23 @@ display(P.success_table(first_runs).drop(index="another object named"))
 """)
 
 md("""
+**Control added on 12 Nov 2026: noise and dropout on the plan, labels unchanged.** "Fast Plans, Faithful Actions" (arXiv 2609.30833) reports the same problem for waypoint plans. Its remedy adds noise to the plan, drops the plan at random and feeds it into every layer of the action expert, while the action labels stay the demonstrated ones. The run below takes the first two ingredients (5 cm of noise on the contact, the plan dropped in 15 % of the samples) with our way of feeding the plan, and has no moved plans. Same starts as above: 6 per perturbed condition. The last table is its open-loop check.
+""")
+
+code("""
+CONTROL = "noise and dropout, labels unchanged"
+control_groups = {"demonstrations only": GROUPS["demonstrations only"],
+                  CONTROL: (RUNS / "s3_noise" / "rollouts_oracle",), RELABELLED: GROUPS[RELABELLED]}
+control_runs = {name: P.merge_runs(*[P.load_run(folder) for folder in group]) for name, group in control_groups.items()}
+display(P.success_table(control_runs))
+display(P.chance_table(control_runs, [("demonstrations only", CONTROL), (CONTROL, RELABELLED)]))
+for name in P.PERTURBED_SETS:
+    print(name)
+    display(P.stage_table(control_groups, name))
+display(P.open_loop_table({CONTROL: RUNS / "s3_noise"}))
+""")
+
+md("""
 Gripper paths from above for the two perturbed sets, first 21 rollouts (green: the named object was delivered; ★: where it starts).
 """)
 

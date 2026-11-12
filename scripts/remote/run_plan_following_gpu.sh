@@ -16,6 +16,7 @@
 #                              leave "standard" out of SETS and give EPISODES that were not run before
 #                              (the notebook refuses a rollout that appears in two folders).
 #   DEPTH [0]                  1 = the rollout logs also hold the agent view's depth image at every step
+#   TRAIN_ARGS []              further options of train_plan_following.py, e.g. "--contact-noise 0.05 --plan-dropout 0.15"
 #
 # Before submitting (CPU, no queue):  replay_libero_states.sh, then build_plan_dataset.py.
 # Submit (never run directly; the queue sets CUDA_VISIBLE_DEVICES):
@@ -40,6 +41,7 @@ SETS="${SETS:-standard shift}"
 EPISODES="${EPISODES:-0 1}"
 SUFFIX="${SUFFIX:-}"
 DEPTH="${DEPTH:-0}"
+TRAIN_ARGS="${TRAIN_ARGS:-}"
 OUT="$W/runs/plan_following/$RUN"
 TASK="pick up the salad dressing and place it in the basket"
 SERVER_START_TRIES=240   # x 5 s: loading 16 GB from the NAS takes a few minutes
@@ -48,6 +50,8 @@ SERVER_START_TRIES=240   # x 5 s: loading 16 GB from the NAS takes a few minutes
 [[ "$SUFFIX" =~ ^[A-Za-z0-9_-]*$ ]] || { echo "SUFFIX may contain only letters, digits, _ and -" >&2; exit 2; }
 [[ "$EPISODES" =~ ^[0-9]+(\ [0-9]+)*$ ]] || { echo "EPISODES must be start indices separated by spaces" >&2; exit 2; }
 read -r -a episodes <<< "$EPISODES"
+[[ "$TRAIN_ARGS" =~ ^[A-Za-z0-9\ ._+-]*$ ]] || { echo "TRAIN_ARGS may hold only option names and numbers" >&2; exit 2; }
+read -r -a train_args <<< "$TRAIN_ARGS"
 [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "CUDA_VISIBLE_DEVICES is not set: submit this through the queue" >&2; exit 2; }
 mkdir -p "$OUT"
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
@@ -60,7 +64,8 @@ if [[ " $STAGES " == *" train "* ]]; then
   echo "=== train: $RUN, counterfactual=$COUNTERFACTUAL, supervision=$SUPERVISION, $STEPS steps ($(date '+%F %T'), card ${GPU_INDEX:-?}) ==="
   PYTHONPATH="$STARVLA:$REPO" "$STARVLA_PYTHON" "$REPO/scripts/remote/train_plan_following.py" --ckpt "$CKPT" \
     --base-vlm "$BASE_VLM" --data "$DATA" --out "$OUT" --counterfactual "$COUNTERFACTUAL" \
-    --supervision "$SUPERVISION" --steps "$STEPS" || { echo "TRAIN-FAILED"; exit 1; }
+    --supervision "$SUPERVISION" --steps "$STEPS" ${train_args[@]+"${train_args[@]}"} \
+    || { echo "TRAIN-FAILED"; exit 1; }
 fi
 
 if [[ " $STAGES " == *" eval "* ]]; then
