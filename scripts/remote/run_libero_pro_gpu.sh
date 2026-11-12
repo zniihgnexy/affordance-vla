@@ -6,7 +6,8 @@
 #   NAME (required)     outputs go to $W/runs/libero_pro/$NAME/<suite>/task<k>_ep<n>.npz
 #   ADAPTER []          run under runs/plan_following whose adapter.pt is served with a plan input;
 #                       empty = the released checkpoint in starVLA's own server, without any plan
-#   PLAN [none]         none | oracle | zero   (oracle and zero need ADAPTER)
+#   PLAN [none]         none | oracle | zero | predicted   (all but none need ADAPTER)
+#   PREDICTOR []        run under runs/plan_predictor whose predictor.pt makes the plan (PLAN=predicted)
 #   DATA [.../dataset10]  training set whose offsets.json the oracle plan reads
 #   SUITES ["libero_object_swap libero_object_task"]   position and task perturbation of LIBERO-Object
 #   TASKS ["0 1 2 3 4 5 6 7 8 9"]   TRIALS [20] start states 0..TRIALS-1 per task (the paper uses 50)
@@ -29,6 +30,7 @@ BASE_VLM="${BASE_VLM:-$W/models/Qwen3-VL-4B-Instruct}"
 NAME="${NAME:-}"
 ADAPTER="${ADAPTER:-}"
 PLAN="${PLAN:-none}"
+PREDICTOR="${PREDICTOR:-}"
 DATA="${DATA:-$W/runs/plan_following/dataset10}"
 SUITES="${SUITES:-libero_object_swap libero_object_task}"
 TASKS="${TASKS:-0 1 2 3 4 5 6 7 8 9}"
@@ -45,9 +47,12 @@ SERVER_START_TRIES=240   # x 5 s: loading 16 GB from the NAS takes a few minutes
   || { echo "TRIALS, IMAGES_FOR or MAX_SIMS is malformed" >&2; exit 2; }
 SUITES="$(tr ' ' '\n' <<< "$SUITES" | awk '!seen[$0]++' | tr '\n' ' ')"; SUITES="${SUITES% }"   # no suite twice
 TASKS="$(tr ' ' '\n' <<< "$TASKS" | awk '!seen[$0]++' | tr '\n' ' ')"; TASKS="${TASKS% }"
-case "$PLAN" in none|oracle|zero) ;; *) echo "PLAN must be none, oracle or zero" >&2; exit 2 ;; esac
+[[ "$PREDICTOR" =~ ^[A-Za-z0-9_-]*$ ]] || { echo "PREDICTOR is a run name: letters, digits, _ and -" >&2; exit 2; }
+case "$PLAN" in none|oracle|zero|predicted) ;; *) echo "PLAN must be none, oracle, zero or predicted" >&2; exit 2 ;; esac
 if [ -z "$ADAPTER" ] && [ "$PLAN" != none ]; then echo "PLAN=$PLAN needs ADAPTER" >&2; exit 2; fi
-if [ -n "$ADAPTER" ] && [ "$PLAN" = none ]; then echo "an adapter is served with PLAN=oracle or zero" >&2; exit 2; fi
+if [ -n "$ADAPTER" ] && [ "$PLAN" = none ]; then echo "an adapter is served with a plan: set PLAN" >&2; exit 2; fi
+if [ "$PLAN" = predicted ] && [ -z "$PREDICTOR" ]; then echo "PLAN=predicted needs PREDICTOR" >&2; exit 2; fi
+if [ "$PLAN" != predicted ] && [ -n "$PREDICTOR" ]; then echo "PREDICTOR is only used with PLAN=predicted" >&2; exit 2; fi
 [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "CUDA_VISIBLE_DEVICES is not set: submit this through the queue" >&2; exit 2; }
 OUT="$W/runs/libero_pro/$NAME"
 mkdir -p "$OUT"
@@ -63,6 +68,7 @@ PORT="$("$STARVLA_PYTHON" -c 'import socket; s = socket.socket(); s.bind(("127.0
 server_args=(--ckpt_path "$CKPT" --port "$PORT" --seed 7)
 for override in "${OVERRIDES[@]}"; do server_args+=(--config_override "$override"); done
 if [ -n "$ADAPTER" ]; then
+  [ "$PLAN" = predicted ] && server_args+=(--predictor "$W/runs/plan_predictor/$PREDICTOR/predictor.pt")
   PYTHONPATH="$STARVLA:$REPO" "$STARVLA_PYTHON" "$REPO/scripts/remote/serve_plan_policy.py" "${server_args[@]}" \
     --adapter "$W/runs/plan_following/$ADAPTER/adapter.pt" > "$OUT/server.log" 2>&1 &
 else

@@ -24,6 +24,7 @@ from probe_vla_demo import encode  # noqa: E402
 
 from affordance3d.plan_input import PLAN_DIM  # noqa: E402
 from affordance3d.plan_policy import PlanConditionedHead, dit_lora_match  # noqa: E402
+from affordance3d.plan_predictor import PlanPredictor, plan_inputs  # noqa: E402
 
 
 def plans_of(examples: list[dict]) -> np.ndarray:
@@ -36,6 +37,15 @@ def plans_of(examples: list[dict]) -> np.ndarray:
     if plans.shape[1] != PLAN_DIM:
         raise ValueError(f"a plan has {plans.shape[1]} numbers, expected {PLAN_DIM}")
     return plans
+
+
+def positions_of(examples: list[dict]) -> np.ndarray:
+    """(B, 3) gripper positions of a request; needed to turn a predicted contact into the plan input."""
+    missing = [index for index, example in enumerate(examples) if "ee_pos" not in example]
+    if missing:
+        raise ValueError(f"examples {missing} carry no 'ee_pos'; with --predictor every example needs one "
+                         "(rollout_libero_logged.py --plan predicted)")
+    return np.stack([np.asarray(example["ee_pos"], dtype=np.float32).reshape(3) for example in examples])
 
 
 def make_wrapper(args: argparse.Namespace) -> "PolicyServerWrapper":  # noqa: F821 (imported inside)
@@ -52,18 +62,27 @@ def make_wrapper(args: argparse.Namespace) -> "PolicyServerWrapper":  # noqa: F8
                                                   dit_lora_match)
             self._plan_head.load_adapter(adapter["state"])
             self._plan_head.eval()
+            self._predictor = None
+            if args.predictor:
+                saved = torch.load(args.predictor, map_location="cpu", weights_only=True)
+                self._predictor = PlanPredictor(**saved["config"])
+                self._predictor.load_state_dict(saved["state"])
+                self._predictor.to("cuda").eval()
 
         @torch.inference_mode()
         def predict_action(self, examples: list[dict], unnorm_key: str | None = None, **kwargs) -> dict:
             processor = self.get_norm_processor(unnorm_key)
             head = self._plan_head.head
-            plans = torch.as_tensor(plans_of(examples), device="cuda")
             states, mask = encode(self._framework, examples)
+            given = (plans_of(examples) if self._predictor is None
+                     else plan_inputs(self._predictor(states, mask), positions_of(examples)))
+            plans = torch.as_tensor(given, device="cuda")
             noise = torch.randn((len(examples), head.action_horizon, head.action_dim), device="cuda")
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 normalised = self._plan_head.sample(states, mask, plans, noise)
             normalised = normalised.float().cpu().numpy()
-            return {"actions": np.stack([processor.unapply_actions(chunk) for chunk in normalised])}
+            # the plan inputs go back too, so that the simulator side can log what the head was given
+            return {"actions": np.stack([processor.unapply_actions(chunk) for chunk in normalised]), "plans": given}
 
     return PlanPolicyWrapper()
 
@@ -72,6 +91,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--ckpt_path", required=True)
     parser.add_argument("--adapter", required=True, type=Path)
+    parser.add_argument("--predictor", type=Path,
+                        help="predictor.pt of train_plan_predictor.py: the plan is predicted from the VLM's hidden "
+                             "states, and every example must carry `ee_pos` instead of `plan`")
     parser.add_argument("--port", type=int, default=10093)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--idle_timeout", type=int, default=1800)
@@ -83,7 +105,8 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, force=True)
     set_seed_everywhere(args.seed)
     wrapper = make_wrapper(args)
-    metadata = {**wrapper.metadata, "seed": args.seed, "adapter": str(args.adapter), "plan_dim": PLAN_DIM}
+    metadata = {**wrapper.metadata, "seed": args.seed, "adapter": str(args.adapter), "plan_dim": PLAN_DIM,
+                "predictor": str(args.predictor) if args.predictor else None}
     logging.info("plan policy server ready: %s", metadata)
     # the simulators run on the same machine; other users of the server have no business with this port
     WebsocketPolicyServer(policy=wrapper, host="127.0.0.1", port=args.port, idle_timeout=args.idle_timeout,

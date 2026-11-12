@@ -127,6 +127,16 @@ class ServerPolicy:
         self.client = ModelClient(host=host, port=port)
         self.name = f"server:{self.client._server_metadata.get('ckpt_path', '?')}"
         self.max_steps: int | None = None
+        self.send_ee_pos = False  # set for --plan predicted: the server predicts the plan and needs the gripper
+        self.answer: dict = {}  # data of the server's latest answer (a plan server also returns its plan inputs)
+        ask = self.client.client.predict_action
+
+        def remember(payload: dict) -> dict:
+            response = ask(payload)
+            self.answer = response.get("data", {})
+            return response
+
+        self.client.client.predict_action = remember
         self.reset("")
 
     def reset(self, instruction: str) -> None:
@@ -137,12 +147,15 @@ class ServerPolicy:
         self.seconds: list[float] = []
         self.plans: list[np.ndarray] = []
 
-    def act(self, image: np.ndarray, wrist: np.ndarray, step: int, plan: np.ndarray | None = None) -> np.ndarray:
+    def act(self, image: np.ndarray, wrist: np.ndarray, step: int, plan: np.ndarray | None = None,
+            ee_pos: np.ndarray | None = None) -> np.ndarray:
         fresh = step % self.client.action_chunk_size == 0
         started = time.perf_counter()
         example = {"image": [image, wrist], "lang": self.instruction}
         if plan is not None:
             example["plan"] = np.asarray(plan, dtype=np.float32)
+        if self.send_ee_pos and ee_pos is not None:
+            example["ee_pos"] = np.asarray(ee_pos, dtype=np.float32)
         raw = self.client.step(example=example, step=step)["raw_action"]
         if fresh:
             self.chunk_steps.append(step)
@@ -150,6 +163,8 @@ class ServerPolicy:
             self.seconds.append(time.perf_counter() - started)
             if plan is not None:
                 self.plans.append(example["plan"])
+            elif "plans" in self.answer:  # predicted by the server
+                self.plans.append(np.asarray(self.answer["plans"], dtype=np.float32)[0])
         gripper = env_gripper_command(float(np.asarray(raw["open_gripper"]).reshape(-1)[0]))
         return np.concatenate([np.asarray(raw["world_vector"], dtype=float).reshape(3),
                                np.asarray(raw["rotation_delta"], dtype=float).reshape(3), [gripper]])
@@ -169,7 +184,8 @@ class ReplayPolicy:
     def reset(self, instruction: str) -> None:
         self.instruction = instruction
 
-    def act(self, image: np.ndarray, wrist: np.ndarray, step: int, plan: np.ndarray | None = None) -> np.ndarray:
+    def act(self, image: np.ndarray, wrist: np.ndarray, step: int, plan: np.ndarray | None = None,
+            ee_pos: np.ndarray | None = None) -> np.ndarray:
         return self.actions[step]
 
 
@@ -246,7 +262,7 @@ def run_episode(env, policy, instruction: str, init_state: np.ndarray, names: li
     for step in range(max_steps):
         log.record(obs)
         plan = planner(log.rows) if planner else None
-        action = policy.act(log.rows["agentview"][-1], log.rows["wrist"][-1], step, plan)
+        action = policy.act(log.rows["agentview"][-1], log.rows["wrist"][-1], step, plan, log.rows["ee_pos"][-1])
         log.actions.append(np.asarray(action, dtype=float))
         obs, _, done, _ = env.step(action.tolist())  # LIBERO returns its goal check as `done`
         success = success or bool(done)
@@ -282,7 +298,7 @@ def goal_container(env, names: list[str]) -> str:
 def build_planner(args: argparse.Namespace, env, names: list[str],
                   target: str) -> Callable[[dict[str, list]], np.ndarray] | None:
     """None, or a function from the log rows so far to the plan input for the next query."""
-    if args.plan == "none":
+    if args.plan in ("none", "predicted"):  # predicted: the server makes the plan itself
         return None
     from affordance3d.plan_input import no_plan_features, offsets_from_json, oracle_plan
 
@@ -337,8 +353,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--demos", type=int, nargs="*", help="demonstration indices for --replay-states (default: all)")
     parser.add_argument("--summary-suffix", default="",
                         help="appended to the summary file name, for processes that share a tag")
-    parser.add_argument("--plan", choices=("none", "oracle", "zero"), default="none",
-                        help="plan input sent with every query: none, the oracle plan, or an empty plan")
+    parser.add_argument("--plan", choices=("none", "oracle", "zero", "predicted"), default="none",
+                        help="plan input sent with every query: none, the oracle plan, or an empty plan; "
+                             "predicted: the gripper position is sent and the server predicts the plan")
     parser.add_argument("--plan-offsets", type=Path, help="contact offsets (JSON) for --plan oracle")
     parser.add_argument("--depth", action="store_true",
                         help="also log the agent view's depth image (metres) at every step, as `depth`")
@@ -360,7 +377,9 @@ def build_policy(args: argparse.Namespace, suite,
             policy = ReplayPolicy(group["actions"][:], name=f"replay:{args.replay_demo.name}/{args.demo}")
             return policy, {0: group["states"][0]}
     initial_states = suite.get_task_init_states(task_id)
-    return ServerPolicy(args.host, args.port), {episode: initial_states[episode] for episode in args.episodes}
+    policy = ServerPolicy(args.host, args.port)
+    policy.send_ee_pos = args.plan == "predicted"
+    return policy, {episode: initial_states[episode] for episode in args.episodes}
 
 
 def save_episode(path: Path, meta: dict, arrays: dict[str, np.ndarray], policy, intrinsics: np.ndarray,
