@@ -40,6 +40,7 @@ ROBOT_SEG_ID = 255  # keep in step with affordance3d/rollout_log.py (this script
 ROBOT_INSTANCES = ("Panda0", "RethinkMount0", "PandaGripper0")
 GRIPPER_OPEN_THRESHOLD = 0.5  # the policy's gripper output is 1 for open and 0 for close
 HOLD_STEPS = 5  # the oracle plan treats the target as held until contact has been absent this long
+IMAGE_ARRAYS = ("agentview", "wrist", "seg", "depth")  # what --images-for leaves out of a log
 
 
 def model_view(image: np.ndarray) -> np.ndarray:
@@ -57,6 +58,34 @@ def metric_depth(sim, buffer: np.ndarray) -> np.ndarray:
 def env_gripper_command(open_value: float) -> float:
     """Policy output (1 = open, 0 = close) to the simulator's command (-1 = open, +1 = close)."""
     return 1.0 - 2.0 * float(open_value > GRIPPER_OPEN_THRESHOLD)
+
+
+def max_steps_of(suite_name: str) -> int:
+    """Step limit of a suite; a variant such as libero_object_swap takes the limit of the suite it is built on."""
+    known = [name for name in MAX_STEPS if suite_name == name or suite_name.startswith(f"{name}_")]
+    if not known:
+        raise SystemExit(f"no step limit is known for suite {suite_name!r}")
+    return MAX_STEPS[max(known, key=len)]
+
+
+def benchmark_instruction(suite_name: str, task) -> str:
+    """The task's instruction; for a perturbed suite, with the words that its task file changed.
+
+    LIBERO takes the instruction from the file name, which LIBERO-PRO's task perturbation leaves as it
+    was: the changed instruction is only in the file's (:language ...) line (affordance3d/benchmark_text.py).
+    """
+    from libero.libero import get_libero_path
+
+    from affordance3d.benchmark_text import bddl_language, perturbed_instruction
+
+    folder = Path(get_libero_path("bddl_files"))
+    bases = [name for name in MAX_STEPS if suite_name.startswith(f"{name}_")]
+    original = folder / max(bases, key=len) / task.bddl_file if bases else None
+    if original is None or not original.is_file():
+        return task.language
+    perturbed = folder / task.problem_folder / task.bddl_file
+    return perturbed_instruction(task.language, bddl_language(original.read_text()),
+                                 bddl_language(perturbed.read_text()))
 
 
 def find_task(suite, language: str) -> int:
@@ -287,6 +316,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tag", required=True, help="prefix of the output files, e.g. standard")
     parser.add_argument("--suite", default="libero_object")
     parser.add_argument("--task", default="pick up the salad dressing and place it in the basket")
+    parser.add_argument("--task-id", type=int, help="index of the task in the suite (instead of --task)")
+    parser.add_argument("--images-for", type=int,
+                        help="keep the camera images only in the logs of the first N episodes of this run "
+                             "(default: all); the other logs can still be read with images=False")
     parser.add_argument("--episodes", type=int, nargs="+", default=[0],
                         help="indices of LIBERO's initial states (not used with --replay-demo)")
     parser.add_argument("--instruction", help="instruction given to the policy (default: the task's own)")
@@ -354,7 +387,7 @@ def policy_episodes(args: argparse.Namespace, env, suite, task_id: int, names: l
     planner = build_planner(args, env, names, target)
     for episode, start in starts.items():
         arrays, success = run_episode(env, policy, instruction, shifted_state(env, start, shifts), names, target,
-                                      policy.max_steps or MAX_STEPS[args.suite], planner)
+                                      policy.max_steps or max_steps_of(args.suite), planner)
         yield f"ep{episode}", {"episode": episode, "shifts": shifts, "success": success}, arrays, policy
 
 
@@ -379,7 +412,9 @@ def make_env(args: argparse.Namespace) -> tuple:
     from libero.libero.envs import SegmentationRenderEnv
 
     suite = benchmark.get_benchmark_dict()[args.suite]()
-    task_id = find_task(suite, args.task)
+    task_id = args.task_id if args.task_id is not None else find_task(suite, args.task)
+    if not 0 <= task_id < suite.n_tasks:
+        raise SystemExit(f"suite {args.suite} has tasks 0-{suite.n_tasks - 1}, not {task_id}")
     task = suite.get_task(task_id)
     env = SegmentationRenderEnv(
         bddl_file_name=str(Path(get_libero_path("bddl_files")) / task.problem_folder / task.bddl_file),
@@ -399,7 +434,8 @@ def main() -> None:
     target = args.target or env.obj_of_interest[0]
     if target not in names:
         raise SystemExit(f"target {target!r} is not a movable object; choose one of {names}")
-    instruction = task.language if args.replay_states else (args.instruction or task.language)
+    instruction = (task.language if args.replay_states
+                   else args.instruction or benchmark_instruction(args.suite, task))
     intrinsics, cam_to_world = camera_matrices(env)
     args.out.mkdir(parents=True, exist_ok=True)
     episodes = (state_replays(args, env, names, target) if args.replay_states
@@ -414,6 +450,8 @@ def main() -> None:
                     "delivered": bool(arrays["in_goal"][-1, names.index(target)]),
                     "wall_seconds": round(time.perf_counter() - started, 1), **extra}
             path = args.out / f"{args.tag}_{label}.npz"
+            if args.images_for is not None and len(summary) >= args.images_for:
+                arrays = {key: value for key, value in arrays.items() if key not in IMAGE_ARRAYS}
             save_episode(path, meta, arrays, policy, intrinsics, cam_to_world)
             summary.append({**meta, "file": path.name})
             print(f"[{args.tag} {label}] steps={meta['steps']} success={meta['success']} "
