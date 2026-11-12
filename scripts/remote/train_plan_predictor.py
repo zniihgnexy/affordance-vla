@@ -13,7 +13,9 @@ LIBERO-PRO rollouts, where objects have traded places or another object is asked
 Usage (starvla env, from the starVLA repo root; PYTHONPATH = starVLA and this repo):
     python train_plan_predictor.py --ckpt .../steps_100000_pytorch_model.pt --base-vlm .../Qwen3-VL-4B-Instruct \
         --data .../runs/plan_following/dataset10 --out .../runs/plan_predictor/p1 --pro .../runs/libero_pro/released
-Outputs in --out: predictor.pt (weights and sizes), train.jsonl, metrics.json.
+Outputs in --out: predictor.pt (weights and sizes), train.jsonl, metrics.json, and predictions.npz
+(images, instructions, predicted and oracle contacts of the test items, for figures). With
+--evaluate-only an existing predictor.pt is tested again and nothing is trained.
 """
 from __future__ import annotations
 
@@ -149,6 +151,25 @@ def evaluate(framework, predictor: PlanPredictor, items: list[Item]) -> dict[str
     return summary
 
 
+@torch.no_grad()
+def save_predictions(framework, predictor: PlanPredictor, items: list[Item], path: Path) -> None:
+    """Images, instructions, predictions and targets of the given items, for figures."""
+    predictor.eval()
+    events, contacts = [], []
+    for start in range(0, len(items), EVAL_BATCH):
+        output = predict(framework, predictor, items[start:start + EVAL_BATCH])
+        events.append(output["event"].argmax(dim=-1).cpu().numpy())
+        contacts.append(output["contact"].float().cpu().numpy() * CONTACT_SCALE_M)
+    predictor.train()
+    np.savez_compressed(
+        path, kind=np.array([item.kind for item in items]),
+        instruction=np.array([item.example["lang"] for item in items]),
+        agentview=np.stack([np.asarray(item.example["image"][0]) for item in items]),
+        event=np.concatenate(events), contact=np.concatenate(contacts),
+        target_event=np.array([item.target.event for item in items]),
+        target_contact=np.stack([item.target.contact for item in items]))
+
+
 def test_items(data: PlanData, container: str, frames: int) -> list[Item]:
     """A fixed set from the held-out demonstrations: any frame, and frames on the way to a grasp."""
     rng = np.random.default_rng(1234)
@@ -209,6 +230,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--test-frames", type=int, default=64)
     parser.add_argument("--log-every", type=int, default=20)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--evaluate-only", action="store_true",
+                        help="load predictor.pt from --out and only run the tests (nothing is trained)")
+    parser.add_argument("--figure-items", type=int, default=120,
+                        help="held-out items stored in predictions.npz, besides all benchmark items")
     args = parser.parse_args()
     if not 0.0 <= args.other_share <= 1.0:
         parser.error(f"--other-share is a probability, got {args.other_share}")
@@ -233,14 +258,19 @@ def main() -> None:
              "parameters_millions": round(sum(p.numel() for p in predictor.parameters()) / 1e6, 2),
              "train_frames": len(data.train), "held_out_items": len(held_out), "benchmark_items": len(benchmark)}
     print(json.dumps(facts, indent=2), flush=True)
-    with (args.out / "train.jsonl").open("w") as handle:
-        def log(record: dict) -> None:
-            handle.write(json.dumps(record) + "\n")
-            handle.flush()
-            print(record, flush=True)
+    if args.evaluate_only:
+        saved = torch.load(args.out / "predictor.pt", map_location="cuda", weights_only=True)
+        predictor.load_state_dict(saved["state"])
+    else:
+        with (args.out / "train.jsonl").open("w") as handle:
+            def log(record: dict) -> None:
+                handle.write(json.dumps(record) + "\n")
+                handle.flush()
+                print(record, flush=True)
 
-        train(args, framework, predictor, data, container, log)
-    torch.save({"config": config, "state": predictor.state_dict()}, args.out / "predictor.pt")
+            train(args, framework, predictor, data, container, log)
+        torch.save({"config": config, "state": predictor.state_dict()}, args.out / "predictor.pt")
+    save_predictions(framework, predictor, benchmark + held_out[:args.figure_items], args.out / "predictions.npz")
     facts["held_out"] = evaluate(framework, predictor, held_out)
     facts["benchmark"] = evaluate(framework, predictor, benchmark) if benchmark else {}
     facts["layer_mix"] = [round(float(w), 3) for w in torch.softmax(predictor.mix.detach(), dim=0).cpu()]

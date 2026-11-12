@@ -7,7 +7,8 @@
 #   DATA [.../dataset10] training set from build_plan_dataset.py
 #   STEPS [3000]
 #   PRO [released]       run under runs/libero_pro whose first frames are the benchmark test; empty = none
-#   TRAIN_ARGS []        further options of train_plan_predictor.py
+#   TRAIN_ARGS []        further options of train_plan_predictor.py, e.g. "--evaluate-only" to test an
+#                        existing predictor again and rewrite metrics.json and predictions.npz
 # Submit (never run directly; the queue sets CUDA_VISIBLE_DEVICES):
 #   bash scripts/remote/submit_queue_job.sh 123 plan_predictor_p1 22000 6 "cards=5 1 6 7" -- \
 #       env RUN=p1 bash ~/affordance-vla/scripts/remote/run_plan_predictor_gpu.sh
