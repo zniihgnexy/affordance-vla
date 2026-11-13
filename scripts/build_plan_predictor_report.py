@@ -283,12 +283,14 @@ for set_name in F.PERTURBED_SETS:
 """)
 
 md("""
-**On LIBERO-PRO Object** (10 tasks × 20 starts per perturbation): the head of 13 Nov with the ORACLE plan and with the plans of the map head, kept per phase, next to the head of 11 Nov; then, with the ORACLE plan, one head for each change on its own and in pairs, which says where the gain comes from; and a head trained like the one of 11 Nov but on all ten tasks.
+**On LIBERO-PRO Object** (10 tasks × 20 starts per perturbation): the head of 13 Nov with the ORACLE plan and with the plans of the map head, kept per phase, next to the head of 11 Nov; then, with the ORACLE plan, one head for each change on its own and in pairs, which says where the gain comes from; a head trained like the one of 11 Nov but on all ten tasks; and the head of 13 Nov trained on all ten tasks (`s9_align_release10`, 4000 steps like the ten-task head of 11 Nov).
 """)
 
 code("""
 SECOND = {"head of 11 Nov + map, kept": "predicted_g1_hold", "head of 13 Nov + map, kept": "predicted_g1_hold_s8",
+          "head of 13 Nov, ten tasks + map, kept": "predicted_g1_hold_s9",
           "head of 11 Nov + ORACLE plan": "oracle_plan_s2", "head of 13 Nov + ORACLE plan": "oracle_plan_s8",
+          "head of 13 Nov, ten tasks + ORACLE plan": "oracle_plan_s9",
           "11 Nov, moved releases + ORACLE plan": "oracle_plan_s6",
           "11 Nov, label fix + ORACLE plan": "oracle_plan_s2b",
           "11 Nov, align first + label fix + ORACLE plan": "oracle_plan_s7",
@@ -302,6 +304,18 @@ for label, suite in L.SUITES.items():
     display(L.outcome_counts(second, suite))
 display(pd.DataFrame({f"{name}: {label.split(':')[0]}": L.stage_counts(folder, suite)
                       for name, folder in SECOND.items() for label, suite in L.SUITES.items()}))
+""")
+
+md("""
+**Per task, for the best head so far** (13 Nov labels, trained on all ten tasks): with the plans of the map head, kept per phase, and with the ORACLE plan.
+""")
+
+code("""
+BEST = {name: second[name] for name in ("head of 13 Nov, ten tasks + map, kept", "head of 13 Nov, ten tasks + ORACLE plan")
+        if name in second}
+for label, suite in L.SUITES.items():
+    print(label)
+    display(L.per_task_table(BEST, suite))
 """)
 
 md(CLOSING)
