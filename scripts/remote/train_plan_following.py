@@ -8,9 +8,11 @@ Every sampled frame gives a demonstration sample (flow-matching loss on the demo
 --counterfactual shift, frames on the way to a grasp are also paired with a contact moved by a few
 centimetres; with shift+other, also with the grasp of another object of the scene and an instruction
 that names it; with shift+other+release, frames on the way to the release are in addition paired with
-a release contact moved by a few centimetres. Those samples have no demonstrated translation: it is
-supervised by the plan–action consistency loss, the distance between the path of the one-step action
-estimate and the moved path (or, with --supervision actions, by the rewritten actions themselves).
+a release contact moved by a few centimetres. --rigid-tail and --align-first change how the
+demonstrated path is moved to the other contact (affordance3d/counterfactual.py). Those samples have
+no demonstrated translation: it is supervised by the plan–action consistency loss, the distance between
+the path of the one-step action estimate and the moved path (or, with --supervision actions, by the
+rewritten actions themselves).
 
 Usage (starvla env, from the starVLA repo root; PYTHONPATH = starVLA and this repo):
     python train_plan_following.py --ckpt .../steps_100000_pytorch_model.pt --base-vlm .../Qwen3-VL-4B-Instruct \
@@ -34,6 +36,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from probe_vla_demo import affine_unnormalise, encode, velocity  # noqa: E402
 
+from affordance3d.counterfactual import RIGID_TAIL_M, Retarget  # noqa: E402
 from affordance3d.path_loss import chunk_path, path_loss  # noqa: E402
 from affordance3d.plan_consistency import plan_ahead  # noqa: E402
 from affordance3d.plan_dataset import frame_offsets, load_tracks  # noqa: E402
@@ -104,7 +107,7 @@ class PlanData:
 
 
 def variants(data: PlanData, demo: int, step: int, mode: str, shift_radius: float, contact_noise: float,
-             rng: np.random.Generator, plan_dropout: float = 0.0) -> list[Item]:
+             rng: np.random.Generator, plan_dropout: float = 0.0, retarget: Retarget = Retarget()) -> list[Item]:
     """The demonstration sample of a frame and its counterfactual samples.
 
     On the way to a grasp the contact is moved within a disc ("shift") and, with "other" in the mode, to
@@ -125,7 +128,7 @@ def variants(data: PlanData, demo: int, step: int, mode: str, shift_radius: floa
     radius, angle = shift_radius * math.sqrt(rng.uniform()), rng.uniform(0.0, 2.0 * math.pi)
     moved = plan.polyline[-1] + np.array([radius * math.cos(angle), radius * math.sin(angle), 0.0])
     sample = shifted_sample(track, step, data.horizon, moved, data.scale, contact_noise=noise(),
-                            allow_release="release" in mode)
+                            allow_release="release" in mode, retarget=retarget)
     if sample is not None:
         items.append(Item(sample, demo, step, track.instruction, SHIFT))
     others = [name for name in track.names if name != track.target and name in data.contact.grasp]
@@ -133,7 +136,8 @@ def variants(data: PlanData, demo: int, step: int, mode: str, shift_radius: floa
         name = others[rng.integers(len(others))]
         contact = track.object_pos[step, track.names.index(name)] + data.contact.grasp[name]
         sample = shifted_sample(track, step, data.horizon, contact, data.scale,
-                                approach=data.contact.grasp_approach[name], contact_noise=noise())
+                                approach=data.contact.grasp_approach[name], contact_noise=noise(),
+                                retarget=retarget)
         instruction = track.instruction.replace(object_words(track.target), object_words(name))
         if sample is not None and instruction != track.instruction:
             items.append(Item(sample, demo, step, instruction, OTHER))
@@ -169,7 +173,7 @@ def draw_batch(data: PlanData, args: argparse.Namespace, rng: np.random.Generato
         pool = data.train_approach if (rng.uniform() < APPROACH_SHARE and data.train_approach) else data.train
         demo, step = pool[rng.integers(len(pool))]
         items += variants(data, demo, step, args.counterfactual, args.shift_radius, args.contact_noise, rng,
-                          args.plan_dropout)
+                          args.plan_dropout, Retarget(args.rigid_tail, args.align_first))
     return items
 
 
@@ -256,7 +260,8 @@ def fixed_test_items(data: PlanData, args: argparse.Namespace) -> list[Item]:
     approach = data.test_approach
     frames += [approach[i] for i in rng.choice(len(approach), min(args.test_frames, len(approach)), replace=False)]
     return [item for demo, step in frames
-            for item in variants(data, demo, step, mode, args.shift_radius, 0.0, rng, plan_dropout=0.0)]
+            for item in variants(data, demo, step, mode, args.shift_radius, 0.0, rng, plan_dropout=0.0,
+                                 retarget=Retarget(args.rigid_tail, args.align_first))]
 
 
 def learning_rate(step: int, args: argparse.Namespace) -> float:
@@ -299,6 +304,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--contact-noise", type=float, default=0.01, help="std (m) of the noise on the plan's contact")
     parser.add_argument("--plan-dropout", type=float, default=0.0,
                         help="probability that a demonstration sample is given no plan (labels unchanged)")
+    parser.add_argument("--rigid-tail", type=float, default=RIGID_TAIL_M,
+                        help="metres of the final approach that a moved plan moves as a whole")
+    parser.add_argument("--align-first", action="store_true",
+                        help="a shift longer than the path before the rigid tail is made first, in a straight line "
+                             "from the current position, instead of being pressed into the steps that are left")
     parser.add_argument("--deep-plan", action="store_true",
                         help="also add the plan to the input of every later block of the action DiT "
                              "(the injection of Fast Plans, Faithful Actions), not only to the action tokens")

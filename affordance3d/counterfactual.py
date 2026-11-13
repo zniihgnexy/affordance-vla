@@ -17,6 +17,17 @@ _EPS = 1e-9
 
 
 @dataclass(frozen=True)
+class Retarget:
+    """How a demonstrated path is moved to another contact."""
+
+    rigid_tail: float = RIGID_TAIL_M  # metres of the final approach that are moved as a whole
+    # A shift longer than the path before the rigid tail is made first, in a straight line from the
+    # current position (it also covers a difference in height); the demonstrated path follows, moved.
+    # Without it such a shift is pressed into what is left of the path, down to a single step.
+    align_first: bool = False
+
+
+@dataclass(frozen=True)
 class ChunkTarget:
     """What the next `horizon` steps should do on the moved path."""
 
@@ -33,18 +44,25 @@ def arc_lengths(path: np.ndarray) -> np.ndarray:
     return np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(path, axis=0), axis=1))])
 
 
-def retarget_path(path: np.ndarray, new_end: np.ndarray, rigid_tail: float = RIGID_TAIL_M) -> np.ndarray:
+def retarget_path(path: np.ndarray, new_end: np.ndarray, retarget: Retarget = Retarget()) -> np.ndarray:
     """The path with its end at `new_end`.
 
     The shift grows with the distance travelled, from zero at the first point to the full shift
     where the last `rigid_tail` metres begin, so the final approach is the demonstrated one, moved.
+    With `align_first`, a shift longer than the path before the rigid tail is made first instead: the
+    result then has one point more, the start, followed by the whole demonstrated path, moved.
     """
     path = np.asarray(path, dtype=float)
     arc = arc_lengths(path)
     if arc[-1] < _EPS:
         raise ValueError("the path has no length, so it cannot be moved to another end")
-    weight = np.clip(arc / max(arc[-1] - rigid_tail, _EPS), 0.0, 1.0)
-    return path + weight[:, None] * (np.asarray(new_end, dtype=float) - path[-1])
+    shift = np.asarray(new_end, dtype=float) - path[-1]
+    free = arc[-1] - retarget.rigid_tail
+    distance = float(np.linalg.norm(shift))
+    if retarget.align_first and free < distance:
+        return path.copy() if distance < _EPS else np.vstack([path[:1], path + shift])
+    weight = np.clip(arc / max(free, _EPS), 0.0, 1.0)
+    return path + weight[:, None] * shift
 
 
 def walk(polyline: np.ndarray, distances: np.ndarray) -> np.ndarray:
@@ -59,7 +77,7 @@ def walk(polyline: np.ndarray, distances: np.ndarray) -> np.ndarray:
 
 
 def counterfactual_chunk(path: np.ndarray, new_end: np.ndarray, horizon: int, flip_remaining: float,
-                         max_step: float = MAX_STEP_M, rigid_tail: float = RIGID_TAIL_M) -> ChunkTarget:
+                         max_step: float = MAX_STEP_M, retarget: Retarget = Retarget()) -> ChunkTarget:
     """Targets for the next `horizon` steps if the contact were at `new_end`.
 
     `path` runs from the current gripper position to the demonstrated contact, one point per step.
@@ -68,7 +86,7 @@ def counterfactual_chunk(path: np.ndarray, new_end: np.ndarray, horizon: int, fl
     step. `flip_remaining` is how far before the contact the demonstration closed the gripper.
     """
     path = np.asarray(path, dtype=float)
-    moved = retarget_path(path, new_end, rigid_tail)
+    moved = retarget_path(path, new_end, retarget)
     arc, total = arc_lengths(path), float(arc_lengths(moved)[-1])
     lengths = np.minimum(np.diff(arc) * (total / arc[-1]), max_step)
     lengths = np.concatenate([lengths, np.full(max(horizon - len(lengths), 0), max_step)])[:horizon]

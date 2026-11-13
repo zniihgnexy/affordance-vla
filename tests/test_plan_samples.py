@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 
+from affordance3d.counterfactual import Retarget, counterfactual_chunk
 from affordance3d.plan_input import no_plan_features, plan_features
 from affordance3d.plan_samples import (
     contact_offsets,
@@ -438,3 +439,48 @@ def test_asking_for_releases_changes_nothing_on_the_way_to_a_grasp():
     # Assert
     np.testing.assert_array_equal(asked.actions, default.actions)
     np.testing.assert_array_equal(asked.features, default.features)
+
+
+def test_a_shifted_sample_can_move_above_the_new_contact_before_it_goes_on_down():
+    # Arrange: at step 30 the gripper has 8 cm left, less than the 18 cm that are moved as a whole
+    track, step = make_track(), 30
+    new_contact = track.ee_pos[GRASP] + [0.0, 0.05, 0.0]
+
+    # Act
+    sample = shifted_sample(track, step=step, horizon=HORIZON, new_contact=new_contact, motion_scale=SCALE,
+                            retarget=Retarget(rigid_tail=0.18, align_first=True))
+
+    # Assert: four full-speed steps cross the 5 cm at the height of the step, then the approach goes on
+    np.testing.assert_allclose(sample.path_target[:4, 2], track.ee_pos[step, 2], atol=1e-9)
+    np.testing.assert_allclose(sample.path_target[3, 1], 0.05, atol=1e-9)
+    assert sample.path_target[4, 2] < track.ee_pos[step, 2]
+
+
+def test_steps_after_the_demonstrated_contact_follow_the_moved_path_alone():
+    # Arrange: four steps before the grasp the contact moves 8 cm aside, so the moved path needs more steps
+    # than the demonstration had left; after its grasp the demonstration carries the bottle away
+    track, step = make_track(), GRASP - 4
+    new_contact = track.ee_pos[GRASP] + [0.08, 0.0, 0.0]
+    path = track.ee_pos[step:GRASP + 1]
+
+    # Act
+    sample = shifted_sample(track, step=step, horizon=HORIZON, new_contact=new_contact, motion_scale=SCALE,
+                            min_remaining=0.0)
+
+    # Assert: every step of the chunk is on the moved path; the carry of the demonstration is not mixed in
+    walked = counterfactual_chunk(path, new_contact, HORIZON, flip_remaining=float("inf"), max_step=SCALE)
+    np.testing.assert_allclose(sample.path_target, walked.points, atol=1e-9)
+    assert walked.valid[4:].any()  # the moved path is still being walked after the demonstrated grasp step
+
+
+def test_rotation_is_not_supervised_after_the_step_of_the_demonstrated_contact():
+    # Arrange: as above; the rotation commands after the grasp belong to the carry
+    track, step = make_track(), GRASP - 4
+
+    # Act
+    sample = shifted_sample(track, step=step, horizon=HORIZON, new_contact=track.ee_pos[GRASP] + [0.08, 0.0, 0.0],
+                            motion_scale=SCALE, min_remaining=0.0)
+
+    # Assert
+    assert sample.action_valid[:4, 3:6].all()
+    assert not sample.action_valid[4:, 3:6].any()

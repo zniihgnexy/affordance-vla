@@ -14,7 +14,7 @@ from dataclasses import dataclass, replace
 import numpy as np
 
 from affordance3d.caw_labels import CawLabel, GripperEvent, caw_labels, contact_events, gripper_events
-from affordance3d.counterfactual import arc_lengths, counterfactual_chunk
+from affordance3d.counterfactual import Retarget, arc_lengths, counterfactual_chunk
 from affordance3d.plan_consistency import PlanAhead, plan_ahead
 from affordance3d.plan_input import ContactOffsets, no_plan_features, plan_features
 
@@ -125,7 +125,8 @@ def _flip_remaining(track: DemoTrack, step: int, event_step: int, arc: np.ndarra
 
 def shifted_sample(track: DemoTrack, step: int, horizon: int, new_contact: np.ndarray, motion_scale: float,
                    approach: np.ndarray | None = None, contact_noise: np.ndarray | None = None,
-                   min_remaining: float = MIN_REDIRECT_M, allow_release: bool = False) -> PlanSample | None:
+                   min_remaining: float = MIN_REDIRECT_M, allow_release: bool = False,
+                   retarget: Retarget = Retarget()) -> PlanSample | None:
     """The step paired with its next gripper event at `new_contact` instead of the demonstrated place.
 
     Returns None unless the step is on the way to a grasp (or, with `allow_release`, to a release)
@@ -136,7 +137,10 @@ def shifted_sample(track: DemoTrack, step: int, horizon: int, new_contact: np.nd
     demonstrated commands, lag compensation included. The path target is the path those commands ask
     for. Rotation is the demonstration's (not supervised after the arrival). The gripper command of
     the event (close for a grasp, open for a release) is given at the demonstrated distance from
-    the contact.
+    the contact. `retarget` says how the demonstrated path is moved (affordance3d/counterfactual.py).
+    A moved path can need more steps than the demonstration had left before its event. Those extra
+    steps follow the moved path alone: what the demonstration did after its event (lifting, carrying)
+    is not added to them, and their rotation is not supervised.
     """
     actions = _policy_chunk(track, step, horizon)
     plan: PlanAhead | None = plan_ahead(track.labels, track.ee_pos[step], step)
@@ -149,14 +153,16 @@ def shifted_sample(track: DemoTrack, step: int, horizon: int, new_contact: np.nd
         return None
     new_contact = np.asarray(new_contact, dtype=float)
     flip = _flip_remaining(track, step, event_step, arc, plan.closing)
-    target = counterfactual_chunk(path, new_contact, horizon, flip, max_step=motion_scale)
-    unmoved = counterfactual_chunk(path, path[-1], horizon, flip, max_step=motion_scale)
+    target = counterfactual_chunk(path, new_contact, horizon, flip, max_step=motion_scale, retarget=retarget)
+    unmoved = counterfactual_chunk(path, path[-1], horizon, flip, max_step=motion_scale, retarget=retarget)
     added = np.diff(np.vstack([np.zeros(3), target.points - unmoved.points]), axis=0) / motion_scale
+    past_event = np.arange(horizon) >= len(path) - 1  # steps the demonstration made after its own event
+    actions[past_event, :3] = 0.0
     actions[:, :3] = np.clip(actions[:, :3] + added, -1.0, 1.0)
     commanded = 0.0 if plan.closing else 1.0  # policy convention: 0 = close, 1 = open
     actions[:, 6] = np.where(target.closed, commanded, 1.0 - commanded)
     action_valid = np.zeros((horizon, 7), dtype=bool)
-    action_valid[:, 3:6] = target.valid[:, None]
+    action_valid[:, 3:6] = (target.valid & ~past_event)[:, None]
     action_valid[:, 6] = True
     features = plan_features(track.ee_pos[step], _noisy(new_contact, contact_noise),
                              plan.approach if approach is None else approach, closing=plan.closing)

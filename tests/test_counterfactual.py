@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from affordance3d.counterfactual import counterfactual_chunk, retarget_path, walk
+from affordance3d.counterfactual import Retarget, counterfactual_chunk, retarget_path, walk
 
 
 def approach_path() -> np.ndarray:
@@ -29,7 +29,7 @@ def test_retargeted_path_moves_the_final_approach_as_a_whole():
     path, shift = approach_path(), np.array([0.1, 0.1, 0.0])
 
     # Act
-    moved = retarget_path(path, path[-1] + shift, rigid_tail=0.08)
+    moved = retarget_path(path, path[-1] + shift, Retarget(rigid_tail=0.08))
 
     # Assert: the last 8 cm (16 steps of 5 mm) are the demonstrated descent, shifted
     np.testing.assert_allclose(moved[-17:], path[-17:] + shift, atol=1e-6)
@@ -117,8 +117,124 @@ def test_a_path_shorter_than_the_rigid_tail_takes_the_whole_shift_in_its_first_s
     path, shift = approach_path()[-5:], np.array([0.05, 0.0, 0.0])
 
     # Act
-    moved = retarget_path(path, path[-1] + shift, rigid_tail=0.08)
+    moved = retarget_path(path, path[-1] + shift, Retarget(rigid_tail=0.08))
 
     # Assert: the start stays, every later point is the demonstrated one, shifted
     np.testing.assert_allclose(moved[0], path[0])
     np.testing.assert_allclose(moved[1:], path[1:] + shift, atol=1e-9)
+
+
+ALIGN = Retarget(rigid_tail=0.18, align_first=True)
+
+
+def test_a_late_shift_is_made_at_the_current_height_before_the_descent_goes_on():
+    # Arrange: 10 cm of the descent are left, less than the 18 cm that are moved as a whole
+    path, shift = approach_path()[-21:], np.array([0.05, 0.0, 0.0])
+
+    # Act
+    moved = retarget_path(path, path[-1] + shift, ALIGN)
+
+    # Assert: first across to above the new contact, then the demonstrated descent, shifted
+    np.testing.assert_allclose(moved[0], path[0])
+    np.testing.assert_allclose(moved[1], path[0] + shift)
+    np.testing.assert_allclose(moved[1:], path + shift, atol=1e-9)
+
+
+def test_a_shift_longer_than_the_free_part_of_the_path_is_made_first():
+    # Arrange: 40 cm of path, 18 cm rigid, so 22 cm are free; the contact moves by 30 cm
+    path, shift = approach_path(), np.array([0.0, 0.3, 0.0])
+
+    # Act
+    moved = retarget_path(path, path[-1] + shift, ALIGN)
+
+    # Assert
+    np.testing.assert_allclose(moved[1:], path + shift, atol=1e-9)
+
+
+def test_a_shift_that_fits_into_the_free_part_of_the_path_is_blended_in_before_the_rigid_tail():
+    # Arrange: 22 cm are free, the contact moves by 10 cm
+    path, shift = approach_path(), np.array([0.0, 0.1, 0.0])
+
+    # Act
+    moved = retarget_path(path, path[-1] + shift, ALIGN)
+
+    # Assert: same number of points; the last 18 cm (36 steps) are the demonstrated ones, shifted
+    assert len(moved) == len(path)
+    np.testing.assert_allclose(moved[0], path[0])
+    np.testing.assert_allclose(moved[-37:], path[-37:] + shift, atol=1e-9)
+    assert 0.0 < moved[20, 1] < 0.1  # half-way along the free part the shift is partly taken up
+
+
+def test_aligning_first_leaves_an_unmoved_contact_as_demonstrated():
+    path = approach_path()[-21:]
+
+    moved = retarget_path(path, path[-1], ALIGN)
+
+    np.testing.assert_allclose(moved, path)
+
+
+def test_chunk_targets_of_a_late_shift_keep_the_height_until_the_gripper_is_above_the_new_contact():
+    # Arrange: 10 cm above the contact, which moves 5 cm to the side; the demonstration walks 5 mm a step
+    path, shift = approach_path()[-21:], np.array([0.05, 0.0, 0.0])
+
+    # Act
+    target = counterfactual_chunk(path, path[-1] + shift, horizon=8, flip_remaining=0.0, max_step=0.0125,
+                                  retarget=ALIGN)
+
+    # Assert: the pace is stretched to the longer path (7.5 mm a step); six steps go across at the starting
+    # height, and the descent only starts once the gripper is above the new contact
+    np.testing.assert_allclose(target.points[:6, 2], path[0, 2])
+    np.testing.assert_allclose(target.points[:6, 0], path[0, 0] + 0.0075 * np.arange(1, 7))
+    np.testing.assert_allclose(target.points[6:, 0], path[0, 0] + 0.05)
+    assert target.points[7, 2] < target.points[6, 2] < path[0, 2]
+
+
+def test_the_default_retargeting_is_the_one_of_the_earlier_runs():
+    # Arrange
+    path, new_end = approach_path(), np.array([0.3, 0.1, 0.0])
+
+    # Act
+    default = retarget_path(path, new_end)
+    explicit = retarget_path(path, new_end, Retarget(rigid_tail=0.08, align_first=False))
+
+    # Assert
+    np.testing.assert_array_equal(default, explicit)
+
+
+def test_a_shift_as_long_as_the_free_part_of_the_path_is_still_blended_and_a_longer_one_is_made_first():
+    # Arrange: 22 cm of the path are free
+    path = approach_path()
+
+    # Act
+    fits = retarget_path(path, path[-1] + [0.0, 0.22, 0.0], ALIGN)
+    too_long = retarget_path(path, path[-1] + [0.0, 0.221, 0.0], ALIGN)
+
+    # Assert
+    assert len(fits) == len(path)
+    assert len(too_long) == len(path) + 1
+
+
+def test_a_shift_made_first_also_covers_the_difference_in_height():
+    # Arrange: the new contact is 5 cm to the side and 4 cm higher, with 10 cm of the descent left
+    path, shift = approach_path()[-21:], np.array([0.05, 0.0, 0.04])
+
+    # Act
+    moved = retarget_path(path, path[-1] + shift, ALIGN)
+
+    # Assert: a straight leg to the shifted start, then the demonstrated descent, moved
+    np.testing.assert_allclose(moved[1], path[0] + shift)
+    np.testing.assert_allclose(moved[-1], path[-1] + shift)
+
+
+def test_the_gripper_closes_at_the_same_distance_from_the_contact_when_the_shift_is_made_first():
+    # Arrange: 10 cm above the contact, the demonstration closed 1.6 cm before it; the contact moves 5 cm
+    path, shift = approach_path()[-21:], np.array([0.05, 0.0, 0.0])
+
+    # Act: the moved path is 15 cm long and is walked in 20 steps of 7.5 mm
+    target = counterfactual_chunk(path, path[-1] + shift, horizon=24, flip_remaining=0.016, max_step=0.0125,
+                                  retarget=ALIGN)
+
+    # Assert: steps that start 1.6 cm or less from the new contact are closed (the last two of the 20, which
+    # start 1.5 and 0.75 cm from it), and the steps after the arrival are not valid
+    assert target.closed.tolist() == [False] * 18 + [True] * 6
+    assert target.valid.tolist() == [True] * 20 + [False] * 4
