@@ -15,6 +15,7 @@
 #   TASKS ["0 1 2 3 4 5 6 7 8 9"]   TRIALS [20] start states 0..TRIALS-1 per task (the paper uses 50)
 #   IMAGES_FOR [2]      episodes per task whose logs keep the camera images (the rest keep states only)
 #   MAX_SIMS [24]       simulator processes running at the same time (one per suite and task)
+#   SEED [7]            seed of the policy server (the sampling noise) and of the simulators
 # The instruction of a task is LIBERO's own; where the perturbation renames the object, the new name
 # is put into it (rollout_libero_logged.py, benchmark_instruction).
 # Before the first use (CPU):  bash scripts/remote/setup_libero_pro.sh
@@ -35,6 +36,7 @@ PLAN="${PLAN:-none}"
 PREDICTOR="${PREDICTOR:-}"
 CAMERA_LOG="${CAMERA_LOG:-$W/runs/plan_following/demos/pick_up_the_salad_dressing_and_place_it_in_the_basket_demo0.npz}"
 HOLD="${HOLD:-0}"
+SEED="${SEED:-7}"
 DATA="${DATA:-$W/runs/plan_following/dataset10}"
 SUITES="${SUITES:-libero_object_swap libero_object_task}"
 TASKS="${TASKS:-0 1 2 3 4 5 6 7 8 9}"
@@ -58,6 +60,7 @@ if [ -n "$ADAPTER" ] && [ "$PLAN" = none ]; then echo "an adapter is served with
 if [ "$PLAN" = predicted ] && [ -z "$PREDICTOR" ]; then echo "PLAN=predicted needs PREDICTOR" >&2; exit 2; fi
 if [ "$PLAN" != predicted ] && [ -n "$PREDICTOR" ]; then echo "PREDICTOR is only used with PLAN=predicted" >&2; exit 2; fi
 [[ "$HOLD" =~ ^[01]$ ]] || { echo "HOLD must be 0 or 1" >&2; exit 2; }
+[[ "$SEED" =~ ^[0-9]+$ ]] || { echo "SEED must be a non-negative integer" >&2; exit 2; }
 if [ "$HOLD" = 1 ] && [ "$PLAN" != predicted ]; then echo "HOLD=1 keeps predicted plans: it needs PLAN=predicted" >&2; exit 2; fi
 [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "CUDA_VISIBLE_DEVICES is not set: submit this through the queue" >&2; exit 2; }
 OUT="$W/runs/libero_pro/$NAME"
@@ -68,10 +71,10 @@ OVERRIDES=("framework.qwenvl.base_vlm=$BASE_VLM"
            "framework.action_model.diffusion_model_cfg.use_canonical_forward=false")
 cd "$STARVLA" || exit 1
 
-echo "=== LIBERO-PRO: $NAME, adapter=${ADAPTER:-none (released policy)}, plan=$PLAN hold=$HOLD, $TRIALS trials per task"
+echo "=== LIBERO-PRO: $NAME, adapter=${ADAPTER:-none (released policy)}, plan=$PLAN hold=$HOLD seed=$SEED, $TRIALS trials per task"
 echo "    suites: $SUITES ($(date '+%F %T'), card ${GPU_INDEX:-?}) ==="
 PORT="$("$STARVLA_PYTHON" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
-server_args=(--ckpt_path "$CKPT" --port "$PORT" --seed 7)
+server_args=(--ckpt_path "$CKPT" --port "$PORT" --seed "$SEED")
 for override in "${OVERRIDES[@]}"; do server_args+=(--config_override "$override"); done
 if [ -n "$ADAPTER" ]; then
   [ "$PLAN" = predicted ] && server_args+=(--predictor "$W/runs/plan_predictor/$PREDICTOR/predictor.pt"
@@ -97,7 +100,7 @@ echo "policy server ready on port $PORT ($(date '+%T'))"
 
 # shellcheck disable=SC1091
 source "$REPO/scripts/remote/libero_pro_env.sh"
-plan_args=(--plan "$PLAN")
+plan_args=(--plan "$PLAN" --seed "$SEED")
 [ "$PLAN" = oracle ] && plan_args+=(--plan-offsets "$DATA/offsets.json")
 [ "$HOLD" = 1 ] && plan_args+=(--hold-plan)
 read -r -a episodes <<< "$(seq -s ' ' 0 $((TRIALS - 1)))"
