@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from affordance3d.rollout_log import RolloutLog, load_rollout_log
@@ -62,6 +63,28 @@ def score_table(runs: dict[str, dict[str, list[RolloutLog]]]) -> pd.DataFrame:
     return pd.DataFrame.from_dict(rows, orient="index")
 
 
+def seed_table(runs: dict[str, dict[int, dict[str, list[RolloutLog]]]], expected: int | None = None) -> pd.DataFrame:
+    """Per policy and perturbation: the solved rollouts of each evaluation seed, and the mean and standard
+    deviation of the success rate over the seeds that are complete. `runs` is {policy: {seed: {suite: logs}}};
+    a seed is complete when it has `expected` rollouts (any number if `expected` is None)."""
+    rows = {}
+    for name, seeds in runs.items():
+        for label, suite in SUITES.items():
+            row, rates = {}, []
+            for seed, run in sorted(seeds.items()):
+                done, total = solved(run.get(suite, [])) if run.get(suite) else (0, 0)
+                complete = total > 0 and (expected is None or total == expected)
+                row[f"seed {seed}"] = ("not run" if total == 0 else
+                                       f"{done} / {total}" + ("" if complete else " (incomplete)"))
+                if complete:
+                    rates.append(done / total)
+            row["mean"] = float(np.mean(rates)) if rates else np.nan
+            row["std over seeds"] = float(np.std(rates, ddof=1)) if len(rates) > 1 else np.nan
+            row["seeds in the mean"] = len(rates)
+            rows[(name, label.split(":")[0])] = row
+    return pd.DataFrame.from_dict(rows, orient="index")
+
+
 def per_task_table(runs: dict[str, dict[str, list[RolloutLog]]], suite: str) -> pd.DataFrame:
     """One row per task of a suite: the instruction given, and the solved rollouts of each policy."""
     rows = {}
@@ -71,8 +94,9 @@ def per_task_table(runs: dict[str, dict[str, list[RolloutLog]]], suite: str) -> 
             done, total = row.get(name, (0, 0))
             row[name] = (done + bool(log.meta["success"]), total + 1)
     table = pd.DataFrame.from_dict(rows, orient="index").sort_index()
-    for name in runs:
-        table[name] = [f"{done} / {total}" for done, total in table[name]]
+    for name in runs:  # a policy with no rollouts of a task gets a dash there
+        cells = table[name] if name in table else [None] * len(table)
+        table[name] = [f"{cell[0]} / {cell[1]}" if isinstance(cell, tuple) else "–" for cell in cells]
     table.index.name = "task"
     return table
 
