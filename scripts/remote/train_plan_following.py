@@ -292,6 +292,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--contact-noise", type=float, default=0.01, help="std (m) of the noise on the plan's contact")
     parser.add_argument("--plan-dropout", type=float, default=0.0,
                         help="probability that a demonstration sample is given no plan (labels unchanged)")
+    parser.add_argument("--deep-plan", action="store_true",
+                        help="also add the plan to the input of every later block of the action DiT "
+                             "(the injection of Fast Plans, Faithful Actions), not only to the action tokens")
     parser.add_argument("--holdout", type=int, default=5, help="demonstrations per instruction kept for testing")
     parser.add_argument("--test-frames", type=int, default=48)
     parser.add_argument("--log-every", type=int, default=20)
@@ -319,7 +322,7 @@ def build(args: argparse.Namespace) -> tuple[torch.nn.Module, PlanConditionedHea
         with torch.autocast("cuda", dtype=torch.bfloat16):
             return velocity(head, noisy, 500, states, mask)
 
-    plan_head = PlanConditionedHead(head, args.rank, float(args.rank), dit_lora_match)
+    plan_head = PlanConditionedHead(head, args.rank, float(args.rank), dit_lora_match, deep=args.deep_plan)
     return framework, plan_head, norm_np, reference
 
 
@@ -384,7 +387,7 @@ def main() -> None:
     facts["gpu_memory_peak_gib"] = round(torch.cuda.max_memory_allocated() / 2**30, 2)
     print("open loop after:", facts["open_loop_after"], flush=True)
     torch.save({"state": plan_head.adapter_state(), "rank": args.rank, "alpha": float(args.rank),
-                "motion_scale": data.scale, "facts": facts}, args.out / "adapter.pt")
+                "deep": args.deep_plan, "motion_scale": data.scale, "facts": facts}, args.out / "adapter.pt")
     (args.out / "metrics.json").write_text(json.dumps(facts, indent=2))
     print("TRAIN-OK", flush=True)
 

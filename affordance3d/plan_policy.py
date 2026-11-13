@@ -8,7 +8,8 @@ For the same reason the head's 32 learned tokens cannot influence the action tok
 """
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 
 import torch
 from torch import nn
@@ -70,12 +71,56 @@ def sample_actions(head: nn.Module, states: list[torch.Tensor], mask: torch.Tens
     return actions
 
 
+class DeepPlan(nn.Module):
+    """The plan added to the input of every DiT block after the first, each through its own linear map.
+
+    "Fast Plans, Faithful Actions" (arXiv 2609.30833) injects the plan into every layer of the action head,
+    so that the head cannot bypass it; this is that injection for the all-cross-attention DiT. Block 0
+    already receives the plan with the action tokens. The maps have no bias and start at zero, which
+    leaves the head unchanged until training moves them. The plan embedding is handed over for one pass
+    with `given`; outside it the blocks get their inputs unchanged. A pass that runs the blocks again
+    later (gradient checkpointing) would therefore miss the plan: do not combine the two.
+    """
+
+    def __init__(self, blocks: nn.ModuleList, width: int) -> None:
+        super().__init__()
+        later = list(blocks)[1:]
+        self.maps = nn.ModuleList(nn.Linear(width, width, bias=False) for _ in later)
+        self._embedding: torch.Tensor | None = None
+        for layer, block in zip(self.maps, later):
+            nn.init.zeros_(layer.weight)
+            block.register_forward_pre_hook(self._adder(layer))
+
+    def _adder(self, layer: nn.Linear) -> Callable[[nn.Module, tuple], tuple | None]:
+        def add(_block: nn.Module, args: tuple) -> tuple | None:
+            if self._embedding is None:
+                return None  # the head is used without a plan
+            if not args:
+                raise RuntimeError("the DiT gave a block its hidden states by keyword; the deep plan can only "
+                                   "be added to hidden states passed as the first positional argument")
+            hidden = args[0]
+            return (hidden + layer(self._embedding).to(hidden.dtype).unsqueeze(1), *args[1:])
+
+        return add
+
+    @contextmanager
+    def given(self, embedding: torch.Tensor) -> Iterator[None]:
+        """While open, every pass through the blocks adds this plan embedding (B, width)."""
+        before = self._embedding
+        self._embedding = embedding
+        try:
+            yield
+        finally:
+            self._embedding = before
+
+
 class PlanConditionedHead(nn.Module):
     """A frozen action head with what is trained on top of it: the plan encoder, low-rank updates of
-    the layers chosen by `lora_match`, and the head's action decoder (kept in float32)."""
+    the layers chosen by `lora_match`, and the head's action decoder (kept in float32). With `deep` the
+    plan also enters every later block of the DiT (DeepPlan)."""
 
     def __init__(self, head: nn.Module, lora_rank: int, lora_alpha: float, lora_match: Callable[[str], bool],
-                 hidden: int = 512) -> None:
+                 hidden: int = 512, deep: bool = False) -> None:
         super().__init__()
         for parameter in head.parameters():
             parameter.requires_grad_(False)
@@ -84,16 +129,26 @@ class PlanConditionedHead(nn.Module):
         for parameter in head.action_decoder.parameters():
             parameter.requires_grad_(True)
         self.head = head
-        self.plan_encoder = PlanEncoder(head.input_embedding_dim, hidden)
-        self.plan_encoder.to(next(head.action_decoder.parameters()).device)
+        device = next(head.action_decoder.parameters()).device
+        self.plan_encoder = PlanEncoder(head.input_embedding_dim, hidden).to(device)
+        self.deep_plan = (DeepPlan(head.model.transformer_blocks, head.input_embedding_dim).to(device)
+                          if deep else None)
+
+    def _in_blocks(self, embedding: torch.Tensor) -> AbstractContextManager[None]:
+        """Context in which the DiT's later blocks receive the plan too, if this head is a deep one."""
+        return nullcontext() if self.deep_plan is None else self.deep_plan.given(embedding)
 
     def velocity(self, noisy: torch.Tensor, timesteps: torch.Tensor, states: list[torch.Tensor],
                  mask: torch.Tensor | None, plan: torch.Tensor) -> torch.Tensor:
-        return head_velocity(self.head, noisy, timesteps, states, mask, self.plan_encoder(plan))
+        embedding = self.plan_encoder(plan)
+        with self._in_blocks(embedding):
+            return head_velocity(self.head, noisy, timesteps, states, mask, embedding)
 
     def sample(self, states: list[torch.Tensor], mask: torch.Tensor | None, plan: torch.Tensor,
                noise: torch.Tensor) -> torch.Tensor:
-        return sample_actions(self.head, states, mask, self.plan_encoder(plan), noise)
+        embedding = self.plan_encoder(plan)
+        with self._in_blocks(embedding):
+            return sample_actions(self.head, states, mask, embedding, noise)
 
     def _trained_names(self) -> set[str]:
         return {name for name, parameter in self.named_parameters() if parameter.requires_grad}
