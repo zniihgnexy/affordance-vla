@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from affordance3d.counterfactual import Retarget, counterfactual_chunk, retarget_path
+from affordance3d.counterfactual import MAX_STEP_M, Retarget, counterfactual_chunk, retarget_path
 from affordance3d.plan_audit import NOT_AN_OBJECT, PlanPoint, plans_before_grasp
 from affordance3d.plan_grid import CELLS, IMAGE_SIZE, Camera, contact_pixel
 from affordance3d.plan_input import ContactOffsets
@@ -150,7 +150,7 @@ def map_figure(found: Predictions, camera: Camera, picks: list[int], columns: in
                f"best cell holds {scores.max():.0%} of the score")
         # a cell is tinted in proportion to its score, so cells without score leave the image as it is
         axis.imshow(scores, extent=(0, IMAGE_SIZE, IMAGE_SIZE, 0), cmap="autumn_r", vmin=0.0, vmax=1.0,
-                    alpha=MAP_ALPHA * np.sqrt(scores), interpolation="nearest")
+                    alpha=MAP_ALPHA * np.sqrt(np.clip(scores, 0.0, 1.0)), interpolation="nearest")
         edges = np.linspace(0, IMAGE_SIZE, CELLS + 1)
         axis.vlines(edges, 0, IMAGE_SIZE, colors="white", linewidths=0.3, alpha=0.5)
         axis.hlines(edges, 0, IMAGE_SIZE, colors="white", linewidths=0.3, alpha=0.5)
@@ -291,7 +291,7 @@ HEIGHT_MARKS_M = (0.12, 0.09, 0.06, 0.04, 0.02)
 
 def heights_when_near(ee_pos: np.ndarray, point: np.ndarray, marks: Sequence[float] = HEIGHT_MARKS_M) -> np.ndarray:
     """Height (m) of the gripper above `point` at the first step it is within each horizontal distance of it;
-    nan for a distance it never comes within."""
+    nan for a distance it never comes within. `point` is (3,), or (T, 3) for a point that moves."""
     relative = np.asarray(ee_pos, dtype=float) - np.asarray(point, dtype=float)
     horizontal = np.hypot(relative[:, 0], relative[:, 1])
     heights = []
@@ -302,28 +302,36 @@ def heights_when_near(ee_pos: np.ndarray, point: np.ndarray, marks: Sequence[flo
 
 
 def approach_heights(log: RolloutLog, offsets: ContactOffsets) -> np.ndarray:
-    """heights_when_near for the named object's grasp point, over the steps before that object is first
-    touched (the end of the log if it never is)."""
+    """heights_when_near for the named object's grasp point where the object is at each step, over the steps
+    before the gripper first touches it (all steps if it never does); all nan if it touches it at once."""
     k = log.target_index
     touched = np.asarray(log.touched)[:, k]
+    if touched[0]:
+        return np.full(len(HEIGHT_MARKS_M), np.nan)
     end = int(np.argmax(touched)) if touched.any() else len(log.ee_pos) - 1
-    return heights_when_near(log.ee_pos[:end + 1], log.object_pos[0, k] + offsets.grasp[log.target])
+    points = np.asarray(log.object_pos[:end + 1, k], dtype=float) + offsets.grasp[log.target]
+    return heights_when_near(log.ee_pos[:end + 1], points, HEIGHT_MARKS_M)
 
 
 def approach_height_table(groups: dict[str, list[RolloutLog]], offsets: ContactOffsets) -> pd.DataFrame:
     """Per group of rollouts: median height (cm) above the grasp point when the gripper first comes within
-    each horizontal distance of it."""
+    each horizontal distance of it, over the rollouts that came that close; and how many came within the
+    smallest distance (a median over few rollouts is a median over the approaches that got there)."""
     rows = {}
     for name, logs in groups.items():
         heights = 100.0 * np.array([approach_heights(log, offsets) for log in logs])
-        rows[name] = {"rollouts": len(logs)} | {
-            f"within {100 * mark:.0f} cm": round(float(np.nanmedian(heights[:, k])), 1)
-            for k, mark in enumerate(HEIGHT_MARKS_M)}
+        heights = heights.reshape(-1, len(HEIGHT_MARKS_M))
+        reached = np.isfinite(heights)
+        medians = [round(float(np.median(heights[reached[:, k], k])), 1) if reached[:, k].any() else np.nan
+                   for k in range(len(HEIGHT_MARKS_M))]
+        closest = f"came within {100 * HEIGHT_MARKS_M[-1]:.0f} cm"
+        rows[name] = {"rollouts": len(logs), closest: int(reached[:, -1].sum())}
+        rows[name] |= {f"within {100 * mark:.0f} cm": value for mark, value in zip(HEIGHT_MARKS_M, medians)}
     return pd.DataFrame.from_dict(rows, orient="index")
 
 
 def retarget_figure(path: np.ndarray, new_contact: np.ndarray, rules: dict[str, Retarget], horizon: int = 8,
-                    max_step: float = 0.0125) -> plt.Figure:
+                    max_step: float = MAX_STEP_M) -> plt.Figure:
     """The demonstrated approach and the same approach moved to `new_contact` under each rule, from above and
     from the side (height against horizontal distance to the contact it heads for). Dots: the next
     `horizon` steps the rewritten action labels ask for."""
@@ -344,11 +352,12 @@ def retarget_figure(path: np.ndarray, new_contact: np.ndarray, rules: dict[str, 
             side.scatter(np.hypot(near[:, 0], near[:, 1]), near[:, 2], color=colour, s=18, zorder=3)
         top.scatter(end[1], end[0], marker="*", s=200, color=colour, edgecolor="black", zorder=4)
     top.scatter(path[0, 1], path[0, 0], marker="x", color="black", s=70, zorder=5)
-    top.set(xlabel="world y (m)", ylabel="world x (m)", title="from above (× gripper now, ★ contact)")
+    top.set(xlabel="world y (m)", ylabel="world x (m)",
+            title="from above, axes flipped as in the camera image (× gripper now, ★ contact)")
     top.set_aspect("equal", adjustable="datalim")
     top.invert_xaxis()
     top.invert_yaxis()
-    side.set(xlabel="horizontal distance to the contact (m)", ylabel="height above the contact (m)",
+    side.set(xlabel="horizontal distance to the contact it heads for (m), far to near", ylabel="height above it (m)",
              title="from the side: where the gripper comes down")
     side.invert_xaxis()
     side.legend(fontsize=8)

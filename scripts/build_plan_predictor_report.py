@@ -51,6 +51,7 @@ from pathlib import Path
 import sys
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from IPython.display import Video, display
 from matplotlib_inline.backend_inline import set_matplotlib_formats
@@ -222,28 +223,32 @@ from affordance3d.counterfactual import Retarget
 from affordance3d.plan_dataset import load_tracks
 
 tracks = load_tracks(ROOT / "runs" / "plan_following" / "dataset" / "tracks.npz")
-track = next(t for t in tracks if t.target == "salad_dressing_1")
+track = next((t for t in tracks if t.target == "salad_dressing_1"), None)
+assert track is not None, "no salad dressing demonstration in the dataset"
 grasp = track.labels[0].event.step
 path = track.ee_pos[grasp - 16:grasp + 1]   # 16 steps before the grasp
 RULES = {"rule of 11 Nov (last 8 cm moved as a whole)": Retarget(),
          "align first (last 18 cm moved as a whole)": Retarget(rigid_tail=0.18, align_first=True)}
-P.retarget_figure(path, path[-1] + [0.0, 0.06, 0.0], RULES)
+SHIFT = np.array([0.0, 0.06, 0.0])   # the contact moved 6 cm sideways, 16 steps before the grasp
+P.retarget_figure(path, path[-1] + SHIFT, RULES)
 plt.show()
 """)
 
 md("""
-**How high the gripper is as it closes in on a tall object.** For every rollout whose named object is tall (bbq sauce, ketchup, milk, orange juice, salad dressing): the height above the grasp point when the gripper first comes within 12, 9, 6, 4 and 2 cm of it horizontally, before it first touches the object. Median over rollouts, in cm.
+**How high the gripper is as it closes in on a tall object.** For every rollout and every demonstration whose named object is tall (bbq sauce, ketchup, milk, orange juice, salad dressing): the height above the grasp point, where the object is at that step, when the gripper first comes within 12, 9, 6, 4 and 2 cm of it horizontally, before it first touches the object. Median in cm over the rollouts that came that close; "came within 2 cm" counts them for the last column.
 """)
 
 code("""
 TALL_WORDS = [name[:-2] for name in P.TALL_OBJECTS]
 DEMOS = ROOT / "runs" / "plan_following" / "demos"
 demos = [load_rollout_log(path, images=False) for path in sorted(DEMOS.glob("*_demo*.npz"))
-         if any(word in path.name for word in TALL_WORDS)]
+         if any(path.name.startswith(f"pick_up_the_{word}_and_") for word in TALL_WORDS)]
 HEADS = {"head of 11 Nov + ORACLE plan": PRO / "oracle_plan_s2",
          "head of 13 Nov + ORACLE plan": PRO / "oracle_plan_s8"}
-HEADS = {name: folder for name, folder in HEADS.items()
-         if all(len(list((folder / suite).glob("task*_ep*.npz"))) >= 200 for suite in L.SUITES.values())}
+complete = lambda folder: all(len(list((folder / suite).glob("task*_ep*.npz"))) >= 200  # noqa: E731
+                              for suite in L.SUITES.values())
+print("not complete, left out:", [name for name, folder in HEADS.items() if not complete(folder)])
+HEADS = {name: folder for name, folder in HEADS.items() if complete(folder)}
 tall = {"demonstrations": demos}
 for name, folder in HEADS.items():
     for label, suite in L.SUITES.items():
@@ -268,6 +273,7 @@ def rollout_folders(run):
                  if folder.is_dir())
 
 
+print("not run yet, left out:", [name for name, run in SIX_HEADS.items() if not rollout_folders(run)])
 SIX_HEADS = {name: run for name, run in SIX_HEADS.items() if rollout_folders(run)}
 six = {name: F.merge_runs(*[F.load_run(folder) for folder in rollout_folders(run)]) for name, run in SIX_HEADS.items()}
 display(F.success_table(six))
@@ -284,8 +290,8 @@ code("""
 SECOND = {"head of 11 Nov + map, kept": "predicted_g1_hold", "head of 13 Nov + map, kept": "predicted_g1_hold_s8",
           "head of 11 Nov + ORACLE plan": "oracle_plan_s2", "head of 13 Nov + ORACLE plan": "oracle_plan_s8",
           "11 Nov, moved releases + ORACLE plan": "oracle_plan_s6"}
-SECOND = {name: PRO / run for name, run in SECOND.items()
-          if all(len(list((PRO / run / suite).glob("task*_ep*.npz"))) >= 200 for suite in L.SUITES.values())}
+print("not complete, left out:", [name for name, run in SECOND.items() if not complete(PRO / run)])
+SECOND = {name: PRO / run for name, run in SECOND.items() if complete(PRO / run)}
 second = {name: {suite: L.load_suite(folder, suite) for suite in L.SUITES.values()} for name, folder in SECOND.items()}
 display(L.score_table(second).T)
 for label, suite in L.SUITES.items():
