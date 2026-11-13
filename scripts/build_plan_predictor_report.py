@@ -213,7 +213,7 @@ md("""
 **This step:** two changes to the labels, and an action head trained with both (`s8_align_release`), on the same six tasks and for the same 2400 steps as the head of 11 Nov:
 - **Align first:** a shift that does not fit into the path before the last 18 cm is made first, in a straight line, and the demonstrated approach follows, moved (`affordance3d/counterfactual.py`, `--align-first --rigid-tail 0.18`).
 - **Moved releases:** frames in which the object is carried are also paired with a release point moved within the same 18 cm disc (`--counterfactual shift+other+release`).
-- In the same commit a label error was fixed: when a moved path needs more steps than the demonstration had left, those steps used to get the demonstration's commands from after its grasp (lifting) added to them. The heads of 11 Nov had that error; a head with the fix alone is still training (`s2b_actions`).
+- In the same commit a label error was fixed: when a moved path needs more steps than the demonstration had left, those steps used to get the demonstration's commands from after its grasp (lifting) added to them. The heads of 11 Nov had that error; heads with each change on its own tell them apart (end of this section).
 
 **Status:** the figure and the first table are real demonstrations and real rollouts; the moved paths are what the labels ask for. The rollouts of section 7 are real; their plans are ORACLE unless a column says "map over image cells".
 """)
@@ -283,13 +283,16 @@ for set_name in F.PERTURBED_SETS:
 """)
 
 md("""
-**On LIBERO-PRO Object** (10 tasks × 20 starts per perturbation): the head of 13 Nov with the ORACLE plan and with the plans of the map head, kept per phase, next to the head of 11 Nov.
+**On LIBERO-PRO Object** (10 tasks × 20 starts per perturbation): the head of 13 Nov with the ORACLE plan and with the plans of the map head, kept per phase, next to the head of 11 Nov; then, with the ORACLE plan, one head for each change on its own and in pairs, which says where the gain comes from; and a head trained like the one of 11 Nov but on all ten tasks.
 """)
 
 code("""
 SECOND = {"head of 11 Nov + map, kept": "predicted_g1_hold", "head of 13 Nov + map, kept": "predicted_g1_hold_s8",
           "head of 11 Nov + ORACLE plan": "oracle_plan_s2", "head of 13 Nov + ORACLE plan": "oracle_plan_s8",
-          "11 Nov, moved releases + ORACLE plan": "oracle_plan_s6"}
+          "11 Nov, moved releases + ORACLE plan": "oracle_plan_s6",
+          "11 Nov, label fix + ORACLE plan": "oracle_plan_s2b",
+          "11 Nov, align first + label fix + ORACLE plan": "oracle_plan_s7",
+          "ten tasks, labels of 11 Nov + ORACLE plan": "oracle_plan"}
 print("not complete, left out:", [name for name, run in SECOND.items() if not complete(PRO / run)])
 SECOND = {name: PRO / run for name, run in SECOND.items() if complete(PRO / run)}
 second = {name: {suite: L.load_suite(folder, suite) for suite in L.SUITES.values()} for name, folder in SECOND.items()}
