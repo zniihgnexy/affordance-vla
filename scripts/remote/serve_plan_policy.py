@@ -36,8 +36,9 @@ def plans_of(examples: list[dict]) -> np.ndarray:
     """(B, PLAN_DIM) plan inputs of a request; every example must bring one."""
     missing = [index for index, example in enumerate(examples) if "plan" not in example]
     if missing:
-        raise ValueError(f"examples {missing} carry no 'plan'; this server needs one per example "
-                         "(rollout_libero_logged.py --plan oracle or --plan zero)")
+        raise ValueError(f"examples {missing} carry no 'plan'; without a predictor this server needs one per "
+                         "example (rollout_libero_logged.py --plan oracle or --plan zero), and with a predictor "
+                         "a request must bring a plan for every example or for none")
     plans = np.stack([np.asarray(example["plan"], dtype=np.float32).reshape(-1) for example in examples])
     if plans.shape[1] != PLAN_DIM:
         raise ValueError(f"a plan has {plans.shape[1]} numbers, expected {PLAN_DIM}")
@@ -98,7 +99,7 @@ def make_wrapper(args: argparse.Namespace) -> "PolicyServerWrapper":  # noqa: F8
                              config_overrides=args.config_override)
             adapter = torch.load(args.adapter, map_location="cpu", weights_only=True)
             self._plan_head = PlanConditionedHead(self._framework.action_model, adapter["rank"], adapter["alpha"],
-                                                  dit_lora_match)
+                                                  dit_lora_match, deep=adapter.get("deep", False))
             self._plan_head.load_adapter(adapter["state"])
             self._plan_head.eval()
             self._predictor, self._camera = load_predictor(args)
@@ -108,8 +109,8 @@ def make_wrapper(args: argparse.Namespace) -> "PolicyServerWrapper":  # noqa: F8
             processor = self.get_norm_processor(unnorm_key)
             head = self._plan_head.head
             states, mask = encode(self._framework, examples)
-            if self._predictor is None:
-                given = plans_of(examples)
+            if self._predictor is None or any("plan" in example for example in examples):
+                given = plans_of(examples)  # sent along: oracle plans, or predicted plans the client has kept
             elif self._camera is None:
                 given = plan_inputs(self._predictor(states, mask), positions_of(examples))
             else:
@@ -133,7 +134,7 @@ def main() -> None:
     parser.add_argument("--adapter", required=True, type=Path)
     parser.add_argument("--predictor", type=Path,
                         help="predictor.pt of train_plan_predictor.py: the plan is predicted from the VLM's hidden "
-                             "states, and every example must carry `ee_pos` instead of `plan`")
+                             "states for requests that carry `ee_pos` and no `plan`")
     parser.add_argument("--camera-log", type=Path,
                         help="a rollout log of the scenes; its camera calibration is needed by a grid predictor")
     parser.add_argument("--port", type=int, default=10093)

@@ -9,6 +9,7 @@ from affordance3d.plan_input import (
     offsets_from_json,
     offsets_to_json,
     oracle_plan,
+    plan_contact,
     plan_features,
 )
 
@@ -105,3 +106,24 @@ def test_offsets_survive_a_json_round_trip():
     np.testing.assert_allclose(restored.grasp_approach["bottle_1"], DOWN)
     np.testing.assert_allclose(restored.release, offsets.release)
     np.testing.assert_allclose(restored.release_approach, DOWN)
+
+
+def test_the_contact_is_recovered_from_a_plan_input_and_the_gripper_position():
+    # Arrange
+    ee, contact = np.array([0.30, -0.10, 0.25]), np.array([0.12, 0.05, 0.02])
+    features = plan_features(ee, contact, DOWN, closing=True)
+
+    # Act
+    found = plan_contact(features, ee)
+
+    # Assert
+    np.testing.assert_allclose(found, contact, atol=1e-6)
+
+
+def test_an_empty_plan_points_at_no_contact():
+    assert plan_contact(no_plan_features(), np.zeros(3)) is None
+
+
+def test_a_vector_of_the_wrong_length_is_not_a_plan():
+    with pytest.raises(ValueError, match="plan"):
+        plan_contact(np.zeros(PLAN_DIM + 1), np.zeros(3))

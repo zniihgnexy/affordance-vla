@@ -9,7 +9,10 @@ This is the loop of starVLA's `eval_libero.py` with three additions:
   4. a state-replay mode that loads the recorded simulator states of demonstrations one by one, with
      no dynamics: the log is then exactly the demonstration, and every demonstration can be used;
   5. an optional plan input sent to the policy server with every query: the oracle plan from simulator
-     ground truth (affordance3d/plan_input.py; needs this repo on PYTHONPATH), or an empty plan.
+     ground truth (affordance3d/plan_input.py; needs this repo on PYTHONPATH), or an empty plan;
+  6. with `--plan predicted` the server predicts the plan itself; `--hold-plan` then keeps each predicted
+     plan until the gripper has carried out its event (affordance3d/plan_hold.py) instead of asking for a
+     new one at every query.
 
 Usage (on the server, after `source scripts/remote/libero_env.sh`, with starVLA on PYTHONPATH):
     $LIBERO_PYTHON rollout_libero_logged.py --out DIR --tag standard --episodes 0 1 2 --port 6694
@@ -25,11 +28,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import numpy as np
+
+REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if REPO_ROOT not in sys.path:
+    sys.path.append(REPO_ROOT)  # for affordance3d (numpy-only modules); last, so that it shadows no library
+from affordance3d.plan_hold import Hold, after_query, after_step, plan_to_send  # noqa: E402
 
 DUMMY_ACTION = [0.0] * 6 + [-1.0]  # no motion, gripper open: lets the objects settle
 RESOLUTION = 256  # resolution of the training images
@@ -128,6 +137,7 @@ class ServerPolicy:
         self.name = f"server:{self.client._server_metadata.get('ckpt_path', '?')}"
         self.max_steps: int | None = None
         self.send_ee_pos = False  # set for --plan predicted: the server predicts the plan and needs the gripper
+        self.hold_plan = False  # set for --hold-plan: a predicted plan is kept until its event is carried out
         self.answer: dict = {}  # data of the server's latest answer (a plan server also returns its plan inputs)
         ask = self.client.client.predict_action
 
@@ -146,12 +156,18 @@ class ServerPolicy:
         self.chunks: list[np.ndarray] = []
         self.seconds: list[float] = []
         self.plans: list[np.ndarray] = []
+        # per logged plan: the server predicted it at that query (False: it was sent along, i.e. an oracle or
+        # empty plan, or with --hold-plan a predicted plan kept from an earlier query)
+        self.plan_predicted: list[bool] = []
+        self.hold = Hold()
 
     def act(self, image: np.ndarray, wrist: np.ndarray, step: int, plan: np.ndarray | None = None,
             ee_pos: np.ndarray | None = None) -> np.ndarray:
         fresh = step % self.client.action_chunk_size == 0
         started = time.perf_counter()
         example = {"image": [image, wrist], "lang": self.instruction}
+        if fresh and plan is None and self.hold_plan and ee_pos is not None:
+            plan = plan_to_send(self.hold, ee_pos)  # the kept plan, seen from where the gripper is now
         if plan is not None:
             example["plan"] = np.asarray(plan, dtype=np.float32)
         if self.send_ee_pos and ee_pos is not None:
@@ -161,13 +177,23 @@ class ServerPolicy:
             self.chunk_steps.append(step)
             self.chunks.append(np.asarray(self.client.raw_actions, dtype=np.float32).copy())
             self.seconds.append(time.perf_counter() - started)
-            if plan is not None:
-                self.plans.append(example["plan"])
-            elif "plans" in self.answer:  # predicted by the server
-                self.plans.append(np.asarray(self.answer["plans"], dtype=np.float32)[0])
+            self.remember_plan(example.get("plan"), ee_pos)
         gripper = env_gripper_command(float(np.asarray(raw["open_gripper"]).reshape(-1)[0]))
+        if self.hold_plan:
+            self.hold = after_step(self.hold, gripper)
         return np.concatenate([np.asarray(raw["world_vector"], dtype=float).reshape(3),
                                np.asarray(raw["rotation_delta"], dtype=float).reshape(3), [gripper]])
+
+    def remember_plan(self, sent: np.ndarray | None, ee_pos: np.ndarray | None) -> None:
+        """Log the plan input of the query just made; with --hold-plan a plan the server predicted is kept."""
+        if sent is not None:
+            self.plans.append(sent)
+            self.plan_predicted.append(False)
+        elif "plans" in self.answer:  # predicted by the server
+            self.plans.append(np.asarray(self.answer["plans"], dtype=np.float32)[0])
+            self.plan_predicted.append(True)
+            if self.hold_plan and ee_pos is not None:
+                self.hold = after_query(self.hold, self.plans[-1], ee_pos)
 
 
 class ReplayPolicy:
@@ -179,7 +205,7 @@ class ReplayPolicy:
         self.actions = np.asarray(actions, dtype=float)
         self.name = name
         self.max_steps: int | None = len(self.actions)
-        self.chunk_steps, self.chunks, self.seconds, self.plans = [], [], [], []
+        self.chunk_steps, self.chunks, self.seconds, self.plans, self.plan_predicted = [], [], [], [], []
 
     def reset(self, instruction: str) -> None:
         self.instruction = instruction
@@ -357,6 +383,9 @@ def parse_args() -> argparse.Namespace:
                         help="plan input sent with every query: none, the oracle plan, or an empty plan; "
                              "predicted: the gripper position is sent and the server predicts the plan")
     parser.add_argument("--plan-offsets", type=Path, help="contact offsets (JSON) for --plan oracle")
+    parser.add_argument("--hold-plan", action="store_true",
+                        help="with --plan predicted: keep each predicted plan until the gripper has carried out "
+                             "its event, instead of predicting a new plan at every query")
     parser.add_argument("--depth", action="store_true",
                         help="also log the agent view's depth image (metres) at every step, as `depth`")
     parser.add_argument("--seed", type=int, default=7)
@@ -379,6 +408,7 @@ def build_policy(args: argparse.Namespace, suite,
     initial_states = suite.get_task_init_states(task_id)
     policy = ServerPolicy(args.host, args.port)
     policy.send_ee_pos = args.plan == "predicted"
+    policy.hold_plan = args.hold_plan
     return policy, {episode: initial_states[episode] for episode in args.episodes}
 
 
@@ -391,7 +421,8 @@ def save_episode(path: Path, meta: dict, arrays: dict[str, np.ndarray], policy, 
         chunk_steps=np.asarray(policy.chunk_steps, dtype=int),
         chunks=np.stack(policy.chunks) if policy.chunks else np.zeros((0, 0, 7), dtype=np.float32),
         infer_seconds=np.asarray(policy.seconds, dtype=float),
-        plans=np.stack(policy.plans) if policy.plans else np.zeros((0, 0), dtype=np.float32), **arrays)
+        plans=np.stack(policy.plans) if policy.plans else np.zeros((0, 0), dtype=np.float32),
+        plan_predicted=np.asarray(policy.plan_predicted, dtype=bool), **arrays)
     partial.replace(path)
 
 
@@ -447,6 +478,8 @@ def main() -> None:
     args = parse_args()
     if args.replay_states and (args.replay_demo or args.shift or args.plan != "none"):
         raise SystemExit("--replay-states reads recorded states: it takes no policy, shift or plan")
+    if args.hold_plan and (args.plan != "predicted" or args.replay_demo):
+        raise SystemExit("--hold-plan keeps plans the server predicts: it needs --plan predicted and a policy server")
     np.random.seed(args.seed)
     suite, task_id, task, env = make_env(args)
     names = sorted(env.env.objects_dict)
@@ -465,7 +498,8 @@ def main() -> None:
         for label, extra, arrays, policy in episodes:
             meta = {"suite": args.suite, "task": task.language, "instruction": instruction, "target": target,
                     "objects_of_interest": list(env.obj_of_interest), "seed": args.seed, "names": names,
-                    "policy": policy.name, "plan": args.plan, "steps": int(len(arrays["actions"])),
+                    "policy": policy.name, "plan": args.plan, "hold_plan": args.hold_plan,
+                    "steps": int(len(arrays["actions"])),
                     "delivered": bool(arrays["in_goal"][-1, names.index(target)]),
                     "wall_seconds": round(time.perf_counter() - started, 1), **extra}
             path = args.out / f"{args.tag}_{label}.npz"

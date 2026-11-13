@@ -16,6 +16,7 @@ PLAN_DIM = 10
 FAR_SCALE_M = 0.10  # coarse part: 10 cm counts as 1
 NEAR_SCALE_M = 0.02  # fine part: tanh(reach / 2 cm) resolves the last centimetres and saturates beyond
 GRASP_CODE, RELEASE_CODE = 1.0, -1.0
+EVENT_COLUMN = PLAN_DIM - 1  # the event code: +1 grasp, -1 release, 0 when there is no plan
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,19 @@ def plan_features(ee_pos: np.ndarray, contact: np.ndarray, approach: np.ndarray,
 def no_plan_features() -> np.ndarray:
     """The input when no gripper event is ahead (after the last release)."""
     return np.zeros(PLAN_DIM, dtype=np.float32)
+
+
+def plan_contact(features: np.ndarray, ee_pos: np.ndarray) -> np.ndarray | None:
+    """The contact a plan input points at from the gripper position it was built for; None when it is no plan.
+
+    The inverse of plan_features: the coarse part of the vector is the reach in units of FAR_SCALE_M.
+    """
+    features = np.asarray(features, dtype=float).reshape(-1)
+    if features.shape != (PLAN_DIM,):
+        raise ValueError(f"a plan input has {PLAN_DIM} numbers, got {features.shape[0]}")
+    if features[EVENT_COLUMN] == 0.0:
+        return None
+    return np.asarray(ee_pos, dtype=float) + FAR_SCALE_M * features[:3]
 
 
 def oracle_plan(offsets: ContactOffsets, ee_pos: np.ndarray, target_pos: np.ndarray, container_pos: np.ndarray,
