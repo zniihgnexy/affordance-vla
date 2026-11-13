@@ -7,8 +7,10 @@ The plan input is the true plan (where the next gripper event happens, relative 
 Every sampled frame gives a demonstration sample (flow-matching loss on the demonstrated chunk). With
 --counterfactual shift, frames on the way to a grasp are also paired with a contact moved by a few
 centimetres; with shift+other, also with the grasp of another object of the scene and an instruction
-that names it. Those samples have no demonstrated translation: it is supervised by the plan–action
-consistency loss, the distance between the path of the one-step action estimate and the moved path.
+that names it; with shift+other+release, frames on the way to the release are in addition paired with
+a release contact moved by a few centimetres. Those samples have no demonstrated translation: it is
+supervised by the plan–action consistency loss, the distance between the path of the one-step action
+estimate and the moved path (or, with --supervision actions, by the rewritten actions themselves).
 
 Usage (starvla env, from the starVLA repo root; PYTHONPATH = starVLA and this repo):
     python train_plan_following.py --ckpt .../steps_100000_pytorch_model.pt --base-vlm .../Qwen3-VL-4B-Instruct \
@@ -103,10 +105,13 @@ class PlanData:
 
 def variants(data: PlanData, demo: int, step: int, mode: str, shift_radius: float, contact_noise: float,
              rng: np.random.Generator, plan_dropout: float = 0.0) -> list[Item]:
-    """The demonstration sample of a frame and, on the way to a grasp, its counterfactual samples.
+    """The demonstration sample of a frame and its counterfactual samples.
 
-    With probability `plan_dropout` (one draw per frame) the demonstration sample loses its plan input,
-    labels unchanged. The counterfactual samples always keep their plan.
+    On the way to a grasp the contact is moved within a disc ("shift") and, with "other" in the mode, to
+    another object named by a changed instruction. With "release" in the mode the release contact is
+    moved within the same disc while the object is carried. With probability `plan_dropout` (one draw per
+    frame) the demonstration sample loses its plan input, labels unchanged. The counterfactual samples
+    always keep their plan.
     """
     track = data.tracks[demo]
     noise = lambda: rng.normal(0.0, contact_noise, 3)  # noqa: E731
@@ -115,15 +120,16 @@ def variants(data: PlanData, demo: int, step: int, mode: str, shift_radius: floa
         demonstrated = without_plan(demonstrated)
     items = [Item(demonstrated, demo, step, track.instruction, DEMO)]
     plan = plan_ahead(track.labels, track.ee_pos[step], step)
-    if mode == "none" or plan is None or not plan.closing:
+    if mode == "none" or plan is None or not (plan.closing or "release" in mode):
         return items
     radius, angle = shift_radius * math.sqrt(rng.uniform()), rng.uniform(0.0, 2.0 * math.pi)
     moved = plan.polyline[-1] + np.array([radius * math.cos(angle), radius * math.sin(angle), 0.0])
-    sample = shifted_sample(track, step, data.horizon, moved, data.scale, contact_noise=noise())
+    sample = shifted_sample(track, step, data.horizon, moved, data.scale, contact_noise=noise(),
+                            allow_release="release" in mode)
     if sample is not None:
         items.append(Item(sample, demo, step, track.instruction, SHIFT))
     others = [name for name in track.names if name != track.target and name in data.contact.grasp]
-    if mode == "shift+other" and others:
+    if plan.closing and "other" in mode and others:
         name = others[rng.integers(len(others))]
         contact = track.object_pos[step, track.names.index(name)] + data.contact.grasp[name]
         sample = shifted_sample(track, step, data.horizon, contact, data.scale,
@@ -245,7 +251,7 @@ def open_loop(framework, plan_head: PlanConditionedHead, data: PlanData, items: 
 def fixed_test_items(data: PlanData, args: argparse.Namespace) -> list[Item]:
     """Held-out samples that stay the same over the run: both kinds of frames, with every counterfactual."""
     rng = np.random.default_rng(1234)
-    mode = "shift+other" if args.counterfactual == "shift+other" else "shift"
+    mode = "shift" if args.counterfactual == "none" else args.counterfactual
     frames = [data.test[i] for i in rng.choice(len(data.test), min(args.test_frames, len(data.test)), replace=False)]
     approach = data.test_approach
     frames += [approach[i] for i in rng.choice(len(approach), min(args.test_frames, len(approach)), replace=False)]
@@ -279,7 +285,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base-vlm", required=True)
     parser.add_argument("--data", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--counterfactual", choices=("none", "shift", "shift+other"), default="shift")
+    parser.add_argument("--counterfactual", choices=("none", "shift", "shift+other", "shift+other+release"),
+                        default="shift")
     parser.add_argument("--supervision", choices=("path", "actions"), default="path",
                         help="translation of counterfactual samples: path loss, or relabelled actions (ablation)")
     parser.add_argument("--steps", type=int, default=1500)

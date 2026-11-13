@@ -315,3 +315,126 @@ def test_a_sample_without_its_plan_keeps_the_demonstrated_actions():
     np.testing.assert_array_equal(dropped.action_valid, sample.action_valid)
     np.testing.assert_array_equal(dropped.start, sample.start)
     assert np.abs(sample.features).sum() > 0
+
+
+DROP = BASKET + [0.0, 0.0, 0.15]  # where make_track releases the bottle
+
+
+def test_a_step_on_the_way_to_a_release_is_only_paired_with_another_contact_when_asked():
+    # Arrange
+    track, new_contact = make_track(), DROP + [0.05, -0.10, 0.0]
+
+    # Act
+    default = shifted_sample(track, step=50, horizon=HORIZON, new_contact=new_contact, motion_scale=SCALE)
+    asked = shifted_sample(track, step=50, horizon=HORIZON, new_contact=new_contact, motion_scale=SCALE,
+                           allow_release=True)
+
+    # Assert
+    assert default is None
+    expected = plan_features(track.ee_pos[50], new_contact, approach=track.labels[1].approach, closing=False)
+    np.testing.assert_allclose(asked.features, expected, atol=1e-6)
+
+
+def test_a_shifted_release_with_the_demonstrated_contact_reproduces_the_demonstrated_path():
+    # Arrange
+    track = make_track()
+
+    # Act
+    sample = shifted_sample(track, step=50, horizon=HORIZON, new_contact=track.ee_pos[RELEASE], motion_scale=SCALE,
+                            allow_release=True)
+
+    # Assert
+    np.testing.assert_allclose(sample.path_target, track.ee_pos[51:59], atol=1e-9)
+    np.testing.assert_allclose(sample.actions[:, 6], 0.0)  # far from the release: the gripper stays closed
+
+
+def test_a_shifted_release_carries_the_object_toward_the_new_contact():
+    # Arrange: the release is moved 10 cm along x, across the direction of the carry
+    track, shift = make_track(), np.array([0.10, 0.0, 0.0])
+
+    # Act
+    moved = shifted_sample(track, step=45, horizon=HORIZON, new_contact=DROP + shift, motion_scale=SCALE,
+                           allow_release=True)
+    unmoved = shifted_sample(track, step=45, horizon=HORIZON, new_contact=DROP, motion_scale=SCALE,
+                             allow_release=True)
+
+    # Assert: the chunk ends further along x than the demonstrated one, and the commands ask for that path
+    assert moved.path_target[-1, 0] > unmoved.path_target[-1, 0] + 0.005
+    path = moved.start + SCALE * np.cumsum(moved.actions[:, :3], axis=0)
+    np.testing.assert_allclose(path, moved.path_target, atol=1e-9)
+    assert moved.path_valid.all() and not moved.action_valid[:, :3].any()
+
+
+def test_a_shifted_release_opens_the_gripper_at_the_demonstrated_distance_from_the_contact():
+    # Arrange: at step 64 the demonstration is six steps from the release and opens two steps before it
+    track = make_track()
+
+    # Act
+    sample = shifted_sample(track, step=64, horizon=HORIZON, new_contact=track.ee_pos[RELEASE], motion_scale=SCALE,
+                            min_remaining=0.0, allow_release=True)
+
+    # Assert: as in the demonstration, four commands closed and then open (policy convention: 1 = open)
+    assert sample.actions[:, 6].tolist() == [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+    np.testing.assert_allclose(sample.actions[:, 6], (1.0 - track.actions[64:72, 6]) / 2.0)
+    assert sample.path_valid.tolist() == [True] * 6 + [False] * 2
+
+
+def test_a_shifted_release_keeps_the_gripper_open_once_the_open_command_was_given():
+    # Arrange: step 69 lies between the open command (step 68) and the loss of contact (step 70)
+    track = make_track()
+
+    # Act
+    sample = shifted_sample(track, step=69, horizon=HORIZON, new_contact=track.ee_pos[RELEASE], motion_scale=SCALE,
+                            min_remaining=0.0, allow_release=True)
+
+    # Assert
+    np.testing.assert_allclose(sample.actions[:, 6], 1.0)
+
+
+def track_with_commands(closed: list[tuple[int, int]]):
+    """make_track with the gripper commanded closed over the given step ranges and open elsewhere."""
+    track = make_track()
+    actions = track.actions.copy()
+    actions[:, 6] = -1.0
+    for start, stop in closed:
+        actions[start:stop, 6] = 1.0
+    return track_from_arrays(track.ee_pos, actions, track.grasped, track.object_pos, track.names, track.target,
+                             track.instruction)
+
+
+def test_an_open_command_from_before_the_grasp_does_not_open_the_gripper_during_the_carry():
+    # Arrange: a first closing attempt (steps 10-19) is given up; after the real grasp no open command comes
+    track = track_with_commands([(10, 20), (GRASP - 4, STEPS - 1)])
+
+    # Act
+    sample = shifted_sample(track, step=50, horizon=HORIZON, new_contact=DROP + [0.05, 0.0, 0.0], motion_scale=SCALE,
+                            allow_release=True)
+
+    # Assert: the open command of step 20 belongs to the first attempt, not to this release
+    np.testing.assert_allclose(sample.actions[:, 6], 0.0)
+
+
+def test_a_release_after_a_failed_first_attempt_opens_at_the_distance_of_its_own_open_command():
+    # Arrange: closed 10-19 (given up), closed again from 36, opened at 68 for the release at 70
+    track = track_with_commands([(10, 20), (GRASP - 4, RELEASE - 2)])
+
+    # Act
+    sample = shifted_sample(track, step=64, horizon=HORIZON, new_contact=track.ee_pos[RELEASE], motion_scale=SCALE,
+                            min_remaining=0.0, allow_release=True)
+
+    # Assert
+    assert sample.actions[:, 6].tolist() == [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+
+
+def test_asking_for_releases_changes_nothing_on_the_way_to_a_grasp():
+    # Arrange
+    track, new_contact = make_track(), np.array([0.3, 0.1, 0.05])
+
+    # Act
+    default = shifted_sample(track, step=10, horizon=HORIZON, new_contact=new_contact, motion_scale=SCALE)
+    asked = shifted_sample(track, step=10, horizon=HORIZON, new_contact=new_contact, motion_scale=SCALE,
+                           allow_release=True)
+
+    # Assert
+    np.testing.assert_array_equal(asked.actions, default.actions)
+    np.testing.assert_array_equal(asked.features, default.features)

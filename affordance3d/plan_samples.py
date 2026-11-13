@@ -109,9 +109,13 @@ def without_plan(sample: PlanSample) -> PlanSample:
     return replace(sample, features=no_plan_features())
 
 
-def _flip_remaining(track: DemoTrack, step: int, event_step: int, arc: np.ndarray) -> float:
-    """Distance before the contact at which the demonstration commanded the gripper to close."""
-    flips = [flip.step for flip in track.command_flips if flip.closing and flip.step <= event_step]
+def _flip_remaining(track: DemoTrack, step: int, event_step: int, arc: np.ndarray, closing: bool) -> float:
+    """Distance before the contact at which the demonstration gave the event's gripper command: close
+    before a grasp, open before a release. Only commands since the previous event count, so an attempt
+    that was given up earlier is not mistaken for this event's command."""
+    previous = max((label.event.step for label in track.labels if label.event.step < event_step), default=-1)
+    flips = [flip.step for flip in track.command_flips
+             if flip.closing == closing and previous < flip.step <= event_step]
     if not flips:
         return 0.0
     if flips[-1] <= step:
@@ -121,21 +125,22 @@ def _flip_remaining(track: DemoTrack, step: int, event_step: int, arc: np.ndarra
 
 def shifted_sample(track: DemoTrack, step: int, horizon: int, new_contact: np.ndarray, motion_scale: float,
                    approach: np.ndarray | None = None, contact_noise: np.ndarray | None = None,
-                   min_remaining: float = MIN_REDIRECT_M) -> PlanSample | None:
-    """The step paired with a grasp at `new_contact` instead of the demonstrated one.
+                   min_remaining: float = MIN_REDIRECT_M, allow_release: bool = False) -> PlanSample | None:
+    """The step paired with its next gripper event at `new_contact` instead of the demonstrated place.
 
-    Returns None unless the step is on the way to a grasp with at least `min_remaining` metres to
-    go. `motion_scale` is the gripper motion per unit of translation action. The clean chunk's
-    translation is the demonstrated command plus what the plan change adds: the displacement
-    between walking the moved path and walking the demonstrated one, divided by the scale and
-    clipped to the action range. An unchanged contact therefore gives the demonstrated commands,
-    lag compensation included. The path target is the path those commands ask for. Rotation is
-    the demonstration's (not supervised after the arrival), the gripper closes at the
-    demonstrated distance from the contact.
+    Returns None unless the step is on the way to a grasp (or, with `allow_release`, to a release)
+    with at least `min_remaining` metres to go. `motion_scale` is the gripper motion per unit of
+    translation action. The clean chunk's translation is the demonstrated command plus what the plan
+    change adds: the displacement between walking the moved path and walking the demonstrated one,
+    divided by the scale and clipped to the action range. An unchanged contact therefore gives the
+    demonstrated commands, lag compensation included. The path target is the path those commands ask
+    for. Rotation is the demonstration's (not supervised after the arrival). The gripper command of
+    the event (close for a grasp, open for a release) is given at the demonstrated distance from
+    the contact.
     """
     actions = _policy_chunk(track, step, horizon)
     plan: PlanAhead | None = plan_ahead(track.labels, track.ee_pos[step], step)
-    if plan is None or not plan.closing:
+    if plan is None or not (plan.closing or allow_release):
         return None
     event_step = step + plan.steps_to_event
     path = track.ee_pos[step:event_step + 1]
@@ -143,17 +148,18 @@ def shifted_sample(track: DemoTrack, step: int, horizon: int, new_contact: np.nd
     if arc[-1] <= max(min_remaining, _MIN_PATH_M):
         return None
     new_contact = np.asarray(new_contact, dtype=float)
-    flip = _flip_remaining(track, step, event_step, arc)
+    flip = _flip_remaining(track, step, event_step, arc, plan.closing)
     target = counterfactual_chunk(path, new_contact, horizon, flip, max_step=motion_scale)
     unmoved = counterfactual_chunk(path, path[-1], horizon, flip, max_step=motion_scale)
     added = np.diff(np.vstack([np.zeros(3), target.points - unmoved.points]), axis=0) / motion_scale
     actions[:, :3] = np.clip(actions[:, :3] + added, -1.0, 1.0)
-    actions[:, 6] = np.where(target.closed, 0.0, 1.0)
+    commanded = 0.0 if plan.closing else 1.0  # policy convention: 0 = close, 1 = open
+    actions[:, 6] = np.where(target.closed, commanded, 1.0 - commanded)
     action_valid = np.zeros((horizon, 7), dtype=bool)
     action_valid[:, 3:6] = target.valid[:, None]
     action_valid[:, 6] = True
     features = plan_features(track.ee_pos[step], _noisy(new_contact, contact_noise),
-                             plan.approach if approach is None else approach, closing=True)
+                             plan.approach if approach is None else approach, closing=plan.closing)
     path_target = track.ee_pos[step] + motion_scale * np.cumsum(actions[:, :3], axis=0)
     return PlanSample(features=features, actions=actions, path_target=path_target, path_valid=target.valid,
                       action_valid=action_valid, start=track.ee_pos[step].copy())
