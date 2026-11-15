@@ -238,3 +238,87 @@ def test_the_gripper_closes_at_the_same_distance_from_the_contact_when_the_shift
     # start 1.5 and 0.75 cm from it), and the steps after the arrival are not valid
     assert target.closed.tolist() == [False] * 18 + [True] * 6
     assert target.valid.tolist() == [True] * 20 + [False] * 4
+
+
+SCALE = Retarget(rigid_tail=0.18, scale_from_start=True)
+
+
+def detour_path() -> np.ndarray:
+    """From (0, 0, 16 cm) 30 cm along -y at that height, then 16 cm straight down: 1 cm per step."""
+    across = np.stack([np.zeros(31), np.linspace(0.0, -0.30, 31), np.full(31, 0.16)], axis=1)
+    down = np.stack([np.zeros(17), np.full(17, -0.30), np.linspace(0.16, 0.0, 17)], axis=1)[1:]
+    return np.vstack([across, down])
+
+
+def test_scaling_about_the_start_leaves_an_unmoved_contact_as_demonstrated():
+    path = detour_path()
+
+    moved = retarget_path(path, path[-1], SCALE)
+
+    np.testing.assert_allclose(moved, path, atol=1e-12)
+
+
+def test_scaling_about_the_start_never_moves_away_from_a_contact_close_to_the_start():
+    # Arrange: the new contact lies 5 cm beside the start, below it; the demonstration went 30 cm the other way
+    path, new = detour_path(), np.array([0.0, 0.05, 0.0])
+
+    # Act
+    moved = retarget_path(path, new, SCALE)
+
+    # Assert: horizontally the gripper only comes closer, and the moved path ends at the new contact
+    horizontal = np.hypot(*(moved - new)[:, :2].T)
+    assert horizontal.max() <= horizontal[0] + 1e-9
+    np.testing.assert_allclose(moved[-1], new)
+
+
+def test_the_last_part_is_moved_as_a_whole_and_shortened_when_the_contact_is_close():
+    # Arrange: the straight distance is 16.8 cm, so the last part is half of it, 8.4 cm: the last 9 points
+    path, new = detour_path(), np.array([0.0, 0.05, 0.0])
+
+    # Act
+    moved = retarget_path(path, new, SCALE)
+
+    # Assert: the last 9 points are only moved; with the full 18 cm the corner of the path would be too
+    np.testing.assert_allclose(moved[-9:], path[-9:] + (new - path[-1]), atol=1e-12)
+    assert not np.allclose(moved[-19:], path[-19:] + (new - path[-1]))
+
+
+def test_the_last_part_keeps_the_full_rigid_length_when_the_contact_is_far():
+    # Arrange: 60 cm away, so the last part is the full 18 cm (here the whole 16 cm descent and 2 cm before it)
+    path, new = detour_path(), np.array([0.0, -0.60, 0.0])
+
+    # Act
+    moved = retarget_path(path, new, SCALE)
+
+    # Assert
+    np.testing.assert_allclose(moved[-19:], path[-19:] + (new - path[-1]), atol=1e-12)
+
+
+def test_a_given_final_approach_replaces_the_demonstrated_one():
+    # Arrange: an approach low from the side, 10 cm long, given relative to its own contact
+    path, new = detour_path(), np.array([0.0, -0.60, 0.0])
+    side = np.stack([np.linspace(-0.10, 0.0, 11), np.zeros(11), np.full(11, 0.02)], axis=1)
+    side[-1, 2] = 0.0
+
+    # Act
+    moved = retarget_path(path, new, SCALE, tail=side)
+
+    # Assert: the moved path ends with the given approach, placed at the new contact
+    np.testing.assert_allclose(moved[-11:], new + side, atol=1e-12)
+
+
+def test_the_free_part_ends_where_the_last_part_begins():
+    # Arrange
+    path, new = detour_path(), np.array([0.10, -0.15, 0.03])
+
+    # Act
+    moved = retarget_path(path, new, SCALE)
+
+    # Assert: no jump anywhere along the moved path
+    steps = np.linalg.norm(np.diff(moved, axis=0), axis=1)
+    assert steps.max() < 0.03
+
+
+def test_a_rule_cannot_both_align_first_and_scale_from_the_start():
+    with pytest.raises(ValueError, match="one of"):
+        Retarget(align_first=True, scale_from_start=True)

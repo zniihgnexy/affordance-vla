@@ -5,6 +5,7 @@ import pytest
 from affordance3d.counterfactual import Retarget, counterfactual_chunk
 from affordance3d.plan_input import no_plan_features, plan_features
 from affordance3d.plan_samples import (
+    approaches_by_target,
     contact_offsets,
     demo_sample,
     shifted_sample,
@@ -484,3 +485,66 @@ def test_rotation_is_not_supervised_after_the_step_of_the_demonstrated_contact()
     # Assert
     assert sample.action_valid[:4, 3:6].all()
     assert not sample.action_valid[4:, 3:6].any()
+
+
+def own_approach(track) -> np.ndarray:
+    """The demonstrated way to the grasp, relative to the grasp point."""
+    return track.ee_pos[:GRASP + 1] - track.ee_pos[GRASP]
+
+
+def test_handing_in_the_demonstrations_own_final_approach_changes_nothing():
+    # Arrange
+    track, new_contact = make_track(), np.array([0.3, 0.1, 0.05])
+    rule = Retarget(rigid_tail=0.18, scale_from_start=True)
+
+    # Act
+    plain = shifted_sample(track, step=10, horizon=HORIZON, new_contact=new_contact, motion_scale=SCALE, retarget=rule)
+    handed = shifted_sample(track, step=10, horizon=HORIZON, new_contact=new_contact, motion_scale=SCALE, retarget=rule,
+                            tail=own_approach(track))
+
+    # Assert
+    np.testing.assert_allclose(handed.actions, plain.actions, atol=1e-12)
+
+
+def test_another_final_approach_changes_the_labels_near_the_contact():
+    # Arrange: eight steps before the grasp, with a final approach that comes in low from the side instead
+    track, step = make_track(), GRASP - 8
+    rule = Retarget(rigid_tail=0.18, scale_from_start=True)
+    side = np.stack([np.linspace(-0.10, 0.0, 11), np.zeros(11), np.zeros(11)], axis=1)
+
+    # Act
+    plain = shifted_sample(track, step=step, horizon=HORIZON, new_contact=track.ee_pos[GRASP] + [0.0, 0.05, 0.0],
+                           motion_scale=SCALE, min_remaining=0.0, retarget=rule)
+    handed = shifted_sample(track, step=step, horizon=HORIZON, new_contact=track.ee_pos[GRASP] + [0.0, 0.05, 0.0],
+                            motion_scale=SCALE, min_remaining=0.0, retarget=rule, tail=side)
+
+    # Assert: only with the side approach is the gripper at the contact's height while still more than 2 cm aside
+    def low_aside(sample) -> bool:
+        relative = sample.path_target - (track.ee_pos[GRASP] + [0.0, 0.05, 0.0])
+        return bool(np.any((np.abs(relative[:, 2]) < 0.005) & (np.hypot(relative[:, 0], relative[:, 1]) > 0.02)))
+
+    assert low_aside(handed)
+    assert not low_aside(plain)
+
+
+def test_the_final_approaches_of_the_demonstrations_are_kept_per_object_relative_to_the_grasp_point():
+    # Arrange: two demonstrations of the bottle and one of the can
+    bottle, can = make_track(), make_track(target="can_1")
+
+    # Act
+    found = approaches_by_target([bottle, bottle, can])
+
+    # Assert
+    assert sorted(found) == ["bottle_1", "can_1"] and len(found["bottle_1"]) == 2
+    np.testing.assert_allclose(found["bottle_1"][0], bottle.ee_pos[:GRASP + 1] - bottle.ee_pos[GRASP])
+    np.testing.assert_allclose(found["bottle_1"][0][-1], 0.0)
+
+
+def test_a_demonstration_that_does_not_start_on_the_way_to_a_grasp_gives_no_final_approach():
+    # Arrange: the same track cut so that it starts while the bottle is already held
+    track = make_track()
+    held = track_from_arrays(track.ee_pos[GRASP + 2:], track.actions[GRASP + 2:], track.grasped[GRASP + 2:],
+                             track.object_pos[GRASP + 2:], track.names, track.target, track.instruction)
+
+    # Act / Assert
+    assert approaches_by_target([held]) == {}

@@ -126,7 +126,7 @@ def _flip_remaining(track: DemoTrack, step: int, event_step: int, arc: np.ndarra
 def shifted_sample(track: DemoTrack, step: int, horizon: int, new_contact: np.ndarray, motion_scale: float,
                    approach: np.ndarray | None = None, contact_noise: np.ndarray | None = None,
                    min_remaining: float = MIN_REDIRECT_M, allow_release: bool = False,
-                   retarget: Retarget = Retarget()) -> PlanSample | None:
+                   retarget: Retarget = Retarget(), tail: np.ndarray | None = None) -> PlanSample | None:
     """The step paired with its next gripper event at `new_contact` instead of the demonstrated place.
 
     Returns None unless the step is on the way to a grasp (or, with `allow_release`, to a release)
@@ -137,7 +137,9 @@ def shifted_sample(track: DemoTrack, step: int, horizon: int, new_contact: np.nd
     demonstrated commands, lag compensation included. The path target is the path those commands ask
     for. Rotation is the demonstration's (not supervised after the arrival). The gripper command of
     the event (close for a grasp, open for a release) is given at the demonstrated distance from
-    the contact. `retarget` says how the demonstrated path is moved (affordance3d/counterfactual.py).
+    the contact. `retarget` says how the demonstrated path is moved (affordance3d/counterfactual.py);
+    `tail` is a final approach to use instead of the demonstrated one (relative to its own contact), for
+    instance one of the object now named.
     A moved path can need more steps than the demonstration had left before its event. Those extra
     steps follow the moved path alone: what the demonstration did after its event (lifting, carrying)
     is not added to them, and their rotation is not supervised.
@@ -153,7 +155,8 @@ def shifted_sample(track: DemoTrack, step: int, horizon: int, new_contact: np.nd
         return None
     new_contact = np.asarray(new_contact, dtype=float)
     flip = _flip_remaining(track, step, event_step, arc, plan.closing)
-    target = counterfactual_chunk(path, new_contact, horizon, flip, max_step=motion_scale, retarget=retarget)
+    target = counterfactual_chunk(path, new_contact, horizon, flip, max_step=motion_scale, retarget=retarget,
+                                  tail=tail)
     unmoved = counterfactual_chunk(path, path[-1], horizon, flip, max_step=motion_scale, retarget=retarget)
     added = np.diff(np.vstack([np.zeros(3), target.points - unmoved.points]), axis=0) / motion_scale
     past_event = np.arange(horizon) >= len(path) - 1  # steps the demonstration made after its own event
@@ -169,6 +172,22 @@ def shifted_sample(track: DemoTrack, step: int, horizon: int, new_contact: np.nd
     path_target = track.ee_pos[step] + motion_scale * np.cumsum(actions[:, :3], axis=0)
     return PlanSample(features=features, actions=actions, path_target=path_target, path_valid=target.valid,
                       action_valid=action_valid, start=track.ee_pos[step].copy())
+
+
+def approaches_by_target(tracks: Sequence[DemoTrack]) -> dict[str, list[np.ndarray]]:
+    """Per target object: the demonstrated ways from the first step to the grasp, relative to the grasp point.
+
+    A demonstration that does not start on the way to a grasp gives none. These are the final approaches
+    handed to shifted_sample when a sample names another object (`tail`).
+    """
+    found: dict[str, list[np.ndarray]] = {}
+    for track in tracks:
+        plan = plan_ahead(track.labels, track.ee_pos[0], 0)
+        if plan is None or not plan.closing:
+            continue
+        path = np.asarray(track.ee_pos[:plan.steps_to_event + 1], dtype=float)
+        found.setdefault(track.target, []).append(path - path[-1])
+    return found
 
 
 def _unit_mean(vectors: list[np.ndarray]) -> np.ndarray:

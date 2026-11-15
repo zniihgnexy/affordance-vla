@@ -8,8 +8,9 @@ Every sampled frame gives a demonstration sample (flow-matching loss on the demo
 --counterfactual shift, frames on the way to a grasp are also paired with a contact moved by a few
 centimetres; with shift+other, also with the grasp of another object of the scene and an instruction
 that names it; with shift+other+release, frames on the way to the release are in addition paired with
-a release contact moved by a few centimetres. --rigid-tail and --align-first change how the
-demonstrated path is moved to the other contact (affordance3d/counterfactual.py). Those samples have
+a release contact moved by a few centimetres. --rigid-tail, --align-first and --scale-from-start change
+how the demonstrated path is moved to the other contact (affordance3d/counterfactual.py), and
+with --own-approach a sample naming another object ends with that object's own final approach. Those samples have
 no demonstrated translation: it is supervised by the plan–action consistency loss, the distance between
 the path of the one-step action estimate and the moved path (or, with --supervision actions, by the
 rewritten actions themselves).
@@ -42,7 +43,8 @@ from affordance3d.plan_consistency import plan_ahead  # noqa: E402
 from affordance3d.plan_dataset import frame_offsets, load_tracks  # noqa: E402
 from affordance3d.plan_input import PLAN_DIM, offsets_from_json  # noqa: E402
 from affordance3d.plan_policy import PlanConditionedHead, dit_lora_match  # noqa: E402
-from affordance3d.plan_samples import PlanSample, demo_sample, shifted_sample, without_plan  # noqa: E402
+from affordance3d.plan_samples import (PlanSample, approaches_by_target, demo_sample, shifted_sample,  # noqa: E402
+                                       without_plan)
 
 DEMO, SHIFT, OTHER = 0, 1, 2  # kinds of samples
 KIND_NAMES = {DEMO: "demo", SHIFT: "shift", OTHER: "other"}
@@ -82,6 +84,8 @@ class PlanData:
         self.train = [frame for frame in frames if frame[0] not in held_out]
         self.test = [frame for frame in frames if frame[0] in held_out]
         self.train_approach = [frame for frame in self.train if self.on_approach(*frame)]
+        # final approaches of the training demonstrations, per object (--own-approach)
+        self.approaches = approaches_by_target([track for d, track in enumerate(self.tracks) if d not in held_out])
         self.test_approach = [frame for frame in self.test if self.on_approach(*frame)]
 
     def _held_out(self, count: int) -> set[int]:
@@ -107,14 +111,16 @@ class PlanData:
 
 
 def variants(data: PlanData, demo: int, step: int, mode: str, shift_radius: float, contact_noise: float,
-             rng: np.random.Generator, plan_dropout: float = 0.0, retarget: Retarget = Retarget()) -> list[Item]:
+             rng: np.random.Generator, plan_dropout: float = 0.0, retarget: Retarget = Retarget(),
+             own_approach: bool = False) -> list[Item]:
     """The demonstration sample of a frame and its counterfactual samples.
 
     On the way to a grasp the contact is moved within a disc ("shift") and, with "other" in the mode, to
     another object named by a changed instruction. With "release" in the mode the release contact is
     moved within the same disc while the object is carried. With probability `plan_dropout` (one draw per
     frame) the demonstration sample loses its plan input, labels unchanged. The counterfactual samples
-    always keep their plan.
+    always keep their plan. With `own_approach`, a sample that names another object ends its path with the
+    final approach of a training demonstration of that object, drawn at random.
     """
     track = data.tracks[demo]
     noise = lambda: rng.normal(0.0, contact_noise, 3)  # noqa: E731
@@ -135,9 +141,11 @@ def variants(data: PlanData, demo: int, step: int, mode: str, shift_radius: floa
     if plan.closing and "other" in mode and others:
         name = others[rng.integers(len(others))]
         contact = track.object_pos[step, track.names.index(name)] + data.contact.grasp[name]
+        choices = data.approaches.get(name, []) if own_approach else []
+        tail = choices[rng.integers(len(choices))] if choices else None
         sample = shifted_sample(track, step, data.horizon, contact, data.scale,
                                 approach=data.contact.grasp_approach[name], contact_noise=noise(),
-                                retarget=retarget)
+                                retarget=retarget, tail=tail)
         instruction = track.instruction.replace(object_words(track.target), object_words(name))
         if sample is not None and instruction != track.instruction:
             items.append(Item(sample, demo, step, instruction, OTHER))
@@ -173,7 +181,7 @@ def draw_batch(data: PlanData, args: argparse.Namespace, rng: np.random.Generato
         pool = data.train_approach if (rng.uniform() < APPROACH_SHARE and data.train_approach) else data.train
         demo, step = pool[rng.integers(len(pool))]
         items += variants(data, demo, step, args.counterfactual, args.shift_radius, args.contact_noise, rng,
-                          args.plan_dropout, Retarget(args.rigid_tail, args.align_first))
+                          args.plan_dropout, retarget_of(args), args.own_approach)
     return items
 
 
@@ -252,6 +260,11 @@ def open_loop(framework, plan_head: PlanConditionedHead, data: PlanData, items: 
     return {key: round(float(np.mean(values)), 4) for key, values in sorted(sums.items())}
 
 
+def retarget_of(args: argparse.Namespace) -> Retarget:
+    """The rule by which demonstrated paths are moved, from the command line."""
+    return Retarget(rigid_tail=args.rigid_tail, align_first=args.align_first, scale_from_start=args.scale_from_start)
+
+
 def fixed_test_items(data: PlanData, args: argparse.Namespace) -> list[Item]:
     """Held-out samples that stay the same over the run: both kinds of frames, with every counterfactual."""
     rng = np.random.default_rng(1234)
@@ -261,7 +274,7 @@ def fixed_test_items(data: PlanData, args: argparse.Namespace) -> list[Item]:
     frames += [approach[i] for i in rng.choice(len(approach), min(args.test_frames, len(approach)), replace=False)]
     return [item for demo, step in frames
             for item in variants(data, demo, step, mode, args.shift_radius, 0.0, rng, plan_dropout=0.0,
-                                 retarget=Retarget(args.rigid_tail, args.align_first))]
+                                 retarget=retarget_of(args), own_approach=args.own_approach)]
 
 
 def learning_rate(step: int, args: argparse.Namespace) -> float:
@@ -309,6 +322,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--align-first", action="store_true",
                         help="a shift longer than the path before the rigid tail is made first, in a straight line "
                              "from the current position, instead of being pressed into the steps that are left")
+    parser.add_argument("--scale-from-start", action="store_true",
+                        help="the part of a moved path before its final approach is turned and scaled about the "
+                             "start, so that it never first moves away from the new contact (instead of a shift)")
+    parser.add_argument("--own-approach", action="store_true",
+                        help="a sample that names another object ends with the final approach of a demonstration of "
+                             "that object (needs --scale-from-start and 'other' in --counterfactual)")
     parser.add_argument("--deep-plan", action="store_true",
                         help="also add the plan to the input of every later block of the action DiT "
                              "(the injection of Fast Plans, Faithful Actions), not only to the action tokens")
@@ -319,6 +338,10 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if not 0.0 <= args.plan_dropout <= 1.0:
         parser.error(f"--plan-dropout is a probability, got {args.plan_dropout}")
+    if args.align_first and args.scale_from_start:
+        parser.error("choose one of --align-first and --scale-from-start")
+    if args.own_approach and not (args.scale_from_start and "other" in args.counterfactual):
+        parser.error("--own-approach needs --scale-from-start and a --counterfactual that names other objects")
     return args
 
 
