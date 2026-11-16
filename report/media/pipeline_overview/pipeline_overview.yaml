@@ -1,0 +1,93 @@
+# Pipeline figure of the weekly review (report/2026-11-16_weekly_review.ipynb, section "先看这里").
+# Spec for the cvpr-figure skill; how to render it with Chinese text: README.md in this folder.
+# The four crops come from real logs (scripts/remote/pipeline_figure_crops.py).
+figure:
+  id: pipeline_overview
+  venue: generic
+  width: 530
+  font: helvetica
+  type_scale: 1.1
+
+layout: col
+gap: 12
+
+panels:
+  - id: s_test
+    title: "测试时：闭环执行（每个动作块之后用新画面再查询）"
+    title_align: left
+    frame: dashed
+    pad: 7
+    padt: 17
+    body:
+      - row:
+          gap: 10
+          align: center
+          body:
+            - {id: img_in, shape: image, w: 66, src: input.png, caption: "画面 + 指令"}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: m_vlm, shape: marker, kind: frozen, d: 7}
+                  - {id: vlm, shape: trapezoid, text: "VLM", role: neutral}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: m_plan, shape: marker, kind: trainable, d: 7}
+                  - {id: planhead, text: "计划头\n8×8 图像格子", role: encoder}
+            - {id: img_plan, shape: image, w: 66, src: plan.png, caption: "预测的计划：抓哪里"}
+            - {id: hold, text: "计划保持\n到夹爪动作完成", role: neutral}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: m_act, shape: marker, kind: trainable, d: 7}
+                  - {id: act, text: "动作头\nVLM 特征 + 计划", role: decoder}
+            - {id: img_out, shape: image, w: 66, src: outcome.png, caption: "执行动作块"}
+
+  - id: s_train
+    title: "训练时：反事实监督（本工作的核心）"
+    title_pos: inside-bottom
+    title_align: left
+    frame: dashed
+    fill: orange.pale
+    pad: 7
+    body:
+      - row:
+          gap: 12
+          align: center
+          body:
+            - {id: demo, text: "示范的一帧\n真实接触点", role: neutral}
+            - {id: move, text: "挪动计划\n换位置 / 换物体", role: core}
+            - {id: relabel, text: "改写动作标签\n走向新接触点", role: core}
+            - {id: img_cf, shape: image, w: 66, src: counterfactual.png, caption: "黑：示范　橙：改写"}
+            - {id: loss, text: "动作损失", role: core, tint: soft, align_x: act}
+
+  - id: s_key
+    frame: none
+    body:
+      - row:
+          gap: 5
+          align: center
+          body:
+            - {id: k1, shape: marker, kind: trainable, d: 6}
+            - {id: k1t, shape: text, text: "训练", type: annot}
+            - {id: k2, shape: marker, kind: frozen, d: 6}
+            - {id: k2t, shape: text, text: "冻结", type: annot}
+
+edges:
+  - {from: img_in.e, to: vlm.w}
+  - {from: vlm.e, to: planhead.w}
+  - {from: planhead.e, to: img_plan.w}
+  - {from: img_plan.e, to: hold.w}
+  - {from: hold.e, to: act.w}
+  - {from: act.e, to: img_out.w}
+  - {from: img_out.n, to: img_in.n, route: bus, bend: 8, color: grey, label: "新画面", label_size: 7}
+  - {from: demo.e, to: move.w, color: core}
+  - {from: move.e, to: relabel.w, color: core}
+  - {from: relabel.e, to: img_cf.w, color: core}
+  - {from: img_cf.e, to: loss.w, color: core}
+  - {from: loss.n, to: act.s, color: core, label: "训练动作头", label_size: 7, label_dx: 4, label_anchor: start}
+  - {from: demo.n, to: planhead.s, dash: true, color: encoder, label: "训练计划头", label_size: 7}
+
