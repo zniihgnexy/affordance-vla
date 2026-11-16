@@ -1,16 +1,15 @@
 """Closed-loop LIBERO rollouts with a per-step log (simulator side: runs in the LIBERO env, CPU only).
 
-This is the loop of starVLA's `eval_libero.py` with three additions:
-  1. a log of every step: end effector, each object's position, grasp and touch flags from simulator
-     contacts, visible pixels per object (instance segmentation), and the goal check per object;
-  2. optional home-made perturbations: another instruction for the same scene, or a shifted object;
-  3. a replay mode that re-executes a recorded demonstration instead of asking a policy, which gives
+The episode loop itself (starVLA's `eval_libero.py` with a per-step log) is in
+affordance_vla/sim/episode.py, shared with the local viewer. This script adds:
+  1. optional home-made perturbations: another instruction for the same scene, or a shifted object;
+  2. a replay mode that re-executes a recorded demonstration instead of asking a policy, which gives
      the same log for training data (and tests this script without a GPU);
-  4. a state-replay mode that loads the recorded simulator states of demonstrations one by one, with
+  3. a state-replay mode that loads the recorded simulator states of demonstrations one by one, with
      no dynamics: the log is then exactly the demonstration, and every demonstration can be used;
-  5. an optional plan input sent to the policy server with every query: the oracle plan from simulator
+  4. an optional plan input sent to the policy server with every query: the oracle plan from simulator
      ground truth (affordance_vla/plan/plan_input.py; needs this repo on PYTHONPATH), or an empty plan;
-  6. with `--plan predicted` the server predicts the plan itself; `--hold-plan` then keeps each predicted
+  5. with `--plan predicted` the server predicts the plan itself; `--hold-plan` then keeps each predicted
      plan until the gripper has carried out its event (affordance_vla/plan/plan_hold.py) instead of asking for a
      new one at every query.
 
@@ -39,96 +38,39 @@ REPO_ROOT = str(Path(__file__).resolve().parents[2])
 if REPO_ROOT not in sys.path:
     sys.path.append(REPO_ROOT)  # for affordance_vla (numpy-only modules); last, so that it shadows no library
 from affordance_vla.plan.plan_hold import Hold, after_query, after_step, plan_to_send  # noqa: E402
+from affordance_vla.sim.episode import (  # noqa: E402
+    benchmark_instruction,
+    camera_matrices,
+    env_gripper_command,
+    find_task,
+    goal_container,
+    max_steps_of,
+    replay_states,
+    run_episode,
+    shifted_state,
+)
+from affordance_vla.sim.episode import make_env as episode_env  # noqa: E402
 
-DUMMY_ACTION = [0.0] * 6 + [-1.0]  # no motion, gripper open: lets the objects settle
-RESOLUTION = 256  # resolution of the training images
-WAIT_STEPS = 10
-MAX_STEPS = {"libero_spatial": 220, "libero_object": 280, "libero_goal": 300, "libero_10": 520, "libero_90": 400}
-CAMERA = "agentview"
-ROBOT_SEG_ID = 255  # keep in step with affordance_vla/sim/rollout_log.py (this script runs in another environment)
-ROBOT_INSTANCES = ("Panda0", "RethinkMount0", "PandaGripper0")
-GRIPPER_OPEN_THRESHOLD = 0.5  # the policy's gripper output is 1 for open and 0 for close
 HOLD_STEPS = 5  # the oracle plan treats the target as held until contact has been absent this long
 IMAGE_ARRAYS = ("agentview", "wrist", "seg", "depth")  # what --images-for leaves out of a log
 
 
-def owns_region(name: str, region: str) -> bool:
-    """Whether the goal region is the object itself (plate_1 in LIBERO-Spatial's "On bowl plate_1") or one of
-    its regions (basket_1_contain_region in LIBERO-Object)."""
-    return region == name or region.startswith(f"{name}_")
 
 
-def model_view(image: np.ndarray) -> np.ndarray:
-    """The 180° rotation applied to LIBERO frames when the training data was made."""
-    return np.ascontiguousarray(image[::-1, ::-1])
 
 
-def metric_depth(sim, buffer: np.ndarray) -> np.ndarray:
-    """The simulator's depth buffer (0 = near plane, 1 = far plane) as metres along the optical axis."""
-    from robosuite.utils.camera_utils import get_real_depth_map
-
-    return get_real_depth_map(sim, buffer).astype(np.float32)
 
 
-def env_gripper_command(open_value: float) -> float:
-    """Policy output (1 = open, 0 = close) to the simulator's command (-1 = open, +1 = close)."""
-    return 1.0 - 2.0 * float(open_value > GRIPPER_OPEN_THRESHOLD)
 
 
-def max_steps_of(suite_name: str) -> int:
-    """Step limit of a suite; a variant such as libero_object_swap takes the limit of the suite it is built on."""
-    known = [name for name in MAX_STEPS if suite_name == name or suite_name.startswith(f"{name}_")]
-    if not known:
-        raise SystemExit(f"no step limit is known for suite {suite_name!r}")
-    return MAX_STEPS[max(known, key=len)]
 
 
-def benchmark_instruction(suite_name: str, task) -> str:
-    """The task's instruction; for a perturbed suite, with the words that its task file changed.
-
-    LIBERO takes the instruction from the file name, which LIBERO-PRO's task perturbation leaves as it
-    was: the changed instruction is only in the file's (:language ...) line (affordance_vla/sim/benchmark_text.py).
-    """
-    from libero.libero import get_libero_path
-
-    from affordance_vla.sim.benchmark_text import bddl_language, perturbed_instruction
-
-    folder = Path(get_libero_path("bddl_files"))
-    bases = [name for name in MAX_STEPS if suite_name.startswith(f"{name}_")]
-    original = folder / max(bases, key=len) / task.bddl_file if bases else None
-    if original is None or not original.is_file():
-        return task.language
-    perturbed = folder / task.problem_folder / task.bddl_file
-    return perturbed_instruction(task.language, bddl_language(original.read_text()),
-                                 bddl_language(perturbed.read_text()))
 
 
-def find_task(suite, language: str) -> int:
-    for task_id in range(suite.n_tasks):
-        if suite.get_task(task_id).language.lower() == language.lower():
-            return task_id
-    known = [suite.get_task(i).language for i in range(suite.n_tasks)]
-    raise SystemExit(f"task {language!r} is not in this suite; choose one of {known}")
 
 
-def goal_template(env) -> tuple[str, str] | None:
-    """(predicate, region) if the goal is one binary predicate on one object, e.g. ("in", "basket_1_contain_region")."""
-    goal = env.env.parsed_problem["goal_state"]
-    if len(goal) == 1 and len(goal[0]) == 3:
-        return goal[0][0], goal[0][2]
-    return None
 
 
-def shifted_state(env, state: np.ndarray, shifts: dict[str, tuple[float, float]]) -> np.ndarray:
-    """A copy of a flattened simulator state (time, qpos, qvel) with objects moved in x and y (metres)."""
-    state = np.array(state, dtype=float, copy=True)
-    for name, (dx, dy) in shifts.items():
-        if name not in env.env.objects_dict:
-            raise SystemExit(f"cannot shift {name!r}; movable objects are {sorted(env.env.objects_dict)}")
-        start, _ = env.sim.model.get_joint_qpos_addr(env.env.objects_dict[name].joints[0])
-        state[1 + start] += dx
-        state[2 + start] += dy
-    return state
 
 
 class ServerPolicy:
@@ -221,110 +163,12 @@ class ReplayPolicy:
         return self.actions[step]
 
 
-class StepLog:
-    """Per-step records of one episode."""
-
-    KEYS = ("agentview", "wrist", "seg", "ee_pos", "ee_quat", "gripper_qpos", "object_pos", "grasped", "touched",
-            "visible_px", "in_goal")
-
-    def __init__(self, env, names: list[str], target: str) -> None:
-        self.env, self.names, self.target = env, names, target
-        self.template = goal_template(env)
-        instances = list(env.env.model.instances_to_ids.keys())
-        unknown = [name for name in names if name not in instances]
-        if unknown:  # such an object would silently count as never visible
-            raise RuntimeError(f"objects without a segmentation instance: {unknown}")
-        self.seg_values = {instances.index(name) + 1: k + 1 for k, name in enumerate(names)}
-        self.robot_values = [instances.index(name) + 1 for name in ROBOT_INSTANCES if name in instances]
-        self.rows: dict[str, list] = {key: [] for key in self.KEYS}
-        self.actions: list[np.ndarray] = []
-
-    def in_goal(self, name: str) -> bool:
-        if self.template is None:  # goal is not a single object predicate: only the task's own check is known
-            return bool(name == self.target and self.env.check_success())
-        predicate, region = self.template
-        if owns_region(name, region):  # the container itself, e.g. basket_1 for basket_1_contain_region
-            return False
-        return bool(self.env.env._eval_predicate([predicate, name, region]))
-
-    def record(self, obs: dict) -> None:
-        inner, gripper = self.env.env, self.env.env.robots[0].gripper
-        raw_seg = obs[f"{CAMERA}_segmentation_instance"][..., 0]
-        seg = np.zeros(raw_seg.shape, dtype=np.uint8)
-        for value, index in self.seg_values.items():
-            seg[raw_seg == value] = index
-        seg[np.isin(raw_seg, self.robot_values)] = ROBOT_SEG_ID
-        objects = [inner.objects_dict[name] for name in self.names]
-        row = {
-            "agentview": model_view(obs[f"{CAMERA}_image"]), "wrist": model_view(obs["robot0_eye_in_hand_image"]),
-            "seg": model_view(seg), "ee_pos": obs["robot0_eef_pos"].copy(), "ee_quat": obs["robot0_eef_quat"].copy(),
-            "gripper_qpos": obs["robot0_gripper_qpos"].copy(),
-            "object_pos": np.array([inner.sim.data.body_xpos[inner.obj_body_id[name]] for name in self.names]),
-            "grasped": np.array([inner._check_grasp(gripper=gripper, object_geoms=obj) for obj in objects]),
-            "touched": np.array([inner.check_contact(gripper, obj) for obj in objects]),
-            "visible_px": np.array([(seg == k + 1).sum() for k in range(len(self.names))]),
-            "in_goal": np.array([self.in_goal(name) for name in self.names]),
-        }
-        if f"{CAMERA}_depth" in obs:  # only when the simulator renders depth (--depth)
-            row["depth"] = model_view(metric_depth(inner.sim, obs[f"{CAMERA}_depth"][..., 0]))
-        for key, value in row.items():
-            self.rows.setdefault(key, []).append(value)
-
-    def arrays(self) -> dict[str, np.ndarray]:
-        out = {key: np.stack(values) for key, values in self.rows.items()}
-        out["actions"] = np.stack(self.actions) if self.actions else np.zeros((0, 7))
-        return out
 
 
-def run_episode(env, policy, instruction: str, init_state: np.ndarray, names: list[str], target: str,
-                max_steps: int, planner=None) -> tuple[dict[str, np.ndarray], bool]:
-    """One episode from `init_state`; returns the log arrays and whether the task's own goal was reached.
-
-    A policy episode ends when the task's goal is met (as in starVLA's evaluation) or when the object named
-    by the instruction satisfies the goal, which differs from the task's goal under a swapped instruction.
-    `planner` maps the log rows so far to the plan input sent with the query (None: no plan is sent).
-    """
-    env.reset()
-    obs = env.set_init_state(init_state)
-    for _ in range(WAIT_STEPS):
-        obs, _, _, _ = env.step(DUMMY_ACTION)
-    policy.reset(instruction)
-    log = StepLog(env, names, target)
-    success = False
-    for step in range(max_steps):
-        log.record(obs)
-        plan = planner(log.rows) if planner else None
-        action = policy.act(log.rows["agentview"][-1], log.rows["wrist"][-1], step, plan, log.rows["ee_pos"][-1])
-        log.actions.append(np.asarray(action, dtype=float))
-        obs, _, done, _ = env.step(action.tolist())  # LIBERO returns its goal check as `done`
-        success = success or bool(done)
-        if policy.stop_on_success and (done or log.in_goal(target)):
-            break
-    log.record(obs)
-    return log.arrays(), success
 
 
-def replay_states(env, states: np.ndarray, actions: np.ndarray, names: list[str],
-                  target: str) -> tuple[dict[str, np.ndarray], bool]:
-    """The log of a demonstration read off its recorded simulator states; no dynamics are run.
-
-    State t is the one in which action t was issued, so T states give T rows and T - 1 actions.
-    Returns the arrays and whether the task's goal holds in the last state.
-    """
-    log = StepLog(env, names, target)
-    for state in states:
-        log.record(env.set_init_state(state))
-    log.actions = [np.asarray(action, dtype=float) for action in actions[:len(states) - 1]]
-    return log.arrays(), bool(env.check_success())
 
 
-def goal_container(env, names: list[str]) -> str:
-    """The object that owns the goal region, e.g. basket_1 for basket_1_contain_region, plate_1 for plate_1."""
-    template = goal_template(env)
-    owners = [name for name in names if template and owns_region(name, template[1])]
-    if len(owners) != 1:
-        raise SystemExit(f"cannot tell which object the goal region belongs to (goal: {template})")
-    return owners[0]
 
 
 def build_planner(args: argparse.Namespace, env, names: list[str],
@@ -351,11 +195,6 @@ def build_planner(args: argparse.Namespace, env, names: list[str],
     return planner
 
 
-def camera_matrices(env) -> tuple[np.ndarray, np.ndarray]:
-    from robosuite.utils.camera_utils import get_camera_extrinsic_matrix, get_camera_intrinsic_matrix
-
-    return (get_camera_intrinsic_matrix(env.sim, CAMERA, RESOLUTION, RESOLUTION),
-            get_camera_extrinsic_matrix(env.sim, CAMERA))
 
 
 def parse_args() -> argparse.Namespace:
@@ -464,19 +303,12 @@ def state_replays(args: argparse.Namespace, env, names: list[str], target: str) 
 
 def make_env(args: argparse.Namespace) -> tuple:
     """(suite, task index, task, simulator) for the task named on the command line."""
-    from libero.libero import benchmark, get_libero_path
-    from libero.libero.envs import SegmentationRenderEnv
+    from libero.libero import benchmark
 
-    suite = benchmark.get_benchmark_dict()[args.suite]()
-    task_id = args.task_id if args.task_id is not None else find_task(suite, args.task)
-    if not 0 <= task_id < suite.n_tasks:
-        raise SystemExit(f"suite {args.suite} has tasks 0-{suite.n_tasks - 1}, not {task_id}")
-    task = suite.get_task(task_id)
-    env = SegmentationRenderEnv(
-        bddl_file_name=str(Path(get_libero_path("bddl_files")) / task.problem_folder / task.bddl_file),
-        camera_heights=RESOLUTION, camera_widths=RESOLUTION, camera_depths=args.depth)
-    env.seed(args.seed)  # the seed affects object placement even with a fixed initial state
-    env.reset()
+    task_id = args.task_id
+    if task_id is None:
+        task_id = find_task(benchmark.get_benchmark_dict()[args.suite](), args.task)
+    suite, task, env = episode_env(args.suite, task_id, args.seed, args.depth)
     return suite, task_id, task, env
 
 
