@@ -19,9 +19,9 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from affordance3d.geometry import project, visible_mask
-from affordance3d.scenefun3d import FunctionalElement, SequenceIndex, load_frames
-from affordance3d.viz import Z_UP_VIEW, points_trace, scene_figure
+from affordance_vla.geometry import project, visible_mask
+from affordance_vla.legacy.scenefun3d import FunctionalElement, SequenceIndex, load_frames
+from affordance_vla.legacy.viz import Z_UP_VIEW, points_trace, scene_figure
 
 # --------------------------------------------------------------------------- candidate landscape
 
@@ -103,7 +103,7 @@ def split_counts(file_lists: Path) -> pd.DataFrame:
 
 
 def label_colours(elements: list[FunctionalElement]) -> dict[str, tuple[float, float, float]]:
-    """Same colours as notebooks/02 (tab10 over the sorted labels)."""
+    """Same colours as report/legacy/02_scenefun3d_e0.ipynb (tab10 over the sorted labels)."""
     palette = plt.get_cmap("tab10")
     return {label: palette(i)[:3] for i, label in enumerate(sorted({e.label for e in elements}))}
 

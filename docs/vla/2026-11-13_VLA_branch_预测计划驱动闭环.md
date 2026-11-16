@@ -65,7 +65,7 @@
 
 ### 1.4 计划在闭环里指向哪里
 
-每条 rollout 的日志里存着动作头每次拿到的计划。把它还原成接触点，和指令所说物体的真值抓取点比较（`affordance3d/plan_audit.py`）。
+每条 rollout 的日志里存着动作头每次拿到的计划。把它还原成接触点，和指令所说物体的真值抓取点比较（`affordance_vla/analysis/plan_audit.py`）。
 
 | 第一次查询时的计划 | 回归坐标（位置扰动） | 图像格子（位置扰动） | 回归坐标（任务扰动） | 图像格子（任务扰动） |
 | --- | --- | --- | --- | --- |
@@ -174,54 +174,54 @@
 | 训练数据 | LIBERO-Object 10 个任务的 454 条示范，每个任务留 5 条不参与训练 |
 | 动作头 | `s2_actions`：计划输入 10 个数，LoRA 加计划编码器，约 3075 万参数，在 6 个任务上用反事实计划训练 |
 | 闭环评测 | LIBERO-PRO Object 的位置扰动和任务扰动，10 个任务 × 20 个起始状态（论文用 50 个） |
-| 任务扰动下的指令 | LIBERO 从文件名取指令，任务扰动不改文件名；这里把任务文件里的新物体名套进训练时的句式（`affordance3d/benchmark_text.py`） |
+| 任务扰动下的指令 | LIBERO 从文件名取指令，任务扰动不改文件名；这里把任务文件里的新物体名套进训练时的句式（`affordance_vla/sim/benchmark_text.py`） |
 | 运行时来自仿真的量 | 只有相机标定（图像格子的计划头用它把"像素加深度"换成三维坐标）和夹爪位置 |
 
 ## 3. 做法
 
 ### 3.1 两个计划头
 
-- **回归坐标**（`affordance3d/plan_predictor.py`）：4 个可学习的查询读整段 token 序列，直接输出接触点的三维坐标。
-- **图像格子**（`affordance3d/plan_grid.py`）：给第三人称相机的 8 × 8 个图像 token 逐个打分，"接触点是不是出现在这一格"；再回归格内位置和沿视线的深度。取分数最高的一格，连同格内位置和深度，用相机标定换成三维接触点。
+- **回归坐标**（`affordance_vla/heads/plan_predictor.py`）：4 个可学习的查询读整段 token 序列，直接输出接触点的三维坐标。
+- **图像格子**（`affordance_vla/heads/plan_grid.py`）：给第三人称相机的 8 × 8 个图像 token 逐个打分，"接触点是不是出现在这一格"；再回归格内位置和沿视线的深度。取分数最高的一格，连同格内位置和深度，用相机标定换成三维接触点。
   - VLM 是因果模型，图像排在指令前面，图像 token 看不到指令。所以计划头里加了一个两层的双向编码器，让格子先读到指令。
   - 训练时把这张图像随机平移最多两格，目标格跟着移。
   - 这些格子分数就是 VLM 分辨率下的 affordance map。
 
 ### 3.2 计划保持
 
-闭环里每 8 步向模型要一次动作块。"每次查询都预测"是每次都重新预测计划。"计划保持"（`affordance3d/plan_hold.py`，`--hold-plan`）是：预测一次，把接触点按世界坐标存下来，之后每次查询只按夹爪的新位置重新算相对量；等夹爪把这个事件做完（连续 5 步发出闭合或张开指令），再预测下一个计划。物体在被抓之前不动，篮子在释放之前不动，所以保持期间计划不会过时。
+闭环里每 8 步向模型要一次动作块。"每次查询都预测"是每次都重新预测计划。"计划保持"（`affordance_vla/plan/plan_hold.py`，`--hold-plan`）是：预测一次，把接触点按世界坐标存下来，之后每次查询只按夹爪的新位置重新算相对量；等夹爪把这个事件做完（连续 5 步发出闭合或张开指令），再预测下一个计划。物体在被抓之前不动，篮子在释放之前不动，所以保持期间计划不会过时。
 
 ### 3.3 计划审计
 
-`affordance3d/plan_audit.py` 把日志里的计划输入还原成接触点（`plan_contact`，`plan_features` 的逆运算），再找离它最近的物体抓取点。超过 10 厘米算"哪个物体都没指到"。只统计任何物体被夹住之前的查询。
+`affordance_vla/analysis/plan_audit.py` 把日志里的计划输入还原成接触点（`plan_contact`，`plan_features` 的逆运算），再找离它最近的物体抓取点。超过 10 厘米算"哪个物体都没指到"。只统计任何物体被夹住之前的查询。
 
 ### 3.4 深层注入
 
-`affordance3d/plan_policy.py` 的 `DeepPlan`：给 DiT 第 2 层起的每一层挂一个前置钩子，把"该层的线性映射（计划嵌入）"加到这一层的输入上。第 1 层的输入本来就加了计划嵌入。训练选项 `--deep-plan`。
+`affordance_vla/heads/plan_policy.py` 的 `DeepPlan`：给 DiT 第 2 层起的每一层挂一个前置钩子，把"该层的线性映射（计划嵌入）"加到这一层的输入上。第 1 层的输入本来就加了计划嵌入。训练选项 `--deep-plan`。
 
 ## 4. 复现
 
-都在 A6000 服务器上，GPU 作业全部走队列（`scripts/remote/submit_queue_job.sh`，用法见 [V0 服务器搭建记录](2026-11-10_VLA_branch_V0_服务器搭建记录.md)）。
+都在 A6000 服务器上，GPU 作业全部走队列（`scripts/server/submit_queue_job.sh`，用法见 [V0 服务器搭建记录](2026-11-10_VLA_branch_V0_服务器搭建记录.md)）。
 
 计划头（`HEAD=regress` 或 `grid`）：
 
 ```bash
-bash scripts/remote/submit_queue_job.sh 126 plan_predictor_g1 20000 6 "cards=5" -- \
-  env RUN=g1 HEAD=grid STEPS=2500 bash ~/affordance-vla/scripts/remote/run_plan_predictor_gpu.sh
+bash scripts/server/submit_queue_job.sh 126 plan_predictor_g1 20000 6 "cards=5" -- \
+  env RUN=g1 HEAD=grid STEPS=2500 bash ~/affordance-vla/scripts/vla/run_plan_predictor_gpu.sh
 ```
 
 动作头（六任务集，带闭环评测）：
 
 ```bash
-bash scripts/remote/submit_queue_job.sh 138 plan_s8_align_release 26000 6 "cards=5" -- \
+bash scripts/server/submit_queue_job.sh 138 plan_s8_align_release 26000 6 "cards=5" -- \
   env RUN=s8_align_release DATA=$W/runs/plan_following/dataset COUNTERFACTUAL=shift+other+release \
   SUPERVISION=actions STEPS=2400 "TRAIN_ARGS=--rigid-tail 0.18 --align-first" \
-  "SETS=standard shift ask" "EPISODES=0 1 2 3 4 5" bash ~/affordance-vla/scripts/remote/run_plan_following_gpu.sh
+  "SETS=standard shift ask" "EPISODES=0 1 2 3 4 5" bash ~/affordance-vla/scripts/vla/run_plan_following_gpu.sh
 ```
 
 深层注入对照：`RUN=s5_deep COUNTERFACTUAL=none STEPS=2400 "TRAIN_ARGS=--contact-noise 0.05 --plan-dropout 0.15 --deep-plan"`。
 
-LIBERO-PRO 闭环（`scripts/remote/run_libero_pro_gpu.sh`）：
+LIBERO-PRO 闭环（`scripts/eval/run_libero_pro_gpu.sh`）：
 
 | 列 | 环境变量 |
 | --- | --- |
@@ -232,7 +232,7 @@ LIBERO-PRO 闭环（`scripts/remote/run_libero_pro_gpu.sh`）：
 最后在服务器的 `report/` 下：
 
 ```bash
-python ../scripts/build_plan_predictor_report.py 2026-11-13_plan_predictor.ipynb
+python ../scripts/report/build_plan_predictor_report.py 2026-11-13_plan_predictor.ipynb
 python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-13_plan_predictor.ipynb
 ```
 

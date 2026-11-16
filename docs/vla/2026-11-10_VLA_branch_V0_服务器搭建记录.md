@@ -43,7 +43,7 @@ NAS 目录里的内容：
 | `cache/wheelhouse` | 建环境时预先下载的大安装包（torch、CUDA 库、flash-attn） |
 | `runs/`、`logs/` | 实验输出和安装、下载日志 |
 
-环境：Python 3.10，torch 2.6.0（CUDA 12.4 版），flash-attn 2.7.4.post1，其余按 starVLA 的 `requirements.txt` 固定版本。完整版本清单存在本仓库的 `scripts/remote/starvla_env_freeze.txt`。
+环境：Python 3.10，torch 2.6.0（CUDA 12.4 版），flash-attn 2.7.4.post1，其余按 starVLA 的 `requirements.txt` 固定版本。完整版本清单存在本仓库的 `envs/server/starvla_env_freeze.txt`。
 
 最初这些大文件放在 `/data/xinyizheng/affordance3d_vla/`，2026-11-10 晚按上面的约定搬到了 NAS，原目录已删除。
 
@@ -57,8 +57,8 @@ git clone --depth 1 -b starVLA_dev https://github.com/starVLA/starVLA.git $W/rep
 git clone --depth 1 https://github.com/Lifelong-Robot-Learning/LIBERO.git $W/repos/LIBERO
 cd ~/affordance-vla
 ln -s $W/data data && ln -s $W/runs runs
-nohup bash scripts/remote/setup_starvla_env.sh > $W/logs/setup_starvla_env.log 2>&1 &
-nohup bash scripts/remote/download_assets.sh   > $W/logs/download_assets.log   2>&1 &
+nohup bash envs/server/setup_starvla_env.sh > $W/logs/setup_starvla_env.log 2>&1 &
+nohup bash scripts/data/download_assets.sh   > $W/logs/download_assets.log   2>&1 &
 ```
 
 ## 3. `scripts/remote/` 里的脚本

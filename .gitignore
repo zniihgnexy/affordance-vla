@@ -1,23 +1,21 @@
-# Python environment (conda env "affordance3d", see requirements.txt)
+# Python caches, local virtual environments, coverage and notebook scratch
 .venv/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+.coverage
 .ipynb_checkpoints/
 .virtual_documents/
+.DS_Store
 
-# Local datasets, third-party checkouts and experiment outputs are not versioned.
-# Leading slashes keep these from matching the tracked docs/outputs/ folder.
-/data/
-/third_party/
-/runs/
-# On the server these are symlinks into the NAS work dir (a trailing slash would not match a symlink).
+# Data, third-party checkouts and experiment outputs are not versioned (leading slashes keep the tracked
+# docs/outputs/ out of these rules; no trailing slash, so symlinks match too):
+# - on the server, data, runs and report/assets are symlinks into the NAS work dir;
+# - on a Mac, third_party holds the LIBERO-PRO checkout and runs the rollout logs fetched for local
+#   simulation (scripts/local/fetch_sim_data.sh).
 /data
 /runs
+/third_party
 /report/assets
-
-# Third-party preview images are fetched with scripts/download_report_images.sh and not
-# redistributed here. Videos made by our own notebooks are small and tracked in report/media/.
-/report/assets/
-
-.DS_Store
+# Third-party preview images are fetched into report/assets by scripts/report/download_report_images.sh
+# and not redistributed here. Videos and figures made by our own notebooks are tracked in report/media/.

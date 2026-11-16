@@ -125,8 +125,8 @@ ICCV 的投稿截止通常在 3 月初，按这个节奏会很紧；NeurIPS 通�
   - Mac（M1，16GB）用于阅读、轻量检查和查看结果。
   - 按 openpi 的说明（需核实），π0.5 的 LoRA 微调需要约 22.5GB 显存，全量微调需要 70GB 以上。A6000 每卡 48GB，所以默认用 LoRA；全量微调需要多卡分片。
 - **机器人：** 不碰真实机器人。真实数据集只用来离线提取标签或做预训练。
-- **环境与呈现：** 用 conda 加 `requirements.txt`，环境由项目负责人自己创建。结果用预先执行好的分步 notebook 呈现。
-- **可复用代码：** `affordance3d/geometry.py`（反投影、投影、可见性）、`affordance3d/memory.py`（`VoxelMemory`、`fuse`、`coverage`）、`affordance3d/features.py`（DINOv2）、`affordance3d/viz.py`，以及 E0 式的数据检查流程。
+- **环境与呈现：** 用 conda 加 `envs/legacy/requirements_mac_e0.txt`，环境由项目负责人自己创建。结果用预先执行好的分步 notebook 呈现。
+- **可复用代码：** `affordance_vla/geometry.py`（反投影、投影、可见性）、`affordance_vla/legacy/memory.py`（`VoxelMemory`、`fuse`、`coverage`）、`affordance_vla/legacy/features.py`（DINOv2）、`affordance_vla/legacy/viz.py`，以及 E0 式的数据检查流程。
 
 ## 5. 已知的直接近邻（初步，需检索核实）
 
@@ -268,7 +268,7 @@ ICCV 的投稿截止通常在 3 月初，按这个节奏会很紧；NeurIPS 通�
 
 - 11-02 的 VLA 调研（memory VLA、affordance VLA 列表）直接作为 S2 的起点。
 - 11-05 的环境记忆设计中"affordance 是记忆的一层，保留观察有效性和来源"的思路继续沿用，但数据不再用 SceneFun3D。
-- `affordance3d/` 的几何与体素记忆代码在 V1、V3 中复用；SceneFun3D 加载器在本分支不用。
+- `affordance_vla/` 的几何与体素记忆代码在 V1、V3 中复用；SceneFun3D 加载器在本分支不用。
 
 ## 10. 本轮检索记录
 

@@ -13,11 +13,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from affordance3d.counterfactual import Retarget, arc_lengths, retarget_path
-from affordance3d.plan_consistency import plan_ahead
-from affordance3d.plan_input import ContactOffsets
-from affordance3d.plan_samples import DemoTrack
-from affordance3d.rollout_log import RolloutLog, load_rollout_log
+from affordance_vla.plan.plan_consistency import plan_ahead
+from affordance_vla.plan.plan_input import ContactOffsets
+from affordance_vla.sim.rollout_log import RolloutLog, load_rollout_log
+from affordance_vla.training.counterfactual import Retarget, arc_lengths, retarget_path
+from affordance_vla.training.plan_samples import DemoTrack
 from report.libero_pro_helpers import EPISODE_FILE
 from report.vla_pipeline_demo_helpers import pretty
 

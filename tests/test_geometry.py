@@ -1,10 +1,9 @@
 import numpy as np
 import pytest
 
-from affordance3d.frames import make_frame, read_intrinsics, read_log_poses
-from affordance3d.geometry import backproject, depth_residuals, forward_warp, project, visible_mask
-
-from .conftest import TEST_HW, TEST_K, frame_from_depth, pose
+from affordance_vla.frames import make_frame, read_intrinsics, read_log_poses
+from affordance_vla.geometry import backproject, depth_residuals, forward_warp, project, visible_mask
+from tests.conftest import TEST_HW, TEST_K, frame_from_depth, pose
 
 
 def test_backproject_then_project_recovers_pixels_and_depth() -> None:

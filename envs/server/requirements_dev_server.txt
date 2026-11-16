@@ -1,0 +1,13 @@
+# Extra packages in the starVLA env on the A6000 server for the repo's tests and the report notebook.
+# Installed by envs/server/setup_starvla_env.sh together with numpy==1.26.4, so that pip cannot
+# upgrade numpy (starVLA's pyarrow 14 breaks with numpy 2). Do not add plyfile: 1.1.5 needs numpy>=2.
+pytest==9.2.0
+h5py==3.16.0
+plotly==7.1.0
+imageio-ffmpeg==0.8.1
+nbformat==5.11.1
+nbconvert==7.17.2
+ipykernel==7.3.0
+# lint and coverage (python -m ruff check .; python -m pytest --cov=affordance_vla)
+ruff==0.15.12
+pytest-cov==7.0.0

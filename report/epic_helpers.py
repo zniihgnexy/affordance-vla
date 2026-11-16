@@ -21,7 +21,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from scipy.spatial.transform import Rotation
 
-from affordance3d.viz import Z_UP_VIEW, points_trace, scene_figure
+from affordance_vla.legacy.viz import Z_UP_VIEW, points_trace, scene_figure
 from report.report_helpers import MapProjection, outlined_text
 
 NOT_A_CONTACT = {"inconclusive", "hand-not-in-contact", "none-of-the-above"}
@@ -318,7 +318,8 @@ def contact_examples_figure(frames: list[VisorFrame], narrations: list[Narration
                              squeeze=False)
     for row, obj in enumerate(objects):
         hits = [f for f in frames if any(o == obj for _, o in f.contacts)]
-        chosen = [hits[i] for i in np.unique(np.linspace(0, len(hits) - 1, per_object).round().astype(int))] if hits else []
+        picks = np.unique(np.linspace(0, len(hits) - 1, per_object).round().astype(int))
+        chosen = [hits[i] for i in picks] if hits else []
         for col in range(per_object):
             axis = axes[row, col]
             axis.set_axis_off()
@@ -327,8 +328,8 @@ def contact_examples_figure(frames: list[VisorFrame], narrations: list[Narration
             vf = chosen[col]
             image = cv2.resize(iio.imread(vf.path), (480, 270), interpolation=cv2.INTER_AREA)
             axis.imshow(draw_masks(image, vf, 480 / 1920, colours, labels=False, only={obj, *HAND_COLOURS}))
-            axis.set_title(f"{_clock(vf.frame, fps_source)} · {textwrap.shorten(narration_at(narrations, vf.frame), 26)}",
-                           fontsize=9)
+            caption = textwrap.shorten(narration_at(narrations, vf.frame), 26)
+            axis.set_title(f"{_clock(vf.frame, fps_source)} · {caption}", fontsize=9)
         axes[row, 0].text(-0.04, 0.5, f"{obj}\n({len(hits)} contact frames)", transform=axes[row, 0].transAxes,
                           ha="right", va="center", fontsize=10, fontweight="bold")
     fig.suptitle("Query: object → every earlier hand contact with it (VISOR ground truth, in time order)")

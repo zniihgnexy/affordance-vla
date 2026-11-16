@@ -158,7 +158,7 @@
 - 原始示范文件里存了每一步的仿真状态。逐步载入状态（不跑动力学）再渲染，得到的就是录制的那条示范本身，接触也能读到。
 - 在一条示范上核对过：抓取和释放的步数（51、112）与动作回放一致，夹爪位置与录制值相差不到 0.5 毫米。v2 风险第 5 条“直接设置状态拿不到接触”不成立。
 - 一条示范被采用的条件：目标物体的接触标志里恰好有一次抓取和一次释放。
-- 其余任务的原始文件每个约 650 MB，服务器到 Hugging Face 只有 0.2–0.9 MB/s。状态回放只需要每条示范的 `states` 和 `actions`，不到文件的 1%，所以改成按字节范围只取这两项（`scripts/remote/fetch_libero_states.py`）。取回的沙拉酱任务与完整文件逐条比对，完全一致。
+- 其余任务的原始文件每个约 650 MB，服务器到 Hugging Face 只有 0.2–0.9 MB/s。状态回放只需要每条示范的 `states` 和 `actions`，不到文件的 1%，所以改成按字节范围只取这两项（`scripts/data/fetch_libero_states.py`）。取回的沙拉酱任务与完整文件逐条比对，完全一致。
 
 ### 3.2 计划怎么接入动作头
 
@@ -187,32 +187,32 @@
 
 ```bash
 # 服务器上，CPU 部分（不占 GPU，不走队列）
-source scripts/remote/libero_env.sh
-$LIBERO_PYTHON scripts/remote/fetch_libero_states.py libero_object $W/data/libero_states/libero_object \
+source envs/server/libero_env.sh
+$LIBERO_PYTHON scripts/data/fetch_libero_states.py libero_object $W/data/libero_states/libero_object \
     --only salad_dressing alphabet_soup cream_cheese ketchup milk tomato_sauce
-RAW=$W/data/libero_states/libero_object PARTS=10 bash scripts/remote/replay_libero_states.sh
-PYTHONPATH=$PWD /data/xinyizheng/envs/starvla/bin/python scripts/remote/build_plan_dataset.py \
+RAW=$W/data/libero_states/libero_object PARTS=10 bash scripts/data/replay_libero_states.sh
+PYTHONPATH=$PWD /data/xinyizheng/envs/starvla/bin/python scripts/data/build_plan_dataset.py \
     --logs $W/runs/plan_following/demos --out $W/runs/plan_following/dataset
 
 # GPU 部分：每个配置一个队列作业（训练加 21 条闭环）
-bash scripts/remote/submit_queue_job.sh 104 plan_s2_other 26000 3 "cards=1 7 5" -- \
+bash scripts/server/submit_queue_job.sh 104 plan_s2_other 26000 3 "cards=1 7 5" -- \
     env RUN=s2_other COUNTERFACTUAL=shift+other STEPS=2400 "SETS=standard shift ask" \
-    bash ~/affordance-vla/scripts/remote/run_plan_following_gpu.sh
+    bash ~/affordance-vla/scripts/vla/run_plan_following_gpu.sh
 # 另外两个配置：RUN=s2_none COUNTERFACTUAL=none；RUN=s2_actions COUNTERFACTUAL=shift+other SUPERVISION=actions
 
 # 只评测：闭环时给空计划；两组扰动条件再补 4 个起始状态
-bash scripts/remote/submit_queue_job.sh 107 plan_s2_other_zero 14000 3 "cards=1 7 5" -- \
+bash scripts/server/submit_queue_job.sh 107 plan_s2_other_zero 14000 3 "cards=1 7 5" -- \
     env RUN=s2_other STAGES=eval PLAN=zero "SETS=standard shift ask" \
-    bash ~/affordance-vla/scripts/remote/run_plan_following_gpu.sh
-bash scripts/remote/submit_queue_job.sh 108 plan_s2_other_more 14000 3 "cards=1 5 7" -- \
+    bash ~/affordance-vla/scripts/vla/run_plan_following_gpu.sh
+bash scripts/server/submit_queue_job.sh 108 plan_s2_other_more 14000 3 "cards=1 5 7" -- \
     env RUN=s2_other STAGES=eval "SETS=shift ask" "EPISODES=2 3 4 5" SUFFIX=_more \
-    bash ~/affordance-vla/scripts/remote/run_plan_following_gpu.sh
+    bash ~/affordance-vla/scripts/vla/run_plan_following_gpu.sh
 
 # notebook（在 report/ 下）
-python ../scripts/build_plan_following_report.py 2026-11-11_plan_following_experiment.ipynb
+python ../scripts/report/build_plan_following_report.py 2026-11-11_plan_following_experiment.ipynb
 python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-11_plan_following_experiment.ipynb
 ```
 
 - 输出在 `$W/runs/plan_following/<RUN>/`：`adapter.pt`（训练出的参数）、`train.jsonl`、`metrics.json`、`rollouts_oracle/`、`rollouts_oracle_more/`、`rollouts_zero/`。
 - 第一阶段的三个配置用 `DATA=$W/runs/plan_following/dataset_salad`、`COUNTERFACTUAL=none|shift`、`STEPS=1200`、`SETS="standard shift"`，`RUN` 分别是 `s1_none`、`s1_shift`、`s1_actions`。
-- 对应代码：`affordance3d/` 下的 `plan_input.py`（计划输入）、`counterfactual.py` 和 `plan_samples.py`（换计划样本）、`path_loss.py`（路径损失）、`lora.py` 和 `plan_policy.py`（带计划输入的动作头）、`plan_stages.py`（闭环分阶段统计）；`report/plan_following_helpers.py` 和 `scripts/build_plan_following_report.py`（notebook）。
+- 对应代码：`affordance_vla/` 下的 `plan_input.py`（计划输入）、`counterfactual.py` 和 `plan_samples.py`（换计划样本）、`path_loss.py`（路径损失）、`lora.py` 和 `plan_policy.py`（带计划输入的动作头）、`plan_stages.py`（闭环分阶段统计）；`report/plan_following_helpers.py` 和 `scripts/report/build_plan_following_report.py`（notebook）。

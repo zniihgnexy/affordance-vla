@@ -1,8 +1,8 @@
 """Figures and tables for report/2026-11-10_vla_pipeline_demo.ipynb: data, model, open loop, closed loop.
 
 The label side of the demo (CAW plan, plan–action consistency, episode state) is in
-vla_pipeline_demo_labels.py. Inputs come from scripts/remote/probe_vla_demo.py (probe.npz / probe.json)
-and scripts/remote/rollout_libero_logged.py (one .npz per episode).
+vla_pipeline_demo_labels.py. Inputs come from scripts/vla/probe_vla_demo.py (probe.npz / probe.json)
+and scripts/eval/rollout_libero_logged.py (one .npz per episode).
 """
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from affordance3d.caw_labels import GripperEvent
-from affordance3d.rollout_log import RolloutLog, load_rollout_log
-from affordance3d.rollout_outcome import NO_GRASP, NOT_DELIVERED, SUCCESS, WRONG_OBJECT, classify
+from affordance_vla.analysis.rollout_outcome import NO_GRASP, NOT_DELIVERED, SUCCESS, WRONG_OBJECT, classify
+from affordance_vla.plan.caw_labels import GripperEvent
+from affordance_vla.sim.rollout_log import RolloutLog, load_rollout_log
 
 ACTION_NAMES = ("dx", "dy", "dz", "droll", "dpitch", "dyaw", "gripper")
 XYZ_COLOURS = ("#1f77b4", "#ff7f0e", "#2ca02c")
@@ -73,7 +73,7 @@ def load_logs(folder: Path, tag: str, images: bool = True) -> list[RolloutLog]:
     """All episodes of one condition, in episode order."""
     paths = sorted(Path(folder).glob(f"{tag}_ep*.npz"), key=lambda p: int(p.stem.rsplit("_ep", 1)[1]))
     if not paths:
-        raise FileNotFoundError(f"no {tag}_ep*.npz in {folder}; run scripts/remote/run_vla_demo_gpu.sh first")
+        raise FileNotFoundError(f"no {tag}_ep*.npz in {folder}; run scripts/vla/run_vla_demo_gpu.sh first")
     return [load_rollout_log(path, images=images) for path in paths]
 
 

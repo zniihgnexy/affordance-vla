@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from affordance3d.frames import Frame
+from affordance_vla.frames import Frame
 
 TEST_K = np.array([[100.0, 0.0, 31.5], [0.0, 100.0, 23.5], [0.0, 0.0, 1.0]])
 TEST_HW = (48, 64)

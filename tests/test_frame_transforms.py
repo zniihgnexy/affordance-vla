@@ -1,9 +1,8 @@
 import numpy as np
 import pytest
 
-from affordance3d.geometry import backproject, project, rotate_frame_cw, subsample_frame
-
-from .conftest import TEST_HW, frame_from_depth, pose
+from affordance_vla.geometry import backproject, project, rotate_frame_cw, subsample_frame
+from tests.conftest import TEST_HW, frame_from_depth, pose
 
 
 def textured_frame():

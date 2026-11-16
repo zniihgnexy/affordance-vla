@@ -1,6 +1,6 @@
 """Tables and the figure of the weekly review notebooks (report/2026-11-16_weekly_review.ipynb).
 
-The counts come from the per-task summaries that scripts/remote/rollout_libero_logged.py writes next to the
+The counts come from the per-task summaries that scripts/eval/rollout_libero_logged.py writes next to the
 rollout logs (`task<k>_summary.json`, one row per rollout with the benchmark's own `success`), so no log has
 to be opened.
 """

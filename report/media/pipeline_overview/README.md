@@ -13,7 +13,7 @@ Remake the crops on the server (starvla env, no GPU):
 
 ```bash
 W=/mnt/nas/xinyizheng/affordance_vla; R=$W/runs/libero_pro/predicted_g1_hold_s10/libero_object_swap
-python scripts/remote/pipeline_figure_crops.py --rollout $R/task2_ep0.npz \
+python scripts/report/pipeline_figure_crops.py --rollout $R/task2_ep0.npz \
     --demo $W/runs/plan_following/demos/pick_up_the_salad_dressing_and_place_it_in_the_basket_demo0.npz \
     --data $W/runs/plan_following/dataset10 --other ketchup_1 --out report/media/pipeline_overview
 ```

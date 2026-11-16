@@ -1,7 +1,7 @@
 """Figures and tables for report/2026-11-11_plan_following_experiment.ipynb.
 
-Inputs: the training set of scripts/remote/build_plan_dataset.py, the run folders written by
-scripts/remote/run_plan_following_gpu.sh (train.jsonl, metrics.json, rollouts_<plan>/), and the
+Inputs: the training set of scripts/data/build_plan_dataset.py, the run folders written by
+scripts/vla/run_plan_following_gpu.sh (train.jsonl, metrics.json, rollouts_<plan>/), and the
 rollouts of the released checkpoint from the pipeline demo of 10 Nov 2026.
 """
 from __future__ import annotations
@@ -13,14 +13,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from affordance3d.counterfactual import arc_lengths, counterfactual_chunk, retarget_path
-from affordance3d.plan_consistency import plan_ahead
-from affordance3d.plan_input import FAR_SCALE_M
-from affordance3d.plan_samples import DemoTrack
-from affordance3d.plan_stages import (REACH_TOLERANCE_M, PlanStages, command_roughness, plan_stages,
-                                      reach_along_rollout)
-from affordance3d.rollout_log import RolloutLog, load_rollout_log
-from affordance3d.rollout_outcome import SUCCESS, classify
+from affordance_vla.analysis.plan_stages import (
+    REACH_TOLERANCE_M,
+    PlanStages,
+    command_roughness,
+    plan_stages,
+    reach_along_rollout,
+)
+from affordance_vla.analysis.rollout_outcome import SUCCESS, classify
+from affordance_vla.plan.plan_consistency import plan_ahead
+from affordance_vla.plan.plan_input import FAR_SCALE_M
+from affordance_vla.sim.rollout_log import RolloutLog, load_rollout_log
+from affordance_vla.training.counterfactual import arc_lengths, counterfactual_chunk, retarget_path
+from affordance_vla.training.plan_samples import DemoTrack
 from report.vla_pipeline_demo_helpers import draw_top_view, outcome_table, pretty
 
 SETS = {  # the 21 rollouts of the pipeline demo, grouped

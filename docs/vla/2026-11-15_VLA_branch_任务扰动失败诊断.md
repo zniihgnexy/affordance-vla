@@ -92,7 +92,7 @@
 在服务器的 `report/` 下：
 
 ```bash
-python ../scripts/build_task_perturbation_report.py 2026-11-15_task_perturbation_failures.ipynb
+python ../scripts/report/build_task_perturbation_report.py 2026-11-15_task_perturbation_failures.ipynb
 python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-15_task_perturbation_failures.ipynb
 ```
 

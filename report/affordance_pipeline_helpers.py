@@ -2,7 +2,7 @@
 
 One closed-loop rollout that was logged with depth (run_plan_following_gpu.sh with DEPTH=1) is followed
 step by step. What no model predicts yet is computed from the simulator and labelled ORACLE in the
-notebook: the affordance map (affordance3d/affordance_map.py), the planned contact, the approach
+notebook: the affordance map (affordance_vla/plan/affordance_map.py), the planned contact, the approach
 direction and the episode state.
 """
 from __future__ import annotations
@@ -14,12 +14,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from affordance3d.affordance_map import contact_region_map, map_point
-from affordance3d.episode_state import Slot
-from affordance3d.libero_camera import project_points, unproject_depth
-from affordance3d.plan_input import FAR_SCALE_M, plan_features
-from affordance3d.rollout_log import RolloutLog, load_rollout_log
-from affordance3d.rollout_outcome import SUCCESS, classify
+from affordance_vla.analysis.rollout_outcome import SUCCESS, classify
+from affordance_vla.plan.affordance_map import contact_region_map, map_point
+from affordance_vla.plan.episode_state import Slot
+from affordance_vla.plan.plan_input import FAR_SCALE_M, plan_features
+from affordance_vla.sim.libero_camera import project_points, unproject_depth
+from affordance_vla.sim.rollout_log import RolloutLog, load_rollout_log
 from report.vla_pipeline_demo_helpers import ACTION_NAMES, CONTROL_HZ, Probe, draw_top_view, pretty
 
 GRASP_SIGMA_M = 0.03  # width of the map around a grasp contact (distance in 3D)

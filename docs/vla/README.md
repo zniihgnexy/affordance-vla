@@ -38,7 +38,7 @@
   1. **之后的动作头默认用 15 日的标签：** 以起点为中心旋转缩放路径前半段，最后一段取自指令所说物体自己的示范（`--counterfactual shift+other+release --supervision actions --rigid-tail 0.18 --scale-from-start --own-approach`）。代码里的默认值不变，以便复现以前的运行。
   2. **接着做：** 教动作头修正小的计划误差（"换成另一个物体"的样本加大计划噪声，`--other-noise`），然后提高计划头的精度。噪声的结果（11-16 晚，见[诊断记录](2026-11-15_VLA_branch_任务扰动失败诊断.md)第 3 节末尾）：tomato sauce 2 → 8 / 20，但合计没有提升（位置扰动 129 → 129，任务扰动 151 → 145 / 200，图像格子的计划）。建议不设为默认，等项目负责人定。
 - **已决定（2026-11-16 晚，项目负责人，针对[周报](../../report/2026-11-16_weekly_review.ipynb)第 8 节）：**
-  1. **下一个任务集先做 LIBERO-Spatial。** 场景里两只碗一样，"换成另一个物体"的样本按碗所在的位置称呼它（`affordance3d/spatial_language.py`）。LIBERO-PRO Spatial 任务扰动的 10 条指令里，5 条和这条规则生成的说法一字不差，另 5 条用了训练里没有的说法（"not between …"、"on the top of the cabinet"）；结果要分开报。
+  1. **下一个任务集先做 LIBERO-Spatial。** 场景里两只碗一样，"换成另一个物体"的样本按碗所在的位置称呼它（`affordance_vla/sim/spatial_language.py`）。LIBERO-PRO Spatial 任务扰动的 10 条指令里，5 条和这条规则生成的说法一字不差，另 5 条用了训练里没有的说法（"not between …"、"on the top of the cabinet"）；结果要分开报。
   2. **同一 backbone 的基线：** 先列 5 个候选，再定 3 个。候选：普通微调（A）、计划输入只用示范（B）、affordance 只作辅助预测（C）、有反事实数据但没有计划接口（D）、Fast Plans 修法（E）；我推荐 B、D、E，官方权重作参考行，等项目负责人确认。
   3. **全量训练的整机时段：** 暂定；需要时提前通知项目负责人协调。
   4. 实验进度先到这里，项目负责人在做深度调研。
@@ -89,7 +89,7 @@
   - **哪些是 ORACLE：** 第三个配置的计划（上限）；计划头用的相机标定来自仿真。
   - **主要结果：** 不用真值计划 0.660 ± 0.012、0.681 ± 0.012；真值计划 0.920、0.753；官方权重 0.000、0.090。论文：GAM 0.47、0.50，CounterAlign 0.51、0.26，π0.5 加测试时 affordance 场 0.73（只有位置扰动）。
   - **还不能说的：** 底座模型和测试时用的信息都和论文不同，不是同条件下的方法比较；种子只改变评测，没有重新训练。
-  - **重新运行：** 按 notebook 开头的说明提交 9 个队列作业，然后在 `report/` 下运行 `scripts/build_libero_pro_full_report.py` 并执行 notebook。
+  - **重新运行：** 按 notebook 开头的说明提交 9 个队列作业，然后在 `report/` 下运行 `scripts/report/build_libero_pro_full_report.py` 并执行 notebook。
 - [预测的计划驱动闭环（2026-11-13）](../../report/2026-11-13_plan_predictor.ipynb)：第一次在 LIBERO-PRO 上完全不用真值计划。
   - **内容：** 两个计划头（回归坐标、对图像格子打分）；它们在没训练过的帧上的误差；预测的接触点和格子分数画在图上；闭环成功数；每条 rollout 的计划指向了哪个物体；第二个动作头（先对齐再下降、搬运和释放的反事实）在六任务集和 LIBERO-PRO 上的结果。
   - **哪些是真的：** 两个计划头和它们的全部输出；动作头；全部闭环；benchmark 的场景、起始状态和成功判定。
@@ -97,23 +97,23 @@
   - **主要结果（10 个任务 × 20 次）：** 回归坐标 0/200、19/200（和官方权重一样）；图像格子每次查询都预测 72、90；计划保持 102、113；换成 13 日的动作头 113、130；13 日的标签、十个任务都训练的动作头 133、136（目前最好，0.67、0.68）。真值计划：11 日的动作头 164、136，十任务新标签的动作头 185、152，13 日的 175、141。高的物体被碰倒的次数（真值计划）从 33、52 降到 8、19。
   - **拆开三处标签改动：** 被碰倒次数的下降来自"先对齐"；释放阶段的反事实和它一起才有用；标签修正单独不起作用。
   - **还不能说的：** 成功数之间的差别多在两个标准误以内；协议比论文宽松（每个任务 20 个起始状态、一个种子）。
-  - **重新运行：** 按[实验记录](2026-11-13_VLA_branch_预测计划驱动闭环.md)第 4 节提交队列作业，然后在 `report/` 下运行 `scripts/build_plan_predictor_report.py` 并执行 notebook。
+  - **重新运行：** 按[实验记录](2026-11-13_VLA_branch_预测计划驱动闭环.md)第 4 节提交队列作业，然后在 `report/` 下运行 `scripts/report/build_plan_predictor_report.py` 并执行 notebook。
 - [LIBERO-PRO Object 任务集：官方权重与"真值计划"上限（2026-11-12）](../../report/2026-11-12_libero_pro_object.ipynb)：第一次在官方的扰动 benchmark 上出数字。
   - **内容：** 两种扰动长什么样；官方权重（不给计划）和反事实训练的动作头（给真值计划）各 400 条闭环；逐任务的成功数；失败发生在哪一步；其他论文在同一 benchmark 上报告的数字。
   - **哪些是真的：** benchmark 的场景、起始状态和成功判定；两个策略的全部闭环。
   - **哪些是 ORACLE：** 第二个策略拿到的计划（仿真里的物体位置加示范的平均抓取偏移）。这一列是计划头的上限，不是方法的结果。
   - **主要结果（10 个任务 × 20 次）：** 位置扰动，官方权重 0/200，给真值计划 164/200；任务扰动，20/200 对 136/200。动作头训练时没见过的 bbq sauce、butter、chocolate pudding 在位置扰动下都是 20/20。失败主要是高的物体被碰倒、夹住后没送进篮子。
   - **和已发表数字的关系：** Object 任务集上，位置扰动已发表的最高是 0.73（测试时用深度和 GPT-4o），只靠训练的是 0.51；任务扰动是 0.50。真值计划给出 0.82 和 0.68。协议不完全一致，只能粗略对照。
-  - **重新运行：** `scripts/remote/setup_libero_pro.sh`（CPU），再按 `scripts/remote/run_libero_pro_gpu.sh` 文件头提交两个队列作业，然后在 `report/` 下运行 `scripts/build_libero_pro_report.py` 并执行 notebook。
-  - **对应代码：** `affordance3d/benchmark_text.py`（扰动任务的指令）、`report/libero_pro_helpers.py`（表和图）。
+  - **重新运行：** `envs/server/setup_libero_pro.sh`（CPU），再按 `scripts/eval/run_libero_pro_gpu.sh` 文件头提交两个队列作业，然后在 `report/` 下运行 `scripts/report/build_libero_pro_report.py` 并执行 notebook。
+  - **对应代码：** `affordance_vla/sim/benchmark_text.py`（扰动任务的指令）、`report/libero_pro_helpers.py`（表和图）。
 - [加入 affordance map 后的流程逐步演示（2026-11-11）](../../report/2026-11-11_affordance_pipeline_walkthrough.ipynb)：取一条真实的闭环，在其中一个时刻把流程的 9 步逐个画出输入和输出，再给出整条 episode 的画面、曲线和视频。用来讨论，不是实验结果。
   - **内容：** 观察（两路图像、深度、相机）；VLM（每张图 8×8 个 token）；affordance map；从 map 取 3D 点；接近方向；计划的 10 个数；动作块；控制器执行；episode 状态。
   - **哪些是真的：** 图像、深度和相机、VLM 和动作头、每次查询送入的计划、动作块、机器人的运动。
   - **哪些是 ORACLE：** affordance map、计划的接触点、接近方向、抓还是放、episode 状态，都由仿真真值算出。闭环是由真值接触点驱动的，map 只是画在旁边，没有参与控制。
   - **看到的事：** map 给出的是物体表面上的点，计划要的是夹爪中心；抓取时两者水平相差 0.9–2.1 厘米，释放时计划点在 map 的点上方约 8.4–9.3 厘米。VLM 的一个图像 token 覆盖 32×32 像素，比 tomato sauce 罐子（18×25 像素）还大。
   - **引出的问题：** map 标什么、3D 接触点从哪来、谁决定抓和放的切换、8×8 个 token 够不够。见 notebook 最后一节。
-  - **重新运行：** 按 `scripts/build_affordance_pipeline_walkthrough.py` 文件头的说明，先通过队列跑一次带深度的评测（`run_plan_following_gpu.sh`，`DEPTH=1 SUFFIX=_depth`），再构建并执行 notebook。
-  - **对应代码：** `affordance3d/affordance_map.py`（由真值生成的 map，以及 map 对应的 3D 点）、`affordance3d/libero_camera.py` 的 `unproject_depth`（深度图反投影）、`report/affordance_pipeline_helpers.py`（图和表）。
+  - **重新运行：** 按 `scripts/report/build_affordance_pipeline_walkthrough.py` 文件头的说明，先通过队列跑一次带深度的评测（`run_plan_following_gpu.sh`，`DEPTH=1 SUFFIX=_depth`），再构建并执行 notebook。
+  - **对应代码：** `affordance_vla/plan/affordance_map.py`（由真值生成的 map，以及 map 对应的 3D 点）、`affordance_vla/sim/libero_camera.py` 的 `unproject_depth`（深度图反投影）、`report/affordance_pipeline_helpers.py`（图和表）。
 - [计划跟随实验（2026-11-11）](../../report/2026-11-11_plan_following_experiment.ipynb)：把真值计划交给官方权重的动作头，看它是否跟随。
   - **内容：** 示范的状态回放；计划输入；换过的计划和目标路径；训练曲线；开环指标；闭环结果（三个模型，各 5 条标准、18 条目标挪动、30 条换物体）；分阶段统计；指令的抖动；结论和要决定的事。
   - **哪些是真的：** 示范、开源模型、训练、开环数字、闭环 rollout。
@@ -126,14 +126,14 @@
   - **哪些还是占位（notebook 里标为 ORACLE）：** CAW 计划、一致性度量里的"计划"、episode 状态。它们都由示范回放和仿真真值算出，还没有模型预测它们。
   - **主要结果：** 按训练时的指令 5 次全部成功；指令换成场景里别的物体，10 次里 8 次拿错；目标挪动 4–16 厘米，6 次里只成功 1 次。整组 21 条跑了两遍，20 条的结果相同。
   - **重新运行（都在服务器上）：**
-    1. `scripts/remote/setup_libero_env.sh`，建 LIBERO 仿真环境；
-    2. `scripts/remote/fetch_modelscope_model.sh`，下载官方权重和 Qwen3-VL-4B；
-    3. 按 `scripts/remote/run_vla_demo_gpu.sh` 文件头的说明，先在 CPU 上回放一条示范，再把这个脚本提交到 GPU 队列；
-    4. 在 `report/` 下运行 `scripts/build_vla_pipeline_demo.py`，再执行 notebook。
-  - **对应代码：** `affordance3d/` 下的 `plan_consistency.py`（一致性度量）、`episode_state.py`（episode 状态）、`rollout_outcome.py`（结果分类）、`rollout_log.py`（读日志）、`libero_camera.py`（相机投影）；`report/` 下的 `vla_pipeline_demo_helpers.py` 和 `vla_pipeline_demo_labels.py`（图和表）。
+    1. `envs/server/setup_libero_env.sh`，建 LIBERO 仿真环境；
+    2. `scripts/data/fetch_modelscope_model.sh`，下载官方权重和 Qwen3-VL-4B；
+    3. 按 `scripts/vla/run_vla_demo_gpu.sh` 文件头的说明，先在 CPU 上回放一条示范，再把这个脚本提交到 GPU 队列；
+    4. 在 `report/` 下运行 `scripts/report/build_vla_pipeline_demo.py`，再执行 notebook。
+  - **对应代码：** `affordance_vla/` 下的 `plan_consistency.py`（一致性度量）、`episode_state.py`（episode 状态）、`rollout_outcome.py`（结果分类）、`rollout_log.py`（读日志）、`libero_camera.py`（相机投影）；`report/` 下的 `vla_pipeline_demo_helpers.py` 和 `vla_pipeline_demo_labels.py`（图和表）。
 - [数据集与仿真环境汇报（2026-11-10）](../../report/2026-11-10_vla_datasets_sim_report.ipynb)：各 benchmark 的能力对照表和官方 teaser 图，LIBERO-Plus 及两个诊断集的说明，一个 LIBERO-Object 任务的细节（视频、末端路径、CAW 标签、动作积分检查），以及 RoboTwin 2.0 Hard。
 - 重新运行前先准备：
-  1. `python -m pip install h5py==3.16.0`，在 `affordance3d` 环境里装（已写入 `requirements.txt`）；
-  2. `bash scripts/download_vla_report_images.sh`，下载官方图片；
-  3. `bash scripts/download_libero_demo.sh`，下载约 664MB 的任务文件和它的 BDDL，存到本仓库的 `data/libero/` 下（不进 git）。
-- 对应代码：`affordance3d/libero_io.py`（读取 LIBERO 文件）、`affordance3d/caw_labels.py`（从末端路径和夹爪指令生成 CAW 标签，检查动作积分）、`report/vla_report_helpers.py`（表格和图）。
+  1. `python -m pip install h5py==3.16.0`，在 `affordance3d` 环境里装（已写入 `envs/legacy/requirements_mac_e0.txt`）；
+  2. `bash scripts/report/download_vla_report_images.sh`，下载官方图片；
+  3. `bash scripts/data/download_libero_demo.sh`，下载约 664MB 的任务文件和它的 BDDL，存到本仓库的 `data/libero/` 下（不进 git）。
+- 对应代码：`affordance_vla/sim/libero_io.py`（读取 LIBERO 文件）、`affordance_vla/plan/caw_labels.py`（从末端路径和夹爪指令生成 CAW 标签，检查动作积分）、`report/vla_report_helpers.py`（表格和图）。

@@ -1,6 +1,6 @@
 """Tables and figures for report/2026-11-12_libero_pro_object.ipynb.
 
-Inputs: the folders written by scripts/remote/run_libero_pro_gpu.sh, one per policy:
+Inputs: the folders written by scripts/eval/run_libero_pro_gpu.sh, one per policy:
 runs/libero_pro/<name>/<suite>/task<k>_ep<n>.npz. A rollout counts as solved when the benchmark's own
 goal check held at some step (`success` in the log's meta), which is LIBERO's convention.
 """
@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from affordance3d.rollout_log import RolloutLog, load_rollout_log
-from affordance3d.rollout_outcome import classify
+from affordance_vla.analysis.rollout_outcome import classify
+from affordance_vla.sim.rollout_log import RolloutLog, load_rollout_log
 from report.plan_following_helpers import rollout_stages
 from report.vla_pipeline_demo_helpers import pretty
 

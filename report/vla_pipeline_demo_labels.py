@@ -11,13 +11,22 @@ import pandas as pd
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch
 
-from affordance3d.caw_labels import CawLabel, caw_labels, contact_events, fit_action_path, gripper_events
-from affordance3d.episode_state import Slot, Status, observations_from_log, run_episode
-from affordance3d.libero_camera import project_points
-from affordance3d.plan_consistency import ChunkConsistency, chunk_path, consistency_along_episode, plan_ahead
-from affordance3d.rollout_log import RolloutLog
-from report.vla_pipeline_demo_helpers import (CONTROL_HZ, GRASP_COLOUR, RELEASE_COLOUR, Probe, draw_top_view,
-                                              named_object, object_colour, pretty, query_row)
+from affordance_vla.plan.caw_labels import CawLabel, caw_labels, contact_events, fit_action_path, gripper_events
+from affordance_vla.plan.episode_state import Slot, Status, observations_from_log, run_episode
+from affordance_vla.plan.plan_consistency import ChunkConsistency, chunk_path, consistency_along_episode, plan_ahead
+from affordance_vla.sim.libero_camera import project_points
+from affordance_vla.sim.rollout_log import RolloutLog
+from report.vla_pipeline_demo_helpers import (
+    CONTROL_HZ,
+    GRASP_COLOUR,
+    RELEASE_COLOUR,
+    Probe,
+    draw_top_view,
+    named_object,
+    object_colour,
+    pretty,
+    query_row,
+)
 
 STEP_SECONDS = 1.0 / CONTROL_HZ
 APPROACH_ARROW_M = 0.10

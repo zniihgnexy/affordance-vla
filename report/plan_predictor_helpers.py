@@ -1,8 +1,8 @@
 """Tables and figures for report/2026-11-13_plan_predictor.ipynb.
 
 Inputs: runs/plan_predictor/<run>/{metrics.json, predictions.npz} written by
-scripts/remote/train_plan_predictor.py, and the closed-loop folders runs/libero_pro/<name>/ written by
-scripts/remote/run_libero_pro_gpu.sh with PLAN=predicted, whose logs keep the plan inputs the action
+scripts/vla/train_plan_predictor.py, and the closed-loop folders runs/libero_pro/<name>/ written by
+scripts/eval/run_libero_pro_gpu.sh with PLAN=predicted, whose logs keep the plan inputs the action
 head was given at every query.
 """
 from __future__ import annotations
@@ -17,11 +17,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from affordance3d.counterfactual import MAX_STEP_M, Retarget, counterfactual_chunk, retarget_path
-from affordance3d.plan_audit import NOT_AN_OBJECT, PlanPoint, plans_before_grasp
-from affordance3d.plan_grid import CELLS, IMAGE_SIZE, Camera, contact_pixel, grid_target
-from affordance3d.plan_input import ContactOffsets, plan_contact
-from affordance3d.rollout_log import RolloutLog
+from affordance_vla.analysis.plan_audit import NOT_AN_OBJECT, PlanPoint, plans_before_grasp
+from affordance_vla.heads.plan_grid import CELLS, IMAGE_SIZE, Camera, contact_pixel, grid_target
+from affordance_vla.plan.plan_input import ContactOffsets, plan_contact
+from affordance_vla.sim.rollout_log import RolloutLog
+from affordance_vla.training.counterfactual import MAX_STEP_M, Retarget, counterfactual_chunk, retarget_path
 from report.libero_pro_helpers import SUITES, task_of
 from report.vla_pipeline_demo_helpers import pretty
 
@@ -175,7 +175,7 @@ class GraspPlans:
 
 
 def grasp_plans(log: RolloutLog, offsets: ContactOffsets) -> GraspPlans:
-    """Judge the plans a rollout was given (affordance3d/plan_audit.py); they are read from the log file."""
+    """Judge the plans a rollout was given (affordance_vla/analysis/plan_audit.py); they are read from the log file."""
     with np.load(log.path) as data:
         plans = data["plans"]
     points = plans_before_grasp(plans, log.chunk_steps, log.ee_pos, log.object_pos, log.names, offsets.grasp,
