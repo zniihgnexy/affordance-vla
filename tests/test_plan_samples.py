@@ -548,3 +548,21 @@ def test_a_demonstration_that_does_not_start_on_the_way_to_a_grasp_gives_no_fina
 
     # Act / Assert
     assert approaches_by_target([held]) == {}
+
+
+def test_the_noise_on_a_moved_plan_moves_the_plan_input_and_not_the_labels():
+    # Arrange: the same moved contact, once with 3 cm of noise on the plan input
+    track, new_contact = make_track(), np.array([0.3, 0.1, 0.05])
+    rule = Retarget(rigid_tail=0.18, scale_from_start=True)
+
+    # Act
+    clean = shifted_sample(track, step=10, horizon=HORIZON, new_contact=new_contact, motion_scale=SCALE, retarget=rule)
+    noisy = shifted_sample(track, step=10, horizon=HORIZON, new_contact=new_contact, motion_scale=SCALE, retarget=rule,
+                           contact_noise=np.array([0.03, 0.0, 0.0]))
+
+    # Assert: the labels still lead to the contact itself; only the plan input points 3 cm away
+    np.testing.assert_allclose(noisy.actions, clean.actions)
+    np.testing.assert_allclose(noisy.path_target, clean.path_target)
+    expected = plan_features(track.ee_pos[10], new_contact + [0.03, 0.0, 0.0], approach=track.labels[0].approach,
+                             closing=True)
+    np.testing.assert_allclose(noisy.features, expected, atol=1e-6)

@@ -112,7 +112,7 @@ class PlanData:
 
 def variants(data: PlanData, demo: int, step: int, mode: str, shift_radius: float, contact_noise: float,
              rng: np.random.Generator, plan_dropout: float = 0.0, retarget: Retarget = Retarget(),
-             own_approach: bool = False) -> list[Item]:
+             own_approach: bool = False, other_noise: float | None = None) -> list[Item]:
     """The demonstration sample of a frame and its counterfactual samples.
 
     On the way to a grasp the contact is moved within a disc ("shift") and, with "other" in the mode, to
@@ -120,7 +120,9 @@ def variants(data: PlanData, demo: int, step: int, mode: str, shift_radius: floa
     moved within the same disc while the object is carried. With probability `plan_dropout` (one draw per
     frame) the demonstration sample loses its plan input, labels unchanged. The counterfactual samples
     always keep their plan. With `own_approach`, a sample that names another object ends its path with the
-    final approach of a training demonstration of that object, drawn at random.
+    final approach of a training demonstration of that object, drawn at random. `other_noise` is the noise
+    (std per axis, m) on the plan input of such a sample, whose label still leads to the object's grasp
+    point; None uses `contact_noise` as for the other samples.
     """
     track = data.tracks[demo]
     noise = lambda: rng.normal(0.0, contact_noise, 3)  # noqa: E731
@@ -143,8 +145,9 @@ def variants(data: PlanData, demo: int, step: int, mode: str, shift_radius: floa
         contact = track.object_pos[step, track.names.index(name)] + data.contact.grasp[name]
         choices = data.approaches.get(name, []) if own_approach else []
         tail = choices[rng.integers(len(choices))] if choices else None
+        spread = contact_noise if other_noise is None else other_noise
         sample = shifted_sample(track, step, data.horizon, contact, data.scale,
-                                approach=data.contact.grasp_approach[name], contact_noise=noise(),
+                                approach=data.contact.grasp_approach[name], contact_noise=rng.normal(0.0, spread, 3),
                                 retarget=retarget, tail=tail)
         instruction = track.instruction.replace(object_words(track.target), object_words(name))
         if sample is not None and instruction != track.instruction:
@@ -181,7 +184,7 @@ def draw_batch(data: PlanData, args: argparse.Namespace, rng: np.random.Generato
         pool = data.train_approach if (rng.uniform() < APPROACH_SHARE and data.train_approach) else data.train
         demo, step = pool[rng.integers(len(pool))]
         items += variants(data, demo, step, args.counterfactual, args.shift_radius, args.contact_noise, rng,
-                          args.plan_dropout, retarget_of(args), args.own_approach)
+                          args.plan_dropout, retarget_of(args), args.own_approach, args.other_noise)
     return items
 
 
@@ -274,7 +277,7 @@ def fixed_test_items(data: PlanData, args: argparse.Namespace) -> list[Item]:
     frames += [approach[i] for i in rng.choice(len(approach), min(args.test_frames, len(approach)), replace=False)]
     return [item for demo, step in frames
             for item in variants(data, demo, step, mode, args.shift_radius, 0.0, rng, plan_dropout=0.0,
-                                 retarget=retarget_of(args), own_approach=args.own_approach)]
+                                 retarget=retarget_of(args), own_approach=args.own_approach, other_noise=0.0)]
 
 
 def learning_rate(step: int, args: argparse.Namespace) -> float:
@@ -315,6 +318,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--path-weight", type=float, default=0.2)
     parser.add_argument("--shift-radius", type=float, default=0.18, help="metres; contacts move within this disc")
     parser.add_argument("--contact-noise", type=float, default=0.01, help="std (m) of the noise on the plan's contact")
+    parser.add_argument("--other-noise", type=float,
+                        help="std (m) of the noise on the plan's contact for samples that name another object, whose "
+                             "label still leads to that object's grasp point (default: --contact-noise)")
     parser.add_argument("--plan-dropout", type=float, default=0.0,
                         help="probability that a demonstration sample is given no plan (labels unchanged)")
     parser.add_argument("--rigid-tail", type=float, default=RIGID_TAIL_M,
@@ -336,13 +342,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--log-every", type=int, default=20)
     parser.add_argument("--seed", type=int, default=7)
     args = parser.parse_args()
+    check_args(parser, args)
+    return args
+
+
+def check_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Stop with a usage error for settings that do not go together."""
     if not 0.0 <= args.plan_dropout <= 1.0:
         parser.error(f"--plan-dropout is a probability, got {args.plan_dropout}")
+    if args.other_noise is not None and args.other_noise < 0.0:
+        parser.error(f"--other-noise is a standard deviation, got {args.other_noise}")
     if args.align_first and args.scale_from_start:
         parser.error("choose one of --align-first and --scale-from-start")
     if args.own_approach and not (args.scale_from_start and "other" in args.counterfactual):
         parser.error("--own-approach needs --scale-from-start and a --counterfactual that names other objects")
-    return args
 
 
 def build(args: argparse.Namespace) -> tuple[torch.nn.Module, PlanConditionedHead, tuple[np.ndarray, np.ndarray],
