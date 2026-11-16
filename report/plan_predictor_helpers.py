@@ -19,8 +19,8 @@ import pandas as pd
 
 from affordance3d.counterfactual import MAX_STEP_M, Retarget, counterfactual_chunk, retarget_path
 from affordance3d.plan_audit import NOT_AN_OBJECT, PlanPoint, plans_before_grasp
-from affordance3d.plan_grid import CELLS, IMAGE_SIZE, Camera, contact_pixel
-from affordance3d.plan_input import ContactOffsets
+from affordance3d.plan_grid import CELLS, IMAGE_SIZE, Camera, contact_pixel, grid_target
+from affordance3d.plan_input import ContactOffsets, plan_contact
 from affordance3d.rollout_log import RolloutLog
 from report.libero_pro_helpers import SUITES, task_of
 from report.vla_pipeline_demo_helpers import pretty
@@ -363,3 +363,39 @@ def retarget_figure(path: np.ndarray, new_contact: np.ndarray, rules: dict[str, 
     side.legend(fontsize=8)
     fig.tight_layout()
     return fig
+
+
+def ray_split(predicted: np.ndarray, target: np.ndarray, origin: np.ndarray) -> tuple[float, float, float]:
+    """(error, its part across the viewing ray, its part along it), in m, of a predicted point against the
+    target seen from a camera at `origin`. The part along the ray is what a wrong depth gives; the part across
+    it is what a wrong cell or position inside the cell gives."""
+    predicted, target, origin = (np.asarray(v, dtype=float) for v in (predicted, target, origin))
+    ray = (target - origin) / np.linalg.norm(target - origin)
+    error = predicted - target
+    along = float(error @ ray)
+    return float(np.linalg.norm(error)), float(np.linalg.norm(error - along * ray)), abs(along)
+
+
+def first_plan_split_table(logs: list[RolloutLog], offsets: ContactOffsets, camera: Camera) -> pd.DataFrame:
+    """Per object asked for: the error of the first plan of each rollout against the oracle grasp point,
+    split along and across the viewing ray, and how often the plan is in the grasp point's image cell
+    (medians in cm over the rollouts)."""
+    origin = np.asarray(camera.cam_to_world, dtype=float)[:3, 3]
+    rows: dict[str, list[tuple[float, float, float, bool]]] = {}
+    for log in logs:
+        with np.load(log.path) as data:
+            first = data["plans"][0]
+        predicted = plan_contact(first, log.ee_pos[log.chunk_steps[0]])
+        if predicted is None:
+            continue
+        truth = log.object_pos[0, log.target_index] + offsets.grasp[log.target]
+        cells = [grid_target(*contact_pixel(point, camera)[:2]) for point in (predicted, truth)]
+        same = None not in cells and cells[0][0] == cells[1][0]
+        rows.setdefault(log.target, []).append((*ray_split(predicted, truth, origin), same))
+    table = {pretty(name): {"rollouts": len(items),
+                            "error (cm)": round(100 * float(np.median([i[0] for i in items])), 1),
+                            "across the ray (cm)": round(100 * float(np.median([i[1] for i in items])), 1),
+                            "along the ray (cm)": round(100 * float(np.median([i[2] for i in items])), 1),
+                            "plan in the right cell": f"{np.mean([i[3] for i in items]):.0%}"}
+             for name, items in sorted(rows.items())}
+    return pd.DataFrame.from_dict(table, orient="index")

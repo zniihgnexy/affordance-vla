@@ -6,7 +6,7 @@ import pytest
 
 from affordance3d.plan_audit import ELSEWHERE, NO_PLAN, PlanPoint
 from report.plan_predictor_helpers import (GraspPlans, approach_height_table, approach_heights, heights_when_near,
-                                          per_task_pointing, pointing_table)
+                                          per_task_pointing, pointing_table, ray_split)
 
 
 def rollout(task: int, solved: bool, first: str, error_cm: float = 1.0, target: str = "soup_1") -> GraspPlans:
@@ -141,3 +141,16 @@ def test_a_rollout_that_touches_the_object_at_once_has_no_heights_below_its_star
     heights = approach_heights(log, SimpleNamespace(grasp={"milk_1": np.zeros(3)}))
 
     assert heights.shape == (5,) and np.isnan(heights).all()
+
+
+def test_an_error_is_split_into_the_part_along_the_viewing_ray_and_the_part_across_it():
+    # Arrange: the camera looks along +x from the origin at a point 1 m away
+    target, origin = np.array([1.0, 0.0, 0.0]), np.zeros(3)
+
+    # Act: 3 cm too far along the ray and 4 cm to the side
+    total, across, along = ray_split(np.array([1.03, 0.04, 0.0]), target, origin)
+
+    # Assert
+    assert total == pytest.approx(0.05)
+    assert across == pytest.approx(0.04)
+    assert along == pytest.approx(0.03)
