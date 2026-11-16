@@ -38,7 +38,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_plan_dataset import resized  # noqa: E402
 from probe_vla_demo import encode  # noqa: E402
-from train_plan_following import PlanData, learning_rate, object_words  # noqa: E402
+from train_plan_following import PlanData, learning_rate  # noqa: E402
 
 from affordance3d.plan_consistency import plan_ahead  # noqa: E402
 from affordance3d.plan_grid import (DEPTH_REFERENCE_M, DEPTH_SCALE_M, NO_CELL, Camera,  # noqa: E402
@@ -48,6 +48,7 @@ from affordance3d.plan_input import ContactOffsets  # noqa: E402
 from affordance3d.plan_predictor import CONTACT_SCALE_M, PlanPredictor, predictor_loss  # noqa: E402
 from affordance3d.plan_targets import GRASP, NONE, RELEASE, PlanTarget, oracle_target  # noqa: E402
 from affordance3d.rollout_log import load_rollout_log  # noqa: E402
+from affordance3d.spatial_language import named_instruction  # noqa: E402
 
 APPROACH_SHARE = 0.5  # share of training frames drawn from the approach to a grasp
 EVENT_NAMES = {NONE: "none", GRASP: "grasp", RELEASE: "release"}
@@ -82,16 +83,19 @@ def frame_items(data: PlanData, demo: int, step: int, container: str, rng: np.ra
     track = data.tracks[demo]
     points = grasp_points(track.names, track.object_pos[step], data.contact)
 
+    phrases = data.phrases.get(track.instruction)
+
     def item(name: str, kind: str) -> Item:
         instruction = (track.instruction if name == track.target
-                       else track.instruction.replace(object_words(track.target), object_words(name)))
+                       else named_instruction(track.instruction, track.target, name, phrases))
         rivals = tuple(point for other, point in points.items() if other != name)
         return Item(data.example(demo, step, instruction), oracle_target(track, step, data.contact, container, name),
                     kind, rivals)
 
     items = [item(track.target, "own")]
     ahead = plan_ahead(track.labels, track.ee_pos[step], step)
-    names = [name for name in points if name != track.target]
+    names = [name for name in points
+             if name != track.target and named_instruction(track.instruction, track.target, name, phrases) is not None]
     if ahead is None or not ahead.closing or not names:
         return items
     if others == "all":

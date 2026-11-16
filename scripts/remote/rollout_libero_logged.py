@@ -52,6 +52,12 @@ HOLD_STEPS = 5  # the oracle plan treats the target as held until contact has be
 IMAGE_ARRAYS = ("agentview", "wrist", "seg", "depth")  # what --images-for leaves out of a log
 
 
+def owns_region(name: str, region: str) -> bool:
+    """Whether the goal region is the object itself (plate_1 in LIBERO-Spatial's "On bowl plate_1") or one of
+    its regions (basket_1_contain_region in LIBERO-Object)."""
+    return region == name or region.startswith(f"{name}_")
+
+
 def model_view(image: np.ndarray) -> np.ndarray:
     """The 180° rotation applied to LIBERO frames when the training data was made."""
     return np.ascontiguousarray(image[::-1, ::-1])
@@ -237,7 +243,7 @@ class StepLog:
         if self.template is None:  # goal is not a single object predicate: only the task's own check is known
             return bool(name == self.target and self.env.check_success())
         predicate, region = self.template
-        if region.startswith(f"{name}_"):  # the object that owns the goal region, e.g. basket_1_contain_region
+        if owns_region(name, region):  # the container itself, e.g. basket_1 for basket_1_contain_region
             return False
         return bool(self.env.env._eval_predicate([predicate, name, region]))
 
@@ -313,9 +319,9 @@ def replay_states(env, states: np.ndarray, actions: np.ndarray, names: list[str]
 
 
 def goal_container(env, names: list[str]) -> str:
-    """The object that owns the goal region, e.g. basket_1 for basket_1_contain_region."""
+    """The object that owns the goal region, e.g. basket_1 for basket_1_contain_region, plate_1 for plate_1."""
     template = goal_template(env)
-    owners = [name for name in names if template and template[1].startswith(f"{name}_")]
+    owners = [name for name in names if template and owns_region(name, template[1])]
     if len(owners) != 1:
         raise SystemExit(f"cannot tell which object the goal region belongs to (goal: {template})")
     return owners[0]

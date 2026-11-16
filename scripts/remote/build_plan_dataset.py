@@ -6,7 +6,10 @@ Output directory:
                   (affordance3d/plan_dataset.py)
   agentview.npy   (rows, 224, 224, 3) uint8, one row per recorded state, in the order of tracks.npz
   wrist.npy       the same for the wrist camera
-  offsets.json    average gripper position at grasps and releases relative to the object (the oracle plan)
+  offsets.json    average gripper position at grasps and releases relative to the object (the oracle plan);
+                  an object of the same kind as a demonstrated one (a second, identical bowl) gets its offset
+  phrases.json    with --bddl-dir: per instruction, the words for where its objects stand (LIBERO-Spatial),
+                  used to name another object of the scene by its place (affordance3d/spatial_language.py)
   stats.json      what was kept and dropped, the spread of the offsets, the action-to-motion scale
 
 A demonstration is kept if the target's contact flags show exactly one grasp followed by one release;
@@ -14,6 +17,8 @@ stats.json counts how many gripper events the others have.
 
 Usage (starvla env, repo root on PYTHONPATH):
     python build_plan_dataset.py --logs $W/runs/plan_following/demos --out $W/runs/plan_following/dataset
+    python build_plan_dataset.py --logs .../demos_spatial --out .../dataset_spatial --container plate_1 \
+        --bddl-dir $W/repos/LIBERO-PRO/libero/libero/bddl_files/libero_spatial
 """
 from __future__ import annotations
 
@@ -28,8 +33,9 @@ import numpy as np
 
 from affordance3d.caw_labels import fit_action_path
 from affordance3d.plan_dataset import frame_offsets, save_tracks
-from affordance3d.plan_input import offsets_to_json
+from affordance3d.plan_input import offsets_to_json, with_same_kind
 from affordance3d.plan_samples import DemoTrack, contact_offsets, single_pick_and_place, track_from_arrays
+from affordance3d.spatial_language import location_phrases
 
 IMAGE_SIZE = 224  # what starVLA's LIBERO client feeds the policy (bilinear resize of the 256 x 256 frame)
 
@@ -85,12 +91,28 @@ def motion_scale(tracks: list[DemoTrack]) -> float:
     return float(np.median([fit_action_path(track.actions[:, :3], track.ee_pos[:-1]).scale for track in tracks]))
 
 
+def scene_phrases(tracks: list[DemoTrack], bddl_dir: Path) -> dict[str, dict[str, str]]:
+    """Per instruction, the words for where its objects stand, read from the task file named after it."""
+    found = {}
+    for instruction in sorted({track.instruction for track in tracks}):
+        path = bddl_dir / (instruction.replace(" ", "_") + ".bddl")
+        if not path.exists():
+            raise SystemExit(f"no task file {path.name} in {bddl_dir}")
+        phrases = location_phrases(path.read_text())
+        if len(phrases) < 2:  # no second object described by its place: no sample can name another one
+            print(f"no other object with a place phrase in {path.name}: {phrases}", flush=True)
+        if phrases:
+            found[instruction] = phrases
+    return found
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--logs", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--container", default="basket_1", help="the object the target is released into")
     parser.add_argument("--workers", type=int, default=16)
+    parser.add_argument("--bddl-dir", type=Path, help="task files of the suite; writes phrases.json (LIBERO-Spatial)")
     args = parser.parse_args()
     files = sorted((path for path in args.logs.glob("*_demo*.npz") if not path.name.startswith(".")),
                    key=natural_key)  # dot files are logs still being written
@@ -108,7 +130,11 @@ def main() -> None:
     save_tracks(args.out / "tracks.npz", tracks)
     for camera in ("agentview", "wrist"):
         np.save(args.out / f"{camera}.npy", np.concatenate([record[camera] for record, _ in kept]))
-    (args.out / "offsets.json").write_text(offsets_to_json(contact_offsets(tracks, args.container)))
+    names = sorted({name for track in tracks for name in track.names})
+    offsets = with_same_kind(contact_offsets(tracks, args.container), names)
+    (args.out / "offsets.json").write_text(offsets_to_json(offsets))
+    if args.bddl_dir is not None:
+        (args.out / "phrases.json").write_text(json.dumps(scene_phrases(tracks, args.bddl_dir), indent=2))
     stats = {"logs": len(files), "kept": len(kept), "rows": int(frame_offsets(tracks)[-1]),
              "dropped": sorted({record["file"] for record in records} - {record["file"] for record, _ in kept}),
              "gripper_events_per_demonstration": {str(k): v for k, v in sorted(event_counts.items())},

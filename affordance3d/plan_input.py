@@ -8,7 +8,8 @@ ground truth during a rollout. Only numpy is used, so the simulator environment 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -73,6 +74,24 @@ def oracle_plan(offsets: ContactOffsets, ee_pos: np.ndarray, target_pos: np.ndar
         raise KeyError(f"no grasp offset for {target!r}; known objects: {sorted(offsets.grasp)}")
     return plan_features(ee_pos, np.asarray(target_pos, dtype=float) + offsets.grasp[target],
                          offsets.grasp_approach[target], closing=True)
+
+
+def object_kind(name: str) -> str:
+    """'akita_black_bowl_2' -> 'akita_black_bowl': the object model, without the instance number."""
+    stem, _, number = name.rpartition("_")
+    return stem if stem and number.isdigit() else name
+
+
+def with_same_kind(offsets: ContactOffsets, names: Iterable[str]) -> ContactOffsets:
+    """New offsets in which every named object without its own grasp offset takes the offset of a
+    demonstrated object of the same kind (e.g. a second, identical bowl); other objects are left out."""
+    by_kind = {object_kind(name): name for name in offsets.grasp}
+    grasp, approach = dict(offsets.grasp), dict(offsets.grasp_approach)
+    for name in names:
+        source = by_kind.get(object_kind(name))
+        if name not in grasp and source is not None:
+            grasp[name], approach[name] = offsets.grasp[source].copy(), offsets.grasp_approach[source].copy()
+    return replace(offsets, grasp=grasp, grasp_approach=approach)
 
 
 def offsets_to_json(offsets: ContactOffsets) -> str:

@@ -11,6 +11,7 @@ from affordance3d.plan_input import (
     oracle_plan,
     plan_contact,
     plan_features,
+    with_same_kind,
 )
 
 DOWN = np.array([0.0, 0.0, -1.0])
@@ -127,3 +128,17 @@ def test_an_empty_plan_points_at_no_contact():
 def test_a_vector_of_the_wrong_length_is_not_a_plan():
     with pytest.raises(ValueError, match="plan"):
         plan_contact(np.zeros(PLAN_DIM + 1), np.zeros(3))
+
+
+def test_objects_of_the_same_kind_get_the_offsets_of_the_one_that_was_demonstrated():
+    # Arrange: only the first bowl was ever grasped in the demonstrations
+    offsets = ContactOffsets(grasp={"black_bowl_1": np.array([0.0, 0.0, 0.03])}, grasp_approach={"black_bowl_1": DOWN},
+                             release=np.zeros(3), release_approach=DOWN)
+
+    # Act
+    found = with_same_kind(offsets, ["black_bowl_1", "black_bowl_2", "plate_1"])
+
+    # Assert: the second bowl is added, the plate is not, and the original is left as it was
+    assert sorted(found.grasp) == ["black_bowl_1", "black_bowl_2"]
+    np.testing.assert_allclose(found.grasp["black_bowl_2"], [0.0, 0.0, 0.03])
+    assert sorted(offsets.grasp) == ["black_bowl_1"]

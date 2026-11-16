@@ -45,6 +45,7 @@ from affordance3d.plan_input import PLAN_DIM, offsets_from_json  # noqa: E402
 from affordance3d.plan_policy import PlanConditionedHead, dit_lora_match  # noqa: E402
 from affordance3d.plan_samples import (PlanSample, approaches_by_target, demo_sample, shifted_sample,  # noqa: E402
                                        without_plan)
+from affordance3d.spatial_language import named_instruction  # noqa: E402
 
 DEMO, SHIFT, OTHER = 0, 1, 2  # kinds of samples
 KIND_NAMES = {DEMO: "demo", SHIFT: "shift", OTHER: "other"}
@@ -61,11 +62,6 @@ class Item:
     step: int
     instruction: str
     kind: int
-
-
-def object_words(name: str) -> str:
-    """'salad_dressing_1' -> 'salad dressing'."""
-    return name.rsplit("_", 1)[0].replace("_", " ")
 
 
 class PlanData:
@@ -86,6 +82,9 @@ class PlanData:
         self.train_approach = [frame for frame in self.train if self.on_approach(*frame)]
         # final approaches of the training demonstrations, per object (--own-approach)
         self.approaches = approaches_by_target([track for d, track in enumerate(self.tracks) if d not in held_out])
+        # per instruction, the words for where its objects stand (LIBERO-Spatial; written by build_plan_dataset)
+        phrases = folder / "phrases.json"
+        self.phrases = json.loads(phrases.read_text()) if phrases.exists() else {}
         self.test_approach = [frame for frame in self.test if self.on_approach(*frame)]
 
     def _held_out(self, count: int) -> set[int]:
@@ -149,8 +148,8 @@ def variants(data: PlanData, demo: int, step: int, mode: str, shift_radius: floa
         sample = shifted_sample(track, step, data.horizon, contact, data.scale,
                                 approach=data.contact.grasp_approach[name], contact_noise=rng.normal(0.0, spread, 3),
                                 retarget=retarget, tail=tail)
-        instruction = track.instruction.replace(object_words(track.target), object_words(name))
-        if sample is not None and instruction != track.instruction:
+        instruction = named_instruction(track.instruction, track.target, name, data.phrases.get(track.instruction))
+        if sample is not None and instruction is not None:
             items.append(Item(sample, demo, step, instruction, OTHER))
     return items
 
