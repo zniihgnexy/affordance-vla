@@ -1,0 +1,28 @@
+# Local MuJoCo simulator (scripts/local/sim.py). Paths are relative to the repository root; the data they
+# point to is fetched by scripts/local/fetch_sim_data.sh. Override any entry with --set key=value.
+libero_pro: third_party/LIBERO-PRO          # LIBERO-PRO checkout, commit eafdb80 plus its perturbed task files
+libero_config: third_party/libero_config    # LIBERO reads its paths from config.yaml here
+logs: runs/libero_pro                       # image-free copies of the server's evaluation logs
+offsets:                                    # gripper position at grasp / release relative to the object, from
+  libero_object: runs/plan_following/dataset10/offsets.json         # the training demonstrations (the
+  libero_spatial: runs/plan_following/dataset_spatial/offsets.json  # oracle plan uses the same numbers)
+
+scene:                    # which scene `scene` and `grasp` open
+  suite: libero_object_swap
+  task: 2
+  episode: 0              # index of the suite's recorded initial state
+  seed: 7
+
+viewer:
+  realtime: 1.0           # 1 = LIBERO's 20 Hz control rate; 0.5 = half speed; 0 = as fast as possible
+  hold: true              # keep the window on the final state until it is closed
+
+grasp:
+  object: null            # null: the object the task's goal names
+  place: true             # carry it to the task's goal region and let go
+  above_m: 0.10           # start this far back along the demonstrated approach direction
+  lift_m: 0.15
+  tolerance_m: 0.008      # a phase ends within this distance of its target
+  gain: 1.0               # action = gain * (target - gripper) / 5 cm, clipped to [-1, 1]
+  close_steps: 15
+  max_phase_steps: 120

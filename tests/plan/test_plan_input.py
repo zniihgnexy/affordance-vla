@@ -142,3 +142,14 @@ def test_objects_of_the_same_kind_get_the_offsets_of_the_one_that_was_demonstrat
     assert sorted(found.grasp) == ["black_bowl_1", "black_bowl_2"]
     np.testing.assert_allclose(found.grasp["black_bowl_2"], [0.0, 0.0, 0.03])
     assert sorted(offsets.grasp) == ["black_bowl_1"]
+
+
+def test_the_oracle_contacts_are_the_object_or_container_position_plus_the_demonstrated_offset():
+    from affordance_vla.plan.plan_input import ContactOffsets, grasp_contact, release_contact
+
+    offsets = ContactOffsets(grasp={"cup_1": np.array([0.0, 0.0, 0.04])}, grasp_approach={"cup_1": np.zeros(3)},
+                             release=np.array([0.0, 0.01, 0.1]), release_approach=np.zeros(3))
+    np.testing.assert_allclose(grasp_contact(offsets, "cup_1", [0.1, 0.2, 0.0]), [0.1, 0.2, 0.04])
+    np.testing.assert_allclose(release_contact(offsets, [0.0, 0.3, 0.0]), [0.0, 0.31, 0.1])
+    with pytest.raises(KeyError):
+        grasp_contact(offsets, "plate_1", [0.0, 0.0, 0.0])

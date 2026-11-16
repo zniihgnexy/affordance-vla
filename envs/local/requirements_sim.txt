@@ -1,0 +1,31 @@
+# Local simulator environment (macOS, Apple Silicon): MuJoCo + robosuite + LIBERO-PRO, CPU only.
+# The pins follow the server's simulator env (envs/server/libero_env_freeze.txt), so a test episode runs
+# with the same simulator versions as the evaluations on the server.
+# Installed by envs/local/setup_sim_env.sh.
+numpy==1.24.4
+# LIBERO's start states are pickles that torch >= 2.6 refuses to load by default
+torch==2.2.2
+mujoco==3.2.3
+robosuite==1.4.0
+bddl==1.0.1
+gym==0.25.2
+numba==0.68.1
+scipy==1.15.3
+networkx==3.4.2
+easydict==1.9
+future==0.18.2
+cloudpickle==2.1.0
+PyOpenGL==3.1.7
+glfw==2.11.0
+opencv-python==4.11.0.86
+h5py==3.16.0
+imageio==2.38.0
+imageio-ffmpeg==0.8.1
+matplotlib==3.10.9
+pillow==12.3.0
+pyyaml==6.0.3
+termcolor==3.3.0
+tqdm==4.70.1
+pytest==9.2.0
+# lint, as on the server (envs/server/requirements_dev_server.txt)
+ruff==0.15.12

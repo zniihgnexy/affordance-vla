@@ -58,12 +58,17 @@ def env_gripper_command(open_value: float) -> float:
     return 1.0 - 2.0 * float(open_value > GRIPPER_OPEN_THRESHOLD)
 
 
-def max_steps_of(suite_name: str) -> int:
-    """Step limit of a suite; a variant such as libero_object_swap takes the limit of the suite it is built on."""
+def base_suite(suite_name: str) -> str:
+    """The LIBERO suite a variant is built on: libero_object for libero_object_swap."""
     known = [name for name in MAX_STEPS if suite_name == name or suite_name.startswith(f"{name}_")]
     if not known:
-        raise SystemExit(f"no step limit is known for suite {suite_name!r}")
-    return MAX_STEPS[max(known, key=len)]
+        raise SystemExit(f"suite {suite_name!r} is not built on a known LIBERO suite ({', '.join(MAX_STEPS)})")
+    return max(known, key=len)
+
+
+def max_steps_of(suite_name: str) -> int:
+    """Step limit of a suite; a variant such as libero_object_swap takes the limit of the suite it is built on."""
+    return MAX_STEPS[base_suite(suite_name)]
 
 
 def benchmark_instruction(suite_name: str, task) -> str:
@@ -169,6 +174,15 @@ class StepLog:
         return out
 
 
+def start_episode(env, init_state: np.ndarray) -> dict:
+    """Reset to a recorded initial state and let the objects settle; returns the first observation."""
+    env.reset()
+    obs = env.set_init_state(init_state)
+    for _ in range(WAIT_STEPS):
+        obs, _, _, _ = env.step(DUMMY_ACTION)
+    return obs
+
+
 def run_episode(env, policy, instruction: str, init_state: np.ndarray, names: list[str], target: str,
                 max_steps: int, planner=None,
                 on_step: Callable[[int, dict, "StepLog"], None] | None = None) -> tuple[dict[str, np.ndarray], bool]:
@@ -180,10 +194,7 @@ def run_episode(env, policy, instruction: str, init_state: np.ndarray, names: li
     `on_step(step, obs, log)` is called once the action of a step is known, before it is executed (the
     local viewer draws the frame there); it does not change the episode.
     """
-    env.reset()
-    obs = env.set_init_state(init_state)
-    for _ in range(WAIT_STEPS):
-        obs, _, _, _ = env.step(DUMMY_ACTION)
+    obs = start_episode(env, init_state)
     policy.reset(instruction)
     log = StepLog(env, names, target)
     success = False
@@ -232,21 +243,26 @@ def camera_matrices(env) -> tuple[np.ndarray, np.ndarray]:
             get_camera_extrinsic_matrix(env.sim, CAMERA))
 
 
-def make_env(suite_name: str, task_id: int, seed: int, depth: bool = False) -> tuple:
+def make_env(suite_name: str, task_id: int, seed: int, depth: bool = False, cameras: bool = True) -> tuple:
     """(suite, task, simulator) for task `task_id` of a suite, with the cameras the policy was trained on.
 
+    `cameras=False` builds the simulator without any rendering (for the viewer, which draws the scene itself).
     The seed is set before the first reset because it affects object placement even with a fixed initial state.
     """
     from libero.libero import benchmark, get_libero_path
     from libero.libero.envs import SegmentationRenderEnv
+    from libero.libero.envs.env_wrapper import ControlEnv
 
     suite = benchmark.get_benchmark_dict()[suite_name]()
     if not 0 <= task_id < suite.n_tasks:
         raise SystemExit(f"suite {suite_name} has tasks 0-{suite.n_tasks - 1}, not {task_id}")
     task = suite.get_task(task_id)
-    env = SegmentationRenderEnv(
-        bddl_file_name=str(Path(get_libero_path("bddl_files")) / task.problem_folder / task.bddl_file),
-        camera_heights=RESOLUTION, camera_widths=RESOLUTION, camera_depths=depth)
+    bddl = str(Path(get_libero_path("bddl_files")) / task.problem_folder / task.bddl_file)
+    if cameras:
+        env = SegmentationRenderEnv(bddl_file_name=bddl, camera_heights=RESOLUTION, camera_widths=RESOLUTION,
+                                    camera_depths=depth)
+    else:
+        env = ControlEnv(bddl_file_name=bddl, has_offscreen_renderer=False, use_camera_obs=False)
     env.seed(seed)
     env.reset()
     return suite, task, env

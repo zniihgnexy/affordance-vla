@@ -68,12 +68,21 @@ def oracle_plan(offsets: ContactOffsets, ee_pos: np.ndarray, target_pos: np.ndar
     if delivered and not grasped:
         return no_plan_features()
     if grasped:
-        return plan_features(ee_pos, np.asarray(container_pos, dtype=float) + offsets.release,
-                             offsets.release_approach, closing=False)
+        return plan_features(ee_pos, release_contact(offsets, container_pos), offsets.release_approach, closing=False)
+    return plan_features(ee_pos, grasp_contact(offsets, target, target_pos), offsets.grasp_approach[target],
+                         closing=True)
+
+
+def grasp_contact(offsets: ContactOffsets, target: str, target_pos: np.ndarray) -> np.ndarray:
+    """Where the gripper should be when it closes on `target`, which stands at `target_pos`."""
     if target not in offsets.grasp:
         raise KeyError(f"no grasp offset for {target!r}; known objects: {sorted(offsets.grasp)}")
-    return plan_features(ee_pos, np.asarray(target_pos, dtype=float) + offsets.grasp[target],
-                         offsets.grasp_approach[target], closing=True)
+    return np.asarray(target_pos, dtype=float) + offsets.grasp[target]
+
+
+def release_contact(offsets: ContactOffsets, container_pos: np.ndarray) -> np.ndarray:
+    """Where the gripper should be when it opens over the container standing at `container_pos`."""
+    return np.asarray(container_pos, dtype=float) + offsets.release
 
 
 def object_kind(name: str) -> str:
