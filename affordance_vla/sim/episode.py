@@ -122,8 +122,8 @@ def shifted_state(env, state: np.ndarray, shifts: dict[str, tuple[float, float]]
 class StepLog:
     """Per-step records of one episode."""
 
-    KEYS = ("agentview", "wrist", "seg", "ee_pos", "ee_quat", "gripper_qpos", "object_pos", "grasped", "touched",
-            "visible_px", "in_goal")
+    KEYS = ("agentview", "wrist", "seg", "ee_pos", "ee_quat", "gripper_qpos", "object_pos", "object_quat", "grasped",
+            "touched", "visible_px", "in_goal")
 
     def __init__(self, env, names: list[str], target: str) -> None:
         self.env, self.names, self.target = env, names, target
@@ -158,6 +158,9 @@ class StepLog:
             "seg": model_view(seg), "ee_pos": obs["robot0_eef_pos"].copy(), "ee_quat": obs["robot0_eef_quat"].copy(),
             "gripper_qpos": obs["robot0_gripper_qpos"].copy(),
             "object_pos": np.array([inner.sim.data.body_xpos[inner.obj_body_id[name]] for name in self.names]),
+            # MuJoCo keeps (w, x, y, z); stored as (x, y, z, w) like robosuite's end-effector quaternion
+            "object_quat": np.array([inner.sim.data.body_xquat[inner.obj_body_id[name]][[1, 2, 3, 0]]
+                                     for name in self.names]),
             "grasped": np.array([inner._check_grasp(gripper=gripper, object_geoms=obj) for obj in objects]),
             "touched": np.array([inner.check_contact(gripper, obj) for obj in objects]),
             "visible_px": np.array([(seg == k + 1).sum() for k in range(len(self.names))]),
