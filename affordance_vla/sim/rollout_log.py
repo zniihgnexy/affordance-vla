@@ -14,6 +14,7 @@ import numpy as np
 STATE_KEYS = ("ee_pos", "object_pos", "grasped", "touched", "visible_px", "in_goal")
 IMAGE_KEYS = ("agentview", "wrist", "seg")
 OPTIONAL_IMAGE_KEYS = ("depth",)  # only in logs written with --depth
+OPTIONAL_STATE_KEYS = ("ee_quat", "object_quat")  # absent from logs written before the episode loop recorded them
 OTHER_KEYS = ("meta", "actions", "chunk_steps", "chunks", "intrinsics", "cam_to_world")
 ROBOT_SEG_ID = 255
 
@@ -38,6 +39,8 @@ class RolloutLog:
     wrist: np.ndarray | None
     seg: np.ndarray | None  # (T + 1, H, W) uint8: 0 background, k + 1 = names[k], 255 robot
     depth: np.ndarray | None = None  # (T + 1, H, W) metres along the optical axis of the agent view, if logged
+    ee_quat: np.ndarray | None = None  # (T + 1, 4) end-effector orientation, (x, y, z, w), if logged
+    object_quat: np.ndarray | None = None  # (T + 1, N, 4) object orientations, (x, y, z, w), if logged
 
     @property
     def steps(self) -> int:
@@ -66,6 +69,7 @@ def load_rollout_log(path: Path | str, images: bool = True) -> RolloutLog:
         if missing:
             raise KeyError(f"{path.name} is missing {', '.join(missing)}")
         optional = tuple(key for key in OPTIONAL_IMAGE_KEYS if images and key in data.files)
+        optional += tuple(key for key in OPTIONAL_STATE_KEYS if key in data.files)
         arrays = {key: data[key] for key in wanted + optional if key != "meta"}
         meta = json.loads(str(data["meta"]))
     steps = len(arrays["actions"])

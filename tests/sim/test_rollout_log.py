@@ -113,3 +113,34 @@ def test_depth_needs_one_more_row_than_actions_too(tmp_path):
 
     with pytest.raises(ValueError, match="depth"):
         load_rollout_log(tmp_path / "ep.npz")
+
+
+def test_the_end_effector_orientation_is_read_when_logged_even_without_images(tmp_path):
+    quat = np.tile([0.0, 0.0, 0.0, 1.0], (5, 1))
+    write_log(tmp_path / "ep.npz", ee_quat=quat)
+
+    np.testing.assert_array_equal(load_rollout_log(tmp_path / "ep.npz", images=False).ee_quat, quat)
+
+
+def test_a_log_without_the_end_effector_orientation_has_none(tmp_path):
+    write_log(tmp_path / "ep.npz")
+
+    assert load_rollout_log(tmp_path / "ep.npz", images=False).ee_quat is None
+
+
+def test_the_end_effector_orientation_needs_one_more_row_than_actions(tmp_path):
+    write_log(tmp_path / "ep.npz", ee_quat=np.zeros((4, 4)))
+
+    with pytest.raises(ValueError, match="ee_quat"):
+        load_rollout_log(tmp_path / "ep.npz", images=False)
+
+
+def test_object_orientations_are_read_when_logged(tmp_path):
+    quat = np.tile([0.0, 0.0, 0.0, 1.0], (5, 2, 1))
+    write_log(tmp_path / "ep.npz", object_quat=quat)
+
+    log = load_rollout_log(tmp_path / "ep.npz", images=False)
+
+    np.testing.assert_array_equal(log.object_quat, quat)
+    assert log.ee_quat is None
+
