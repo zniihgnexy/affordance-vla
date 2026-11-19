@@ -1,0 +1,126 @@
+# VLA Pipeline v3, figure 3 of 3: where generalisation comes from and how failures are traced
+# (docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md). Purple dashed: added by v3, not implemented yet.
+# Crops: first frames of a real demonstration and two real LIBERO-PRO rollouts, the named object outlined
+# (scripts/report/pipeline_figure_crops.py --scene, README.md in this folder).
+figure:
+  id: v3_generalization
+  venue: generic
+  width: 530
+  font: helvetica
+  type_scale: 1.1
+  pptx_app: office
+
+layout: col
+gap: 9
+
+panels:
+  - id: band_a
+    title: "① 训练和测试不一样：测试是零样本，场景或指令在训练里没见过"
+    title_align: left
+    frame: dashed
+    pad: 6
+    padt: 20
+    body:
+      - row:
+          gap: 14
+          align: center
+          body:
+            - group:
+                id: train
+                frame: solid
+                pad: 6
+                title: "训练"
+                title_pos: inside-top
+                body:
+                  - {id: img_train, shape: image, w: 54, src: scene_train.png, caption: "LIBERO-Object"}
+            - group:
+                id: test
+                frame: solid
+                pad: 6
+                title: "测试（零样本）：LIBERO-PRO"
+                title_pos: inside-top
+                body:
+                  - row:
+                      gap: 14
+                      align: start
+                      body:
+                        - {id: img_swap, shape: image, w: 54, src: scene_swap.png, caption: "位置扰动"}
+                        - {id: img_task, shape: image, w: 54, src: scene_task.png, caption: "任务扰动"}
+                        - col:
+                            gap: 5
+                            align: center
+                            body:
+                              - {id: lan, text: "语言扰动\n同一任务换说法", fill: purple.light, dash: true}
+                              - {id: later, text: "之后：Spatial、\nLIBERO-Plus", role: neutral}
+
+  - id: band_c
+    title: "② 泛化靠计划头，动作头只管服从；每个失败归到一个要改的模块"
+    title_align: left
+    frame: dashed
+    pad: 6
+    padt: 20
+    padb: 22
+    body:
+      - row:
+          gap: 12
+          align: center
+          body:
+            - {id: offline, text: "离线：首帧检查\n认对物体率\n位置误差 · 朝向误差", role: neutral}
+            - {id: closed, text: "闭环：LIBERO-PRO\n开发：20 个起始状态\n报告：50 个 × 3 种子", role: neutral}
+            - col:
+                gap: 6
+                align: center
+                body:
+                  - group:
+                      id: gen
+                      frame: region
+                      fill: blue.pale
+                      pad: 5
+                      title: "计划头负责：必须泛化（感知）"
+                      title_pos: inside-top
+                      body:
+                        - col:
+                            gap: 4
+                            align: center
+                            body:
+                              - {id: f_obj, text: "认错物体 → 语义先验", fill: purple.light, dash: true}
+                              - {id: f_pos, text: "位置偏 → 位置输出、更细的几何", role: encoder}
+                              - {id: f_ori, text: "朝向错 → 朝向输出 + 位姿标签", fill: purple.light, dash: true}
+                  - group:
+                      id: obey
+                      frame: region
+                      fill: orange.pale
+                      pad: 5
+                      title: "动作头负责：只要服从（反事实训练）"
+                      title_pos: inside-top
+                      body:
+                        - col:
+                            gap: 4
+                            align: center
+                            body:
+                              - {id: f_obey, text: "没跟上计划 → 动作头 + 反事实标签", role: core}
+                              - {id: f_after, text: "抓到后失败 → 释放阶段的标签", role: core}
+
+  - id: s_key
+    frame: none
+    body:
+      - row:
+          gap: 5
+          align: center
+          body:
+            - {id: k3, shape: sharpbox, w: 11, h: 7, fill: purple.light, dash: true}
+            - {id: k3t, shape: text, text: "v3 新增，尚未实现", type: annot}
+
+edges:
+  - {from: train.e, to: test.w}
+  - {from: offline.e, to: closed.w}
+  - {from: closed.e, to: gen.w}
+  - {from: closed.e, to: obey.w}
+  - {from: obey.s, to: offline.s, route: bus, bend: 10, color: grey, label: "改对应的模块，再回到离线检查",
+     label_size: 7, label_dy: -5}
+
+caption: >-
+  \textbf{泛化全部压在计划头上：它把没见过的场景读成正确的计划，动作头因为被训练成服从计划，计划对了就能做对。}
+  ① 只在标准 LIBERO-Object 上训练（图中是沙拉酱任务的示范，橙色轮廓是指令点名的物体）；测试用 LIBERO-PRO，零样本：位置扰动把沙拉酱挪了位置，任务扰动在同一场景里点名番茄酱，v3 再加语言扰动。
+  ② 计划头负责认对物体、找准位置、摆对朝向（蓝），动作头只负责服从（橙）；每次改动先做离线首帧检查，再跑闭环，把每个失败的回合归到一类，改对应的模块。
+  紫色虚线框是 v3 新增、尚未实现的部分。

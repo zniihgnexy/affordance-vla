@@ -1,18 +1,22 @@
 """Real image crops for the pipeline figure of the weekly review (report/media/pipeline_overview/).
 
-Four square crops, no text (the figure's labels say what they are):
+Square crops, no text (the figure's labels say what they are):
   input.png           camera frame at the first query of a LIBERO-PRO rollout
   plan.png            the same frame with the 8 x 8 cells of the grid plan head, the cell of the predicted
                       grasp contact shaded and the contact marked (the plan the policy was sent)
   counterfactual.png  a demonstration's first frame: its own way to the grasp (dark) and the same way
                       rewritten to another object's grasp (orange), as the 15 Nov labels do
   outcome.png         the rollout shortly after the gripper has closed on the target
+  <name>.png          (one per --scene name=log) the log's first frame with the object its instruction
+                      names outlined, for the generalisation figure
 
 Usage on the server (starvla env, no GPU):
-    R=$W/runs/libero_pro/predicted_g1_hold_s10/libero_object_swap
-    python scripts/report/pipeline_figure_crops.py --rollout $R/task2_ep0.npz \\
-        --demo $W/runs/plan_following/demos/pick_up_the_salad_dressing_and_place_it_in_the_basket_demo0.npz \\
-        --data $W/runs/plan_following/dataset10 --other ketchup_1 --out report/media/pipeline_overview
+    R=$W/runs/libero_pro/predicted_g1_hold_s10
+    D=$W/runs/plan_following/demos/pick_up_the_salad_dressing_and_place_it_in_the_basket_demo0.npz
+    python scripts/report/pipeline_figure_crops.py --rollout $R/libero_object_swap/task2_ep0.npz --demo $D \\
+        --data $W/runs/plan_following/dataset10 --other ketchup_1 --out report/media/pipeline_overview \\
+        --scene scene_train=$D --scene scene_swap=$R/libero_object_swap/task2_ep0.npz \\
+        --scene scene_task=$R/libero_object_task/task2_ep0.npz
 """
 from __future__ import annotations
 
@@ -118,6 +122,27 @@ def counterfactual_crop(demo_path: Path, image: np.ndarray, data: Path, other: s
     _save(fig, out)
 
 
+def scene_crop(log: RolloutLog, out: Path) -> None:
+    """First frame of a log with the outline of the object its instruction names (from the segmentation)."""
+    if log.seg is None:
+        raise SystemExit(f"{log.path.name} has no segmentation to outline its target with")
+    mask = (log.seg[0] == log.target_index + 1).astype(float)
+    if not mask.any():
+        raise SystemExit(f"the target {log.target} is not visible in the first frame of {log.path.name}")
+    fig, axis = _canvas(log.agentview[0])
+    rows, cols = mask.shape  # pixel centres in the IMAGE_SIZE frame the image is drawn in, row 0 at the top
+    xs, ys = (np.arange(cols) + 0.5) * IMAGE_SIZE / cols, (np.arange(rows) + 0.5) * IMAGE_SIZE / rows
+    axis.contour(xs, ys, mask, levels=[0.5], colors=[ORANGE], linewidths=1.0)
+    _save(fig, out)
+
+
+def _scene(text: str) -> tuple[str, Path]:
+    name, sep, path = text.partition("=")
+    if not sep or not name or not path:
+        raise argparse.ArgumentTypeError(f"--scene takes name=log.npz, got {text!r}")
+    return name, Path(path)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--rollout", required=True, type=Path, help="rollout log with images and plans")
@@ -125,6 +150,8 @@ def main() -> None:
     parser.add_argument("--data", required=True, type=Path, help="plan dataset (tracks.npz, offsets.json)")
     parser.add_argument("--other", required=True, help="object the counterfactual sample names")
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--scene", action="append", default=[], type=_scene, metavar="NAME=LOG",
+                        help="also save NAME.png: the log's first frame with its target outlined (repeatable)")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     rollout, demo = load_rollout_log(args.rollout), load_rollout_log(args.demo)
@@ -142,6 +169,8 @@ def main() -> None:
         raise SystemExit("the rollout never grasps its target")
     last = min(int(held[0]) + STEPS_AFTER_GRASP, len(rollout.agentview) - 1)
     _save(_canvas(rollout.agentview[last])[0], args.out / "outcome.png")
+    for name, path in args.scene:
+        scene_crop(load_rollout_log(path), args.out / f"{name}.png")
 
 
 if __name__ == "__main__":

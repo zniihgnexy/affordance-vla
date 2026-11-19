@@ -1,0 +1,111 @@
+# Proposed pose-aware pipeline: the weekly-review figure (report/media/pipeline_overview/pipeline_overview.yaml)
+# with the gripper orientation added to the plan and to the counterfactual supervision.
+# Purple marks what this proposal adds; every other part, and all four crops, show the current system.
+figure:
+  id: pose_plan_pipeline
+  venue: generic
+  width: 530
+  font: helvetica
+  type_scale: 1.1
+  pptx_app: office
+
+layout: col
+gap: 8
+
+panels:
+  - id: s_test
+    title: "测试时：闭环执行（每个动作块之后用新画面再查询）"
+    title_align: left
+    frame: dashed
+    pad: 7
+    padt: 23
+    body:
+      - row:
+          gap: 12
+          align: center
+          body:
+            - {id: img_in, shape: image, w: 62, src: input.png, caption: "画面 + 指令"}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: m_vlm, shape: marker, kind: frozen, d: 7}
+                  - {id: vlm, shape: trapezoid, text: "VLM", role: neutral}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: m_plan, shape: marker, kind: trainable, d: 7}
+                  - {id: planhead, text: "计划头\n8×8 图像格子", role: encoder}
+            - col:
+                gap: 6
+                align: center
+                body:
+                  - {id: img_plan, shape: image, w: 62, src: plan.png, caption: "抓哪里（现有）"}
+                  - {id: orient, text: "怎么摆\n夹爪朝向", fill: purple.light, dash: true}
+            - {id: hold, text: "计划保持\n到夹爪动作完成", role: neutral}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: m_act, shape: marker, kind: trainable, d: 7}
+                  - {id: act, text: "动作头\nVLM 特征 + 计划", role: decoder}
+            - {id: img_out, shape: image, w: 62, src: outcome.png, caption: "执行动作块"}
+
+  - id: s_train
+    title: "训练时：反事实监督（本工作的核心）"
+    title_pos: inside-bottom
+    title_align: left
+    frame: dashed
+    fill: orange.pale
+    pad: 7
+    body:
+      - row:
+          gap: 11
+          align: center
+          body:
+            - {id: demo, text: "示范的一帧\n接触点 + 夹爪位姿", role: neutral}
+            - {id: grasp, text: "抓取位姿标签\n按物体类别", fill: purple.light, dash: true, align_x: planhead}
+            - {id: move, text: "挪动计划\n换位置 / 换物体\n转朝向", role: core}
+            - {id: relabel, text: "改写动作标签\n平移 + 旋转", role: core}
+            - {id: img_cf, shape: image, w: 62, src: counterfactual.png, caption: "现有：只改写平移"}
+            - {id: loss, text: "动作损失", role: core, tint: soft}
+
+  - id: s_key
+    frame: none
+    body:
+      - row:
+          gap: 5
+          align: center
+          body:
+            - {id: k1, shape: marker, kind: trainable, d: 6}
+            - {id: k1t, shape: text, text: "训练", type: annot}
+            - {id: k2, shape: marker, kind: frozen, d: 6}
+            - {id: k2t, shape: text, text: "冻结", type: annot}
+            - {id: k3, shape: sharpbox, w: 11, h: 7, fill: purple.light, dash: true}
+            - {id: k3t, shape: text, text: "本方案新增：夹爪朝向", type: annot}
+
+edges:
+  - {from: img_in.e, to: vlm.w}
+  - {from: vlm.e, to: planhead.w}
+  - {from: planhead.e, to: img_plan.w, mid: 0.2}
+  - {from: planhead.e, to: orient.w, color: purple, mid: 0.2}
+  - {from: img_plan.e, to: hold.w, mid: 0.2}
+  - {from: orient.e, to: hold.w, color: purple, mid: 0.2}
+  - {from: hold.e, to: act.w}
+  - {from: act.e, to: img_out.w}
+  - {from: img_out.n, to: img_in.n, route: bus, bend: 30, color: grey, label: "新画面", label_size: 7, label_dx: -95}
+  - {from: demo.e, to: grasp.w, color: purple}
+  - {from: grasp.e, to: move.w, color: core}
+  - {from: move.e, to: relabel.w, color: core}
+  - {from: relabel.e, to: img_cf.w, color: core}
+  - {from: img_cf.e, to: loss.w, color: core}
+  - {from: loss.n, to: act.s, color: core, label: "训练动作头", label_size: 7, label_dx: -4, label_dy: 11, label_anchor: end}
+  - {from: grasp.n, to: planhead.s, dash: true, color: encoder, label: "训练计划头", label_size: 7, label_dy: 9}
+
+caption: >-
+  \textbf{计划加入夹爪朝向，动作头被训练成服从它。}
+  上行：冻结的 VLM 读画面和指令，计划头在 8×8 图像格子上给出抓哪里，并新增每格的夹爪朝向；
+  计划保持到夹爪动作完成，动作头读 VLM 特征和计划。
+  下行（橙色）：从示范得到按物体类别的抓取位姿标签，挪动计划时同时转朝向，动作标签的平移和旋转一起改写。
+  紫色虚线框为本方案新增；四张截图来自真实 LIBERO-PRO 日志，展示的是现有系统（只有位置）。
