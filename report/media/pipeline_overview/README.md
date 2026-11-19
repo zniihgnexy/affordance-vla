@@ -6,13 +6,13 @@ the figures are real crops, and they live in this folder too.
 | Figure | What it shows | Status |
 | --- | --- | --- |
 | `pipeline_overview.png` | the pipeline as it runs now; it is the figure in the first section of `report/2026-11-16_weekly_review.ipynb` | current system |
-| `v3_model.png` | Pipeline v3 at test time: frozen VLM, then the plan head (which object, where, gripper orientation), then the 16-number plan and the action head | **guide since 19 Nov 2026** |
-| `v3_training.png` | how v3 trains its two heads: the plan head from demonstration labels, the action head from counterfactual samples | **guide since 19 Nov 2026** |
-| `v3_generalization.png` | v3 generalisation: trained on LIBERO-Object and tested zero-shot on LIBERO-PRO. The plan head has to generalise and the action head only has to obey. Each failure is traced back to one module | **guide since 19 Nov 2026** |
+| `v3_model.png` | Pipeline v3 at test time. The frozen VLM feeds the interaction affordance map head, which outputs an interaction score, depth and a direction field (gripper closing direction). A semantic prior picks the named object. The plan (contact and gripper orientation) is decoded from the map into 16 numbers, and the action head follows it | **guide since 19 Nov 2026** |
+| `v3_training.png` | How v3 trains its two heads. The map head learns from gripper-object interaction labels: L1 comes from demonstration grasps, L2 from per-category canonical maps projected by object pose (labels only). The action head learns from counterfactual samples | **guide since 19 Nov 2026** |
+| `v3_generalization.png` | v3 generalisation. Training is on LIBERO-Object and testing is zero-shot on LIBERO-PRO, with LIBERO-10 (mugs, moka pots) added later for orientation. The interaction map has to generalise; the action head only has to obey. Each failure is traced back to one module | **guide since 19 Nov 2026** |
 | `pose_plan_pipeline.png` | first proposal (18 Nov): adds only the gripper orientation; superseded by the v3 figures | record |
 
-The v3 figures belong to `docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md`, which the project lead confirmed on
-19 Nov 2026. Purple dashed boxes mark what v3 adds and has not implemented yet. Every other part of the figures, and
+The v3 figures belong to `docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md`. The project lead confirmed it on
+19 Nov 2026, together with the revision that evening that puts the interaction affordance map at its centre. Purple dashed boxes mark what v3 adds and has not implemented yet. Every other part of the figures, and
 all the crops, show the current system.
 
 | File | What it is |

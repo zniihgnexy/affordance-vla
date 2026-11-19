@@ -14,7 +14,7 @@ gap: 9
 
 panels:
   - id: band_a
-    title: "① 计划头：从示范学“哪个、哪里、怎么摆”（VLM 冻结，示范的每一帧都是一个样本）"
+    title: "① 交互 map 头：从夹爪和物体的交互学“哪个、哪里、什么方向”（VLM 冻结）"
     title_align: left
     frame: dashed
     pad: 6
@@ -40,7 +40,7 @@ panels:
                       align: center
                       body:
                         - {id: m_plan, shape: marker, kind: trainable, d: 7}
-                        - {id: planhead, text: "计划头\n含语义先验", role: encoder}
+                        - {id: planhead, text: "交互 map 头\n含语义先验", role: encoder}
                   - group:
                       id: pred
                       frame: none
@@ -49,8 +49,8 @@ panels:
                             gap: 4
                             align: center
                             body:
-                              - {id: p_cell, text: "格子 · 偏移 · 深度", role: decoder, minw: 84}
-                              - {id: p_ori, text: "夹爪朝向", fill: purple.light, dash: true}
+                              - {id: p_cell, text: "交互分数 · 深度", role: decoder, minw: 84}
+                              - {id: p_ori, text: "方向场", fill: purple.light, dash: true}
                               - {id: p_glob, text: "事件 · 接近方向", role: decoder}
                   - group:
                       id: loss
@@ -60,16 +60,16 @@ panels:
                             gap: 4
                             align: center
                             body:
-                              - {id: l_ce, text: "交叉熵：格子、事件", role: loss}
+                              - {id: l_ce, text: "交叉熵：交互分数、事件", role: loss}
                               - {id: l_hub, text: "Huber：偏移、深度", role: loss}
-                              - {id: l_ori, text: "测地角：朝向（180 度对称）", fill: purple.light, dash: true}
+                              - {id: l_ori, text: "方向场：接触区域内的 L2", fill: purple.light, dash: true}
                               - {id: l_dir, text: "余弦距离：接近方向", role: loss}
             - row:
                 gap: 12
                 align: center
                 body:
-                  - {id: traj, text: "示范记录\n末端轨迹 · 夹爪开合", role: input}
-                  - {id: contact, text: "夹爪事件时刻的末端位置\n= 接触点", role: neutral}
+                  - {id: traj, text: "示范记录\n夹爪位姿 · 开合", role: input}
+                  - {id: contact, text: "L1：抓取时刻的夹爪位姿\n+ 物体分割图", role: neutral}
                   - group:
                       id: labels
                       frame: none
@@ -78,8 +78,8 @@ panels:
                             gap: 4
                             align: center
                             body:
-                              - {id: proj, text: "投影到画面：格子 · 偏移 · 深度", role: neutral}
-                              - {id: g_ori, text: "抓取朝向标签，按物体类别汇总", fill: purple.light, dash: true}
+                              - {id: proj, text: "投影到画面：接触区域 · 深度", role: neutral}
+                              - {id: g_ori, text: "L2：按类别的标准 map（带方向）", fill: purple.light, dash: true}
 
   - id: band_b
     title: "② 动作头：反事实监督，计划变了动作就得跟着变（本工作的核心）"
@@ -157,6 +157,6 @@ edges:
 
 caption: >-
   \textbf{两个头分开训练：计划头学会从画面读出计划，动作头学会服从计划。}
-  ① 计划头在冻结的 VLM 特征上训练；标签全部来自示范记录：夹爪闭合或张开那一刻的末端位置是接触点，投影到画面得到格子、格内偏移和深度；v3 再加上按物体类别汇总的抓取朝向。
+  ① 交互 map 头在冻结的 VLM 特征上训练；标签来自夹爪和物体的交互：L1 用示范里抓取那一刻的夹爪位姿和物体分割图，投影到画面得到接触区域、深度和闭合方向；L2 把同一类物体的所有抓取放到物体坐标系里叠加成标准 map，再按物体位姿投影到每一帧（物体位姿只用来生成标签和评测，测试时不输入模型）。
   ② 动作头用反事实样本训练：画面不变，把计划挪到别处（挪位置、换成另一个物体、换释放点，v3 加上转朝向），动作标签按挪过的计划改写（15 日的规则：前半段绕起点旋转缩放，最后一段取该物体自己示范里的接近，v3 加上旋转），用 flow matching 损失只更新计划编码器和 DiT 的 LoRA。
   橙色是本工作的核心，紫色虚线框是 v3 新增、尚未实现的部分。
