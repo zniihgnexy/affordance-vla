@@ -51,6 +51,19 @@ def object_at_peak(scores: np.ndarray, coverage: np.ndarray, min_cover: float = 
     return k if coverage[k, best] >= min_cover else None
 
 
+def object_means(scores: np.ndarray, coverage: np.ndarray) -> np.ndarray:
+    """(objects,) coverage-weighted mean of the cell scores over each object; -inf for objects not in view.
+
+    This is what a multiplicative gate sees: the interaction map already limits the target to objects, so the
+    question is whether the named object scores higher than the other objects, wherever the single best cell is.
+    """
+    weight = coverage.sum(axis=1)
+    means = np.full(len(coverage), -np.inf)
+    seen = weight > 0
+    means[seen] = coverage[seen] @ scores / weight[seen]
+    return means
+
+
 def text_token_indices(pieces: Sequence[str], text: str) -> np.ndarray:
     """Indices of the tokens, given as their decoded text in sequence order, that overlap the first occurrence of
     `text` in their concatenation, case-insensitive; empty when it does not occur.

@@ -6,6 +6,7 @@ from affordance_vla.analysis.semantic_probe import (
     cell_coverage,
     merge_similarity,
     object_at_peak,
+    object_means,
     object_phrase,
     text_token_indices,
 )
@@ -57,6 +58,19 @@ def test_object_at_peak_names_the_object_on_the_best_cell_or_none():
     coverage[1, 2] = 0.02  # too little of the cell to count
     assert object_at_peak(np.array([0.0, 1.0, 0.5, 0.0]), coverage) == 0
     assert object_at_peak(np.array([0.0, 0.0, 1.0, 0.0]), coverage) is None
+
+
+def test_object_means_weights_cells_by_coverage_and_skips_objects_out_of_view():
+    coverage = np.array([[1.0, 0.5, 0.0, 0.0],
+                         [0.0, 0.0, 0.0, 0.0],   # not in view
+                         [0.0, 0.0, 0.2, 0.0]])
+    scores = np.array([0.3, 0.9, 2.0, 5.0])  # the best cell (5.0) is background
+    means = object_means(scores, coverage)
+    assert means[0] == pytest.approx((0.3 + 0.5 * 0.9) / 1.5)
+    assert means[1] == -np.inf
+    assert means[2] == pytest.approx(2.0)
+    assert object_at_peak(scores, coverage) is None
+    assert int(np.argmax(means)) == 2   # still picks an object, the one scoring highest on itself
 
 
 def test_text_token_indices_finds_the_instruction_inside_the_prompt():

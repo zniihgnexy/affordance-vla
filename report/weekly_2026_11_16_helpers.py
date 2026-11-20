@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from affordance_vla.analysis.grasp_orientation import close_onsets, grasp_attempts
+from affordance_vla.analysis.semantic_probe import object_at_peak, object_means
 from affordance_vla.heads.plan_grid import CELL_PX, IMAGE_SIZE, Camera, camera_of_log, contact_pixel
 from affordance_vla.plan.plan_input import plan_contact
 from affordance_vla.sim.rollout_log import RolloutLog, load_rollout_log
@@ -225,6 +226,49 @@ def probe_table(summary_path: Path) -> pd.DataFrame | None:
     if not summary_path.exists():
         return None
     summary = json.loads(summary_path.read_text())
-    rows = {variant: {"best layer": found["best_layer"], "on the named object": found["best_share"]}
+    rows = {variant: {"最好的层": found["best_layer"], "峰值落在点名物体上": found["best_share"]}
             for variant, found in summary["maps"].items()}
+    return pd.DataFrame(rows).T.astype({"最好的层": int})
+
+
+SUITE_GROUPS = {"LIBERO-Object（g1 训练过）": "libero_object", "LIBERO-Spatial（g1 没训练过）": "libero_spatial"}
+
+
+def _head_outcome(probe: dict, i: int) -> str:
+    k = object_at_peak(probe["head_scores"][i], probe["coverage"][i])
+    if k is None:
+        return "背景"
+    if k != probe["target"][i]:
+        return "别的物体"
+    error = probe["head_error_m"][i]
+    return "点名物体，没有抓取点" if np.isnan(error) else "点名物体，2 cm 内" if error < 0.02 else "点名物体，超过 2 cm"
+
+
+def probe_head_table(probe_path: Path) -> pd.DataFrame:
+    """E1 (1): where the g1 grid head's best first-frame cell lands, per LIBERO-PRO suite."""
+    probe = dict(np.load(probe_path, allow_pickle=True))
+    outcomes = [(str(suite), _head_outcome(probe, i)) for i, suite in enumerate(probe["suite"])]
+    return pd.crosstab([s for s, _ in outcomes], [o for _, o in outcomes]).rename_axis(index="套件", columns=None)
+
+
+def probe_object_table(probe_path: Path) -> pd.DataFrame:
+    """E1 (2): how often the named object has the highest mean similarity among the objects in view.
+
+    Best layer per variant and suite group, next to chance (1 / objects in view); 40 and 34 frames, so one
+    standard deviation is about 6-8 points.
+    """
+    probe = np.load(probe_path, allow_pickle=True)
+    maps, coverage, target = probe["maps"].astype(np.float32), probe["coverage"], probe["target"]
+    rows = {}
+    for group, prefix in SUITE_GROUPS.items():
+        frames = np.flatnonzero(np.char.startswith(probe["suite"].astype(str), prefix))
+        in_view = (coverage[frames].sum(axis=2) > 0).sum(axis=1)
+        row = {"帧数": len(frames), "随机水平": round(float((1 / in_view).mean()), 2)}
+        for t, tokens in enumerate(probe["token_sets"]):
+            for m, merge in enumerate(probe["merges"]):
+                hits = [np.mean([np.argmax(object_means(maps[i, t, m, layer], coverage[i])) == target[i]
+                                 for i in frames]) for layer in range(maps.shape[3])]
+                best = int(np.argmax(hits))
+                row[f"{tokens}/{merge}"] = f"{hits[best]:.2f}（第 {best} 层）"
+        rows[group] = row
     return pd.DataFrame(rows).T
