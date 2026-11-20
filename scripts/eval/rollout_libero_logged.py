@@ -321,7 +321,9 @@ def main() -> None:
     np.random.seed(args.seed)
     suite, task_id, task, env = make_env(args)
     names = sorted(env.env.objects_dict)
-    target = args.target or env.obj_of_interest[0]
+    # the first object of interest that can be picked up; LIBERO-10 tasks may list a fixture first (a stove,
+    # a cabinet region), and in every task of the earlier suites the first one is movable, so they are unchanged
+    target = args.target or next((name for name in env.obj_of_interest if name in names), env.obj_of_interest[0])
     if target not in names:
         raise SystemExit(f"target {target!r} is not a movable object; choose one of {names}")
     instruction = (task.language if args.replay_states

@@ -45,9 +45,11 @@ for task in "${tasks[@]}"; do
       [ -f "$OUT/${task}_demo${demo}.npz" ] || todo=1
     done
     [ "$todo" -eq 1 ] || continue
+    # LIBERO-10 and LIBERO-90 files start with the scene (KITCHEN_SCENE3_...), which is not in the instruction
+    if [[ "$task" =~ ^[A-Z_]+SCENE[0-9]+_(.+)$ ]]; then language="${BASH_REMATCH[1]}"; else language="$task"; fi
     while [ "$(jobs -rp | wc -l)" -ge "$MAX_JOBS" ]; do sleep 2; done
     CUDA_VISIBLE_DEVICES='' "$LIBERO_PYTHON" "$REPO/scripts/eval/rollout_libero_logged.py" --out "$OUT" \
-      --suite "$SUITE" --task "${task//_/ }" --tag "$task" --replay-states "$file" --demos "${demos[@]}" \
+      --suite "$SUITE" --task "${language//_/ }" --tag "$task" --replay-states "$file" --demos "${demos[@]}" \
       --summary-suffix "_part$part" > "$OUT/logs/${task}_part$part.log" 2>&1 &
     pids+=("$!"); labels+=("${task}_part$part")
   done
