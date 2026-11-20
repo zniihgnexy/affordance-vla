@@ -100,16 +100,18 @@ def probe(framework, head: PlanGridPredictor, camera, offsets, log: RolloutLog) 
             for layer in range(len(stack)):
                 maps[s, m, layer] = merge_similarity(stack[layer, positions[name]], cell_states[layer], how)
     contact = grid_contacts(output, camera)[0]
-    grasp = np.asarray(log.object_pos[0, log.target_index]) + offsets.grasp[log.target]
+    offset = offsets.grasp.get(log.target)  # the plan dataset knows the grasp points of its own suite only
+    error = np.nan if offset is None else float(np.linalg.norm(contact - log.object_pos[0, log.target_index] - offset))
     return {"maps": maps, "coverage": cell_coverage(log.seg[0], len(log.names)),
             "head_scores": output["cell"][0].float().cpu().numpy(),
-            "head_error_m": float(np.linalg.norm(contact - grasp)), "object_words": int(len(positions["object"]))}
+            "head_error_m": error, "object_words": int(len(positions["object"]))}
 
 
 def summarise(records: list[dict], logs: list[RolloutLog]) -> dict:
     layers = records[0]["maps"].shape[2]
     on_target = np.full((len(records), len(TOKEN_SETS), len(MERGES), layers), np.nan)
-    head = {"named object, within 2 cm": 0, "named object, further": 0, "another object": 0, "background": 0}
+    head = {"named object, within 2 cm": 0, "named object, further": 0, "named object, no grasp point known": 0,
+            "another object": 0, "background": 0}
     for i, (record, log) in enumerate(zip(records, logs)):
         for s in range(len(TOKEN_SETS)):
             for m in range(len(MERGES)):
@@ -119,7 +121,9 @@ def summarise(records: list[dict], logs: list[RolloutLog]) -> dict:
                         on_target[i, s, m, layer] = object_at_peak(scores, record["coverage"]) == log.target_index
         found = object_at_peak(record["head_scores"], record["coverage"])
         if found == log.target_index:
-            head["named object, within 2 cm" if record["head_error_m"] <= NEAR_M else "named object, further"] += 1
+            error = record["head_error_m"]
+            head["named object, no grasp point known" if np.isnan(error) else
+                 "named object, within 2 cm" if error <= NEAR_M else "named object, further"] += 1
         else:
             head["background" if found is None else "another object"] += 1
     share = np.nanmean(on_target, axis=0)  # (token set, merge, layer)
