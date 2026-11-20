@@ -9,8 +9,8 @@ which splits its errors into "another object" and "the named object, but off". I
 its decoded contact.
 
 Outputs in --out:
-- probe.npz: per item, the maps (item, token set, merge, layer, 64), object coverages and the head's cell
-  scores and contact;
+- probe.npz: per item, the maps (item, token set, merge, layer, 64), object coverages, the head's cell scores
+  and 3D error, and the log each item came from (log_file);
 - summary.json: the share of maps on the named object per token set, merge and layer, and the head's split.
 
 Usage: through the GPU queue with scripts/vla/run_semantic_probe_gpu.sh.
@@ -167,14 +167,14 @@ def main() -> None:
         "object_words": np.array([r["object_words"] for r in records]),
         "target": np.array([log.target_index for log in logs]),
         "suite": np.array([log.path.parent.name for log in logs]),
-        "file": np.array([log.path.name for log in logs]),
+        "log_file": np.array([log.path.name for log in logs]),  # not "file": savez_compressed takes that name
         "instruction": np.array([log.meta["instruction"] for log in logs]),
         "agentview": np.stack([log.agentview[0] for log in logs]), "token_sets": np.array(TOKEN_SETS),
         "merges": np.array(MERGES)}
-    np.savez_compressed(args.out / "probe.npz", **arrays)
-    summary = summarise(records, logs)
+    summary = summarise(records, logs)  # written first: it is what E1 decides on
     summary["args"] = {key: str(value) for key, value in vars(args).items()}
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2))
+    np.savez_compressed(args.out / "probe.npz", **arrays)
     print(json.dumps({key: value for key, value in summary.items() if key != "args"}, indent=2))
 
 
