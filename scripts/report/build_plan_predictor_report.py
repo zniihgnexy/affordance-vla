@@ -1,7 +1,7 @@
-"""Build report/2026-11-13_plan_predictor.ipynb (cells only; execution happens separately).
+"""Build report/experiments/2026-11-13_plan_predictor.ipynb (cells only; execution happens separately).
 
-Usage on the server (starvla env, from report/):
-    python ../scripts/report/build_plan_predictor_report.py 2026-11-13_plan_predictor.ipynb
+Usage on the server (starvla env, from report/experiments/):
+    python ../../scripts/report/build_plan_predictor_report.py 2026-11-13_plan_predictor.ipynb
     python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-13_plan_predictor.ipynb
 Needs runs/plan_predictor/{p1,g1} from scripts/vla/run_plan_predictor_gpu.sh (HEAD=regress and HEAD=grid)
 and the closed-loop folders under runs/libero_pro from scripts/eval/run_libero_pro_gpu.sh: released,

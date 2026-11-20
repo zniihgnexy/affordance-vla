@@ -1,4 +1,4 @@
-"""Figures and tables for report/2026-11-11_plan_following_experiment.ipynb.
+"""Figures and tables for report/experiments/2026-11-11_plan_following_experiment.ipynb.
 
 Inputs: the training set of scripts/data/build_plan_dataset.py, the run folders written by
 scripts/vla/run_plan_following_gpu.sh (train.jsonl, metrics.json, rollouts_<plan>/), and the

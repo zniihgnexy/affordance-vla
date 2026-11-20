@@ -1,7 +1,7 @@
-"""Build report/2026-11-11_affordance_pipeline_walkthrough.ipynb (cells only; execution happens separately).
+"""Build report/experiments/2026-11-11_affordance_pipeline_walkthrough.ipynb (cells only; execution happens separately).
 
-Usage on the server (starvla env, from report/):
-    python ../scripts/report/build_affordance_pipeline_walkthrough.py 2026-11-11_affordance_pipeline_walkthrough.ipynb
+Usage on the server (starvla env, from report/experiments/):
+    python ../../scripts/report/build_affordance_pipeline_walkthrough.py 2026-11-11_affordance_pipeline_walkthrough.ipynb
     python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-11_affordance_pipeline_walkthrough.ipynb
 Needs rollouts logged with depth: run_plan_following_gpu.sh with RUN=s2_actions STAGES=eval DEPTH=1
 SUFFIX=_depth EPISODES=1 (through the GPU queue), the training set runs/plan_following/dataset, and the

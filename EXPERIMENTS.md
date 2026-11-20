@@ -125,6 +125,9 @@ bash scripts/server/submit_queue_job.sh 162 pro_g1_hold_s10 16000 3 "cards=5" --
 
 ## 5. Notebooks (server, CPU; read finished runs only)
 
-From `report/`: `python ../scripts/report/build_<name>.py <notebook>.ipynb`, then
+One weekly review per London calendar week, from `report/`:
+`python ../scripts/report/build_weekly_<YYYY_MM_DD>.py <YYYY-MM-DD>_weekly_review.ipynb` (the week's Monday).
+Experiment notebooks (appendices of their week), from `report/experiments/`:
+`python ../../scripts/report/build_<name>.py <notebook>.ipynb`. Then
 `python -m jupyter nbconvert --to notebook --execute --inplace <notebook>.ipynb`. Each builder's docstring
 names its notebook and inputs; media go to the tracked `report/media/`.

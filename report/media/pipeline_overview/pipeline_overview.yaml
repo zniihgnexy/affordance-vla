@@ -1,4 +1,4 @@
-# Pipeline figure of the weekly review (report/2026-11-16_weekly_review.ipynb, section "先看这里").
+# Pipeline figure of the weekly review (report/2026-11-09_weekly_review.ipynb, section "先看这里").
 # Spec for the cvpr-figure skill; how to render it with Chinese text: README.md in this folder.
 # The four crops come from real logs (scripts/report/pipeline_figure_crops.py).
 figure:

@@ -1,4 +1,4 @@
-"""Tables and figures for report/2026-11-12_libero_pro_object.ipynb.
+"""Tables and figures for report/experiments/2026-11-12_libero_pro_object.ipynb.
 
 Inputs: the folders written by scripts/eval/run_libero_pro_gpu.sh, one per policy:
 runs/libero_pro/<name>/<suite>/task<k>_ep<n>.npz. A rollout counts as solved when the benchmark's own

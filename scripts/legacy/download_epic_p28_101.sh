@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Data for the EPIC-KITCHENS + VISOR section of report/2026-11-09_datasets_report.ipynb (~125 MB).
+# Data for the EPIC-KITCHENS + VISOR section of report/experiments/2026-11-09_datasets_report.ipynb (~125 MB).
 # One video, P28_101: VISOR sparse frames + masks, VISOR frame mapping, EPIC-KITCHENS-100
 # narrations and the EPIC-Fields example reconstruction. Non-commercial licences apply.
 set -euo pipefail

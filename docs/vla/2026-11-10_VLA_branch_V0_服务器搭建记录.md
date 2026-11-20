@@ -160,7 +160,7 @@ nohup bash scripts/data/download_assets.sh   > $W/logs/download_assets.log   2>&
 
 ## 9. 流程 demo 的实测数字（2026-11-10）
 
-结果和图都在 [流程 demo notebook](../../report/2026-11-10_vla_pipeline_demo.ipynb) 里，这里只记以后排作业会用到的数字。
+结果和图都在 [流程 demo notebook](../../report/experiments/2026-11-10_vla_pipeline_demo.ipynb) 里，这里只记以后排作业会用到的数字。
 
 | 项目 | 实测 |
 | --- | --- |

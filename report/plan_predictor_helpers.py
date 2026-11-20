@@ -1,4 +1,4 @@
-"""Tables and figures for report/2026-11-13_plan_predictor.ipynb.
+"""Tables and figures for report/experiments/2026-11-13_plan_predictor.ipynb.
 
 Inputs: runs/plan_predictor/<run>/{metrics.json, predictions.npz} written by
 scripts/vla/train_plan_predictor.py, and the closed-loop folders runs/libero_pro/<name>/ written by

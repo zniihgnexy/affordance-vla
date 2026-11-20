@@ -1,4 +1,4 @@
-"""Tables and figures for report/2026-11-20_grasp_orientation.ipynb (E0 of Pipeline v3).
+"""Tables and figures for report/experiments/2026-11-20_grasp_orientation.ipynb (E0 of Pipeline v3).
 
 Do failed grasps hold the gripper differently from held ones and from the demonstrations of the same object?
 Inputs: the demonstration replays (runs/plan_following/demos) and closed-loop rollouts of LIBERO-PRO

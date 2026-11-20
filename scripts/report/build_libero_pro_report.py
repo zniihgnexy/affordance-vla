@@ -1,7 +1,7 @@
-"""Build report/2026-11-12_libero_pro_object.ipynb (cells only; execution happens separately).
+"""Build report/experiments/2026-11-12_libero_pro_object.ipynb (cells only; execution happens separately).
 
-Usage on the server (starvla env, from report/):
-    python ../scripts/report/build_libero_pro_report.py 2026-11-12_libero_pro_object.ipynb
+Usage on the server (starvla env, from report/experiments/):
+    python ../../scripts/report/build_libero_pro_report.py 2026-11-12_libero_pro_object.ipynb
     python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-12_libero_pro_object.ipynb
 Needs runs/libero_pro/{released,oracle_plan_s2} from scripts/eval/run_libero_pro_gpu.sh (through the GPU
 queue; see its header; runs/libero_pro/oracle_plan is added as a third column once it is complete) and one replayed demonstration in runs/plan_following/demos for the unperturbed

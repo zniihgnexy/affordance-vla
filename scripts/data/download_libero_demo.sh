@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One LIBERO-Object task file (50 demos, ~664 MB) and its BDDL scene description, used by
-# report/2026-11-10_vla_datasets_sim_report.ipynb. It goes to <repo>/data/libero/ (on the server `data`
+# report/experiments/2026-11-10_vla_datasets_sim_report.ipynb. It goes to <repo>/data/libero/ (on the server `data`
 # is a symlink into the NAS work dir) and is not versioned. Resumable; the file's sha256 is checked.
 #
 # Sources: SOURCE=modelscope (default; a byte-identical re-upload, fast from the A6000 server) or

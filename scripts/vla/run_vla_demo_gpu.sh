@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GPU part of the VLA pipeline demo (report/2026-11-10_vla_pipeline_demo.ipynb), as ONE job for the shared
+# GPU part of the VLA pipeline demo (report/experiments/2026-11-10_vla_pipeline_demo.ipynb), as ONE job for the shared
 # queue on the A6000 server (estar). It uses the released starVLA checkpoint Qwen3-VL-PI-LIBERO-4in1:
 #   stage 1  probe_vla_demo.py: model facts, flow sampling, open-loop predictions, flow-matching loss
 #   stage 2  starVLA's policy server on the queue's card + closed-loop LIBERO rollouts with per-step logs

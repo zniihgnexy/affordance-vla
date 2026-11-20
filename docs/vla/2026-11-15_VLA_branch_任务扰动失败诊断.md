@@ -1,6 +1,6 @@
 # VLA branch：任务扰动下三个任务为什么给真值计划也失败
 
-**日期：2026-11-15｜分支：`main`｜状态：诊断完成，修法已检验（2026-11-16），是否设为默认待项目负责人决定｜结果 notebook：[`report/2026-11-15_task_perturbation_failures.ipynb`](../../report/2026-11-15_task_perturbation_failures.ipynb)**
+**日期：2026-11-15｜分支：`main`｜状态：诊断完成，修法已检验（2026-11-16），是否设为默认待项目负责人决定｜结果 notebook：[`report/experiments/2026-11-15_task_perturbation_failures.ipynb`](../../report/experiments/2026-11-15_task_perturbation_failures.ipynb)**
 
 按论文协议跑完之后（[实验记录](2026-11-13_VLA_branch_预测计划驱动闭环.md) 1.8 节），项目负责人同意先查这一条：任务扰动下，番茄酱瓶（ketchup）、牛奶、橙汁三个任务即使给真值计划也只成功 31、24、54 次（满分 150）。这里只用已有的闭环日志和示范数据，没有跑新的 GPU 作业。
 
@@ -41,7 +41,7 @@
 
 ## 3. 修法的检验（2026-11-16）
 
-项目负责人 2026-11-15 同意后执行（提交 856ec13）：`--scale-from-start --own-approach`，其余设置与 13 日标签的十任务动作头（`s9_align_release10`）相同，新动作头是 `s10_scale_own10`。LIBERO-PRO Object，每个任务 20 个起始状态，种子 7。结果 notebook：[`report/2026-11-16_label_fix_results.ipynb`](../../report/2026-11-16_label_fix_results.ipynb)。
+项目负责人 2026-11-15 同意后执行（提交 856ec13）：`--scale-from-start --own-approach`，其余设置与 13 日标签的十任务动作头（`s9_align_release10`）相同，新动作头是 `s10_scale_own10`。LIBERO-PRO Object，每个任务 20 个起始状态，种子 7。结果 notebook：[`report/experiments/2026-11-16_label_fix_results.ipynb`](../../report/experiments/2026-11-16_label_fix_results.ipynb)。
 
 | 动作头 | 位置扰动，真值计划 | 任务扰动，真值计划 | 位置扰动，图像格子计划保持 | 任务扰动，图像格子计划保持 |
 | --- | --- | --- | --- | --- |
@@ -89,10 +89,10 @@
 
 ## 4. 复现
 
-在服务器的 `report/` 下：
+在服务器的 `report/experiments/` 下：
 
 ```bash
-python ../scripts/report/build_task_perturbation_report.py 2026-11-15_task_perturbation_failures.ipynb
+python ../../scripts/report/build_task_perturbation_report.py 2026-11-15_task_perturbation_failures.ipynb
 python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-15_task_perturbation_failures.ipynb
 ```
 

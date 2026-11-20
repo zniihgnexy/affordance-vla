@@ -1,4 +1,4 @@
-"""Videos, figures and status tables for report/2026-11-20_week2_review.ipynb (week 2: 16-22 Nov 2026).
+"""Videos, figures and status tables for report/2026-11-16_weekly_review.ipynb (week 2: 16-22 Nov 2026).
 
 The demos are real closed-loop rollouts of LIBERO-PRO that kept their camera images (episodes 0 and 1 of each
 task). The plan drawn into a frame is the one the policy was sent for that step: the grid plan head's
@@ -189,6 +189,23 @@ def task_results(runs: list[Path], suite: str) -> pd.DataFrame:
     table = pd.DataFrame.from_dict(rows, orient="index", columns=["指令", "成功", "回合"]).sort_index()
     table.index.name = "任务"
     return table
+
+
+LABEL_COLUMNS = {"真值计划：位置扰动": ("oracle_plan_{}", "libero_object_swap"),
+                 "真值计划：任务扰动": ("oracle_plan_{}", "libero_object_task"),
+                 "图像格子计划保持：位置扰动": ("predicted_g1_hold_{}", "libero_object_swap"),
+                 "图像格子计划保持：任务扰动": ("predicted_g1_hold_{}", "libero_object_task")}
+
+
+def label_runs_table(pro: Path, heads: dict[str, str]) -> pd.DataFrame:
+    """Successes of action heads (run suffix s9, s10, ...) with oracle plans and with kept g1 map plans."""
+    rows = {}
+    for label, head in heads.items():
+        rows[label] = {}
+        for column, (pattern, suite) in LABEL_COLUMNS.items():
+            table = task_results([pro / pattern.format(head)], suite)
+            rows[label][column] = f"{table['成功'].sum()}/{table['回合'].sum()}"
+    return pd.DataFrame(rows).T
 
 
 def label_summary(summary_path: Path) -> pd.DataFrame:

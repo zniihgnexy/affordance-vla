@@ -1,7 +1,7 @@
-"""Build report/2026-11-11_plan_following_experiment.ipynb (cells only; execution happens separately).
+"""Build report/experiments/2026-11-11_plan_following_experiment.ipynb (cells only; execution happens separately).
 
-Usage on the server (starvla env, from report/):
-    python ../scripts/report/build_plan_following_report.py 2026-11-11_plan_following_experiment.ipynb
+Usage on the server (starvla env, from report/experiments/):
+    python ../../scripts/report/build_plan_following_report.py 2026-11-11_plan_following_experiment.ipynb
     jupyter nbconvert --to notebook --execute --inplace 2026-11-11_plan_following_experiment.ipynb
 Needs runs/plan_following/{dataset,<runs>} (scripts/vla/run_plan_following_gpu.sh and the CPU steps in
 its header) and the rollouts of the released checkpoint in runs/vla_pipeline_demo/rollouts.

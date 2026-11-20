@@ -1,8 +1,8 @@
-"""Build report/2026-11-16_weekly_review.ipynb, the review of the week 9-15 Nov 2026 (cells only; execute it after).
+"""Build report/2026-11-09_weekly_review.ipynb, the review of the week 9-15 Nov 2026 (cells only; execute it after).
 
 Usage on the server (starvla env, from report/):
-    python ../scripts/report/build_weekly_review.py 2026-11-16_weekly_review.ipynb
-    python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-16_weekly_review.ipynb
+    python ../scripts/report/build_weekly_2026_11_09.py 2026-11-09_weekly_review.ipynb
+    python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-09_weekly_review.ipynb
 Reads only finished runs: runs/plan_following/<run> and runs/libero_pro/<run> (their summaries and logs),
 runs/plan_predictor/{p1,g1}/metrics.json. Nothing is run on a GPU. The text is in Chinese for the project lead.
 """
@@ -126,7 +126,7 @@ md("""
 
 | 日期 | 做了什么 | 主要产出 |
 | --- | --- | --- |
-| 11-09 一 | 记忆方向的原型（RGB-D 几何、DINOv2 特征、体素记忆、SceneFun3D），组会数据集汇报 | `report/2026-11-09_datasets_report.ipynb` |
+| 11-09 一 | 记忆方向的原型（RGB-D 几何、DINOv2 特征、体素记忆、SceneFun3D），组会数据集汇报 | `report/experiments/2026-11-09_datasets_report.ipynb` |
 | 11-10 二 | VLA 方向起步：检索清单、Pipeline v1 → v2、R1–R3 核实；LIBERO 读取与 CAW 标签；A6000 服务器搭建（V0）；从 affordance3D 拆出本仓库，工作副本搬到服务器、大文件放 NAS | Pipeline v2、R1–R3、V0 记录；`2026-11-10_vla_datasets_sim_report`、`2026-11-10_vla_pipeline_demo` |
 | 11-11 三 | 仿真环境、逐步记录的 rollout、官方权重探针；计划输入、换过计划的样本、计划条件动作头；**计划跟随实验** | `2026-11-11_plan_following_experiment`、实验记录 |
 | 11-12 四 | 深度记录、真值 affordance map、**流程逐步演示**；项目评审 → 论点收束；R9 近邻核实；噪声加丢弃对照（负结果） | `2026-11-11_affordance_pipeline_walkthrough`、R9 |

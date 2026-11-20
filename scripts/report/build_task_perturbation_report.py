@@ -1,10 +1,10 @@
-"""Build report/2026-11-15_task_perturbation_failures.ipynb (cells only; execution happens separately).
+"""Build report/experiments/2026-11-15_task_perturbation_failures.ipynb (cells only; execution happens separately).
 
-Usage on the server (starvla env, from report/):
-    python ../scripts/report/build_task_perturbation_report.py 2026-11-15_task_perturbation_failures.ipynb
+Usage on the server (starvla env, from report/experiments/):
+    python ../../scripts/report/build_task_perturbation_report.py 2026-11-15_task_perturbation_failures.ipynb
     python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-15_task_perturbation_failures.ipynb
 Needs runs/libero_pro/full_oracle_s9_seed{7,8,9} (the papers' protocol, see
-report/2026-11-14_libero_pro_full_protocol.ipynb) and runs/plan_following/dataset10. Nothing is run on a GPU.
+report/experiments/2026-11-14_libero_pro_full_protocol.ipynb) and runs/plan_following/dataset10. Nothing is run on a GPU.
 The closing text is in conclusions_task_perturbation.md next to this script.
 """
 import sys

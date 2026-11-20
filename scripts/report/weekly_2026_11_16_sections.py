@@ -1,6 +1,6 @@
 """Sections 2 (the pipeline and how it changed) and 6 (the proposed experiment plan) of the week-2 review.
 
-Imported by build_week2_review.py, which owns the notebook. Only the latest version of every figure and block
+Imported by build_weekly_2026_11_16.py, which owns the notebook. Only the latest version of every figure and block
 is kept: when the pipeline changes, the text here is replaced, and section 2.1 records what changed and why.
 """
 

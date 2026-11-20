@@ -1,10 +1,10 @@
-"""Build report/2026-11-20_grasp_orientation.ipynb, E0 of Pipeline v3 (cells only; execution happens separately).
+"""Build report/experiments/2026-11-20_grasp_orientation.ipynb, E0 of Pipeline v3 (cells only; execution happens separately).
 
-Usage on the server (starvla env, from report/):
-    python ../scripts/report/build_grasp_orientation_report.py 2026-11-20_grasp_orientation.ipynb
+Usage on the server (starvla env, from report/experiments/):
+    python ../../scripts/report/build_grasp_orientation_report.py 2026-11-20_grasp_orientation.ipynb
     python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-20_grasp_orientation.ipynb
 Needs runs/plan_following/demos (the replayed demonstrations) and runs/libero_pro/full_{g1_hold,oracle}_s9_seed{7,8,9}
-(the papers' protocol, see report/2026-11-14_libero_pro_full_protocol.ipynb). Nothing is run on a GPU.
+(the papers' protocol, see report/experiments/2026-11-14_libero_pro_full_protocol.ipynb). Nothing is run on a GPU.
 The closing text is in conclusions_grasp_orientation.md next to this script.
 """
 import sys

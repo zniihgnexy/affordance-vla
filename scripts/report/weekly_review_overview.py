@@ -1,4 +1,4 @@
-"""The "先看这里" section of the weekly review (scripts/report/build_weekly_review.py): one page on what the
+"""The "先看这里" section of the weekly review (scripts/report/build_weekly_2026_11_09.py): one page on what the
 project does and why, why each step was chosen, where it stands and what comes next, with the pipeline
 figure (report/media/pipeline_overview/)."""
 

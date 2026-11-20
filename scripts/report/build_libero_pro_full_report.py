@@ -1,7 +1,7 @@
-"""Build report/2026-11-14_libero_pro_full_protocol.ipynb (cells only; execution happens separately).
+"""Build report/experiments/2026-11-14_libero_pro_full_protocol.ipynb (cells only; execution happens separately).
 
-Usage on the server (starvla env, from report/):
-    python ../scripts/report/build_libero_pro_full_report.py 2026-11-14_libero_pro_full_protocol.ipynb
+Usage on the server (starvla env, from report/experiments/):
+    python ../../scripts/report/build_libero_pro_full_report.py 2026-11-14_libero_pro_full_protocol.ipynb
     python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-14_libero_pro_full_protocol.ipynb
 Needs runs/libero_pro/full_{released,g1_hold_s9,oracle_s9}_seed{7,8,9} from scripts/eval/run_libero_pro_gpu.sh
 with TRIALS=50 and SEED=7, 8, 9 (through the GPU queue; see docs/vla/2026-11-13_VLA_branch_预测计划驱动闭环.md).

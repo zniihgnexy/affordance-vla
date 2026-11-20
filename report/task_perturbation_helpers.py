@@ -1,4 +1,4 @@
-"""Tables and figures for report/2026-11-15_task_perturbation_failures.ipynb.
+"""Tables and figures for report/experiments/2026-11-15_task_perturbation_failures.ipynb.
 
 Why does the action head fail three tasks of LIBERO-PRO's task perturbation even with the oracle plan? Inputs:
 the rollouts of runs/libero_pro/full_oracle_s9_seed<seed> (the papers' protocol, 14 Nov) and the demonstration

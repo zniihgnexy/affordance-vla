@@ -1,7 +1,7 @@
-"""Build report/2026-11-16_label_fix_results.ipynb (cells only; execution happens separately).
+"""Build report/experiments/2026-11-16_label_fix_results.ipynb (cells only; execution happens separately).
 
-Usage on the server (starvla env, from report/):
-    python ../scripts/report/build_label_fix_report.py 2026-11-16_label_fix_results.ipynb
+Usage on the server (starvla env, from report/experiments/):
+    python ../../scripts/report/build_label_fix_report.py 2026-11-16_label_fix_results.ipynb
     python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-16_label_fix_results.ipynb
 Needs runs/libero_pro/{oracle_plan,predicted_g1_hold}_{s9,s10} from scripts/eval/run_libero_pro_gpu.sh (20 start
 states, seed 7) and runs/plan_following/dataset10. The closing text is in conclusions_label_fix.md next to this script.

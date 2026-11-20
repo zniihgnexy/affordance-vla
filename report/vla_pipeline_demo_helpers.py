@@ -1,4 +1,4 @@
-"""Figures and tables for report/2026-11-10_vla_pipeline_demo.ipynb: data, model, open loop, closed loop.
+"""Figures and tables for report/experiments/2026-11-10_vla_pipeline_demo.ipynb: data, model, open loop, closed loop.
 
 The label side of the demo (CAW plan, plan–action consistency, episode state) is in
 vla_pipeline_demo_labels.py. Inputs come from scripts/vla/probe_vla_demo.py (probe.npz / probe.json)

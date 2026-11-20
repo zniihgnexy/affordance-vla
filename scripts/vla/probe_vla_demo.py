@@ -1,6 +1,6 @@
 """Probe the released starVLA QwenPI LIBERO checkpoint on one training episode (GPU: run through the queue).
 
-Measurements for report/2026-11-10_vla_pipeline_demo.ipynb. Nothing is trained.
+Measurements for report/experiments/2026-11-10_vla_pipeline_demo.ipynb. Nothing is trained.
   1. model facts: parameters per module, the prompt, token counts, hidden-state shapes, time, memory;
   2. flow sampling: the action chunk after each Euler step, for several noise seeds, at one frame;
   3. open loop: predicted chunks along the recorded episode, with the true instruction and with

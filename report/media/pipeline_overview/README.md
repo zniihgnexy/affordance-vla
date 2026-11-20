@@ -5,7 +5,7 @@ the figures are real crops, and they live in this folder too.
 
 | Figure | What it shows | Status |
 | --- | --- | --- |
-| `pipeline_overview.png` | the pipeline as it runs now; it is the figure in the first section of `report/2026-11-16_weekly_review.ipynb` | current system |
+| `pipeline_overview.png` | the pipeline as it runs now; it is the figure in the first section of `report/2026-11-09_weekly_review.ipynb` | current system |
 | `v3_model.png` | Pipeline v3 at test time. The frozen VLM feeds the interaction affordance map head, which outputs an interaction score for every object in view, depth and a direction field (gripper closing direction). A semantic gate multiplies the instruction-to-cell similarity onto the scores and so picks the named object. The plan (contact and gripper orientation) is decoded from the map into 16 numbers, and the action head follows it | **guide since 19 Nov 2026** |
 | `v3_training.png` | How v3 trains its two heads. The map head learns from gripper-object interaction labels: L1 comes from demonstration grasps, L2 from per-category 3D canonical maps in the object frame, projected by object pose onto every object in the frame (labels only). The action head learns from counterfactual samples | **guide since 19 Nov 2026** |
 | `v3_generalization.png` | v3 generalisation. Training is on LIBERO-Object and testing is zero-shot on LIBERO-PRO, with LIBERO-10 (mugs, moka pots) added later for orientation. A grasp splits into three parts: which object (semantic gate), where and in which direction (interaction map), how to move (action head, which only has to obey). Each failure is traced back to one module; E7 adds object rotation, unseen objects of a known category and combined changes | **guide since 19 Nov 2026** |

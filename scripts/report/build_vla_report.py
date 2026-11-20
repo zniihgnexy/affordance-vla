@@ -1,7 +1,7 @@
-"""Build report/2026-11-10_vla_datasets_sim_report.ipynb (cells only; execution happens separately).
+"""Build report/experiments/2026-11-10_vla_datasets_sim_report.ipynb (cells only; execution happens separately).
 
-Usage (from report/):
-    python ../scripts/report/build_vla_report.py 2026-11-10_vla_datasets_sim_report.ipynb
+Usage (from report/experiments/):
+    python ../../scripts/report/build_vla_report.py 2026-11-10_vla_datasets_sim_report.ipynb
     jupyter nbconvert --to notebook --execute --inplace 2026-11-10_vla_datasets_sim_report.ipynb
 Needs h5py, the official images (scripts/report/download_vla_report_images.sh) and the LIBERO task file
 (scripts/data/download_libero_demo.sh).

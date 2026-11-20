@@ -1,7 +1,7 @@
-"""Build report/2026-11-10_vla_pipeline_demo.ipynb (cells only; execution happens separately).
+"""Build report/experiments/2026-11-10_vla_pipeline_demo.ipynb (cells only; execution happens separately).
 
-Usage on the server (starvla env, from report/):
-    python ../scripts/report/build_vla_pipeline_demo.py 2026-11-10_vla_pipeline_demo.ipynb
+Usage on the server (starvla env, from report/experiments/):
+    python ../../scripts/report/build_vla_pipeline_demo.py 2026-11-10_vla_pipeline_demo.ipynb
     jupyter nbconvert --to notebook --execute --inplace 2026-11-10_vla_pipeline_demo.ipynb
 Needs the outputs of scripts/vla/run_vla_demo_gpu.sh and of the CPU replay described in its header
 (runs/vla_pipeline_demo/{probe,rollouts}).

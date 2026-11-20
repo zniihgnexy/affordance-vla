@@ -1,4 +1,4 @@
-"""Figures and tables for report/2026-11-10_vla_pipeline_demo.ipynb: CAW plan, consistency, episode state.
+"""Figures and tables for report/experiments/2026-11-10_vla_pipeline_demo.ipynb: CAW plan, consistency, episode state.
 
 Everything here is computed from logs (simulator ground truth) or from labels derived from them. No
 model predicts these quantities yet; the notebook marks them ORACLE.

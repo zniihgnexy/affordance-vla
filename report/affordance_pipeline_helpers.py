@@ -1,4 +1,4 @@
-"""Figures and tables for report/2026-11-11_affordance_pipeline_walkthrough.ipynb.
+"""Figures and tables for report/experiments/2026-11-11_affordance_pipeline_walkthrough.ipynb.
 
 One closed-loop rollout that was logged with depth (run_plan_following_gpu.sh with DEPTH=1) is followed
 step by step. What no model predicts yet is computed from the simulator and labelled ORACLE in the

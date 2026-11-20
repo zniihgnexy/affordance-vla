@@ -1,19 +1,19 @@
-"""Build report/2026-11-20_week2_review.ipynb, the review of week 2 (16-22 Nov 2026; cells only, execute it after).
+"""Build report/2026-11-16_weekly_review.ipynb, the review of the London week 16-22 Nov 2026 (cells only; execute it).
 
 Usage on the server (starvla env, from report/):
-    python ../scripts/report/build_week2_review.py 2026-11-20_week2_review.ipynb
-    python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-20_week2_review.ipynb
+    python ../scripts/report/build_weekly_2026_11_16.py 2026-11-16_weekly_review.ipynb
+    python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-16_weekly_review.ipynb
 Reads finished runs only: runs/libero_pro/{released,predicted_g1_hold_s10,full_*_s9_seed*}, the replayed
 demonstrations, and the folders of the jobs started this week (their progress is read when the notebook runs).
-Writes its videos to report/media/week2/ (tracked). Nothing runs on a GPU. The text is in Chinese for the
-project lead. Sections 2 and 6 come from week2_review_sections.py; only the latest version of every figure and
+Writes its videos to report/media/weekly_2026_11_16/ (tracked). Nothing runs on a GPU. The text is in Chinese for the
+project lead. Sections 2 and 6 come from weekly_2026_11_16_sections.py; only the latest version of every figure and
 block is kept, and section 2.1 records how the pipeline changed.
 """
 import sys
 from pathlib import Path
 
 import nbformat as nbf
-from week2_review_sections import pipeline_cells, plan_cells
+from weekly_2026_11_16_sections import pipeline_cells, plan_cells
 
 OUT = Path(sys.argv[1])
 cells = []
@@ -21,15 +21,15 @@ md = lambda s: cells.append(nbf.v4.new_markdown_cell(s.strip("\n")))  # noqa: E7
 code = lambda s: cells.append(nbf.v4.new_code_cell(s.strip("\n")))  # noqa: E731
 
 md("""
-# VLA 方向周报 · 第二周：2026-11-16 至 11-22
+# VLA 方向周报 · 第二周：2026-11-16 至 11-22（伦敦时间）
 
-**仓库：** `affordance-vla` · **更新于：** 2026-11-20 晚（周四；本周还没结束，进行中的任务在第 4 节实时读取）
+**仓库：** `affordance-vla` · **更新于：** 2026-11-20（周五，伦敦时间；本周还没结束，进行中的任务在第 4 节实时读取）
 
 **这份 notebook 的顺序按优先级：**
 
 1. 真实 demo 的图像和视频；
 2. 现行 pipeline（v3）：这一周怎么变过来的，三张图，逐块的详细解释；
-3. 本周的实验结果（E0、L）；
+3. 本周的实验结果（11-16 的新标签、E0、L）；
 4. 进行中的任务和 LIBERO-10 的基线；
 5. 时间线和决定；
 6. 下一步：实验推进计划（已同意）。
@@ -39,6 +39,7 @@ md("""
 - **数字从哪来：** 表格和图都是从服务器上已经跑完的结果里读出来的，执行 notebook 时现算。
 - **ORACLE：** 指仿真里的真值；"真值计划"是上限，不是方法的结果。
 - **状态标记：** 【已实现】表示代码在跑、有结果；【v3 计划】表示设计已确认，还没实现。
+- **周报的规则：** 每个伦敦时间的自然周（周一到周日）只有一份周报；同一周里新内容直接替换旧内容。各实验的详细 notebook 是附录，在 `report/experiments/`。
 """)
 
 code("""
@@ -55,12 +56,12 @@ sys.path.insert(0, str(ROOT))
 from affordance_vla.sim.rollout_log import load_rollout_log
 from report import grasp_orientation_helpers as G
 from report import vla_pipeline_demo_helpers as D
-from report import week2_helpers as K
+from report import weekly_2026_11_16_helpers as K
 
 set_matplotlib_formats("jpeg")
 RUNS = ROOT / "runs"
 PRO = RUNS / "libero_pro"
-MEDIA = ROOT / "report" / "media" / "week2"   # tracked in git
+MEDIA = ROOT / "report" / "media" / "weekly_2026_11_16"   # tracked in git
 MEDIA.mkdir(parents=True, exist_ok=True)
 FIGURES = ROOT / "report" / "media" / "pipeline_overview"
 OURS = PRO / "predicted_g1_hold_s10"   # grid plan head, plans kept, action head with the labels of 15 Nov
@@ -76,8 +77,9 @@ md("""
   - 抓哪个物体：语义门控；
   - 抓哪里、朝什么方向：带方向的交互 affordance map，画面里所有物体都画；
   - 手怎么动：动作头，被训练成服从计划。
+- **11-16：动作头的新标签（s10）设为默认**（3.1 节）。
 - **E0 做完了。** LIBERO-Object 上，失败的抓取不是朝向错了，而是位置偏了：夹爪离物体还远就闭合了。按事先约定的规则，方向部分改到有把手物体的 LIBERO-10 上验证。
-- **L 做完了：** 每类物体一张 3D 标准 map（LIBERO-Object 10 类、LIBERO-10 10 类），投回画面和示范对得上（3.2 节）。摩卡壶的 map 落在把手上，杯子落在杯沿：方向信息正是罐子类物体没有的。
+- **L 做完了：** 每类物体一张 3D 标准 map（LIBERO-Object 10 类、LIBERO-10 10 类），投回画面和示范对得上（3.3 节）。摩卡壶的 map 落在把手上，杯子落在杯沿：方向信息正是罐子类物体没有的。
 - **LIBERO-10 的基线：** 官方权重在 LIBERO-PRO 的 LIBERO-10 上几乎全失败（位置扰动 3/200，任务扰动 18/160；另 2 个任务在补跑）。
 - **定下了实验推进计划**（第 6 节，项目负责人已同意）：骨架定型 → 挑下游任务 → 按对比结果有针对性地改进。
 
@@ -93,7 +95,7 @@ md("""
 - 读了 SemanticVLA 和 AROS；
 - 给记忆系统写了一份"带方向的交互 affordance map"总结页。
 
-**现在最好的数字**（第一周的结果，本周没有新的闭环训练）：LIBERO-PRO Object，按论文协议（每个任务 50 个起始状态，3 个种子）。
+**现在最好的数字**（论文协议的结果来自上周；本周 11-16 的新标签只在开发协议下测过，见 3.1 节）：LIBERO-PRO Object，按论文协议（每个任务 50 个起始状态，3 个种子）。
 
 | | 位置扰动 | 任务扰动 |
 | --- | --- | --- |
@@ -226,7 +228,29 @@ pipeline_cells(md, code)
 md("""
 ## 3 · 本周结果
 
-### 3.1 E0：失败的抓取是不是朝向错了
+### 3.1 11-16：动作头的新标签（s10）和计划噪声（s11）
+
+11-16 是周一，按伦敦时间的自然周属于本周。
+
+- **白天：** 检验了 15 日诊断后提出的标签修法（s10）：前半段以起点为中心旋转缩放，最后一段用被点名物体自己示范里的接近方式。
+- **晚上：** 又试了给"换成另一个物体"的样本加计划噪声（s11）。
+
+都在 LIBERO-PRO Object 上测，每个任务 20 个起始状态、种子 7：
+""")
+
+code("""
+HEADS = {"13 日的标签（s9）": "s9", "15 日的标签（s10，现在的默认）": "s10", "s10 + 换物体样本的计划噪声（s11）": "s11"}
+display(K.label_runs_table(PRO, HEADS))
+""")
+
+md("""
+**结论：**
+
+- **s10 设为默认（11-16 项目负责人同意）。** 任务扰动明显变好，真值计划和图像格子计划都是。代价是位置扰动下用图像格子计划时，tomato sauce 从 13 掉到 2：新动作头更严格地跟着偏了约 3 cm 的计划。
+- **s11 不设为默认。** 合计没有提升。
+- 逐任务的分析在附录 [`experiments/2026-11-16_label_fix_results.ipynb`](experiments/2026-11-16_label_fix_results.ipynb)。
+
+### 3.2 E0：失败的抓取是不是朝向错了
 
 **问题：** 失败抓取的夹爪朝向，是不是比抓住的更偏离示范？
 
@@ -234,7 +258,7 @@ md("""
 
 **数据：** 论文协议的全部闭环，两种配置 × 3 个种子，每种配置 3000 个回合。
 
-完整的 notebook：[`2026-11-20_grasp_orientation.ipynb`](2026-11-20_grasp_orientation.ipynb)。
+附录：[`experiments/2026-11-20_grasp_orientation.ipynb`](experiments/2026-11-20_grasp_orientation.ipynb)。
 """)
 
 code("""
@@ -261,7 +285,7 @@ md("""
 """)
 
 md("""
-### 3.2 L：每类物体的 3D 标准 map
+### 3.3 L：每类物体的 3D 标准 map
 
 **做法**（[`interaction_labels.py`](../affordance_vla/plan/interaction_labels.py)）：
 
@@ -348,6 +372,7 @@ md("""
 
 | 日期 | 做了什么 | 提交 |
 | --- | --- | --- |
+| 11-16 | 检验 15 日的新标签（s10），项目负责人同意设为默认；晚上试了给"换成另一个物体"的样本加计划噪声（s11），合计没有提升 | 附录 `2026-11-16_label_fix_results` |
 | 11-16 晚 | 第一周周报；项目负责人暂停实验，做深度调研 | `ddf3ff2`、`c75460f` |
 | 11-17 | 仓库按研究代码要求整理：按领域分包，每个文件不超过 500 行，实验索引写在 `EXPERIMENTS.md`；Mac 上的 MuJoCo 本机仿真（打开场景、脚本抓取、回放服务器上的测试） | `b1b09ad` 至 `f593260` |
 | 11-18 | 逐个问答理解 pipeline。发现 affordance 只给接触点、没有朝向，提出"计划里加夹爪朝向"的方案，画了第一版图 | `5d6bb35` 里的 `pose_plan_pipeline.png` |
@@ -355,6 +380,7 @@ md("""
 | 11-20 | **E0 完成**（不通过，失败的原因是位置）；日志加物体朝向（逐字节核对过）；L 回放、LIBERO-10 下载和基线、E1 开始；为记忆系统写方向性 map 总结页 | `ce7b263`、`2d447e0` |
 | 11-20 晚 | **L 完成：** 每类物体的 3D 标准 map（Object、LIBERO-10）；E1 的第二个问题修好 | `9e598cd`、`ec1c792` |
 | 11-20 晚 | **v3 第三轮修订**（3D 标准 map、所有物体 + 语义门控、3D 对齐、G1–G5），文档和三张图更新；修好 E1 和 LIBERO-10 的三个问题；**定下实验推进计划**（三个阶段，项目负责人同意） | `9e41d68`、`0d60d4d`、`7bf1f63` |
+| 11-20 晚 | 周报改成按伦敦时间的自然周，一周一份；各实验的 notebook 移到 `report/experiments/` 作附录 | 本次整理 |
 
 **本周的决定**（每条改了什么见 2.1 节，原文在 [`docs/vla/README.md`](../docs/vla/README.md)）：
 
@@ -362,6 +388,7 @@ md("""
 - **11-19 晚，修订 5 条：** 以交互 map 为核心；标签用 L1 + L2；第一版做 2D map；朝向的主要测试加 LIBERO-10；读物体朝向放在第二阶段。另有两条细节：语义图的合并方式由 E1 选定；"转朝向"先设 ±45°。
 - **11-20，第三轮 4 条：** L2 做成每类物体的 3D 标准 map；交互 map 画所有物体，语义门控挑目标；读物体朝向改用 3D 对齐；E7 加泛化测试 G3–G5。
 - **11-20 晚，2 条：** 实验按三个阶段推进（第 6 节）；本项目的作业可以设队列优先级 164。
+- **11-20 晚：** 周报按伦敦时间的自然周，一周一份；同一周里新内容直接替换旧内容。
 """)
 
 plan_cells(md)

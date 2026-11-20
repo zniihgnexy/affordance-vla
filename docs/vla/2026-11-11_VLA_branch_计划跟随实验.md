@@ -1,6 +1,6 @@
 # VLA branch：计划跟随实验（动作头会不会跟着给定的计划走）
 
-**日期：2026-11-11｜分支：`main`｜状态：诊断实验，已完成｜结果 notebook：[`report/2026-11-11_plan_following_experiment.ipynb`](../../report/2026-11-11_plan_following_experiment.ipynb)**
+**日期：2026-11-11｜分支：`main`｜状态：诊断实验，已完成｜结果 notebook：[`report/experiments/2026-11-11_plan_following_experiment.ipynb`](../../report/experiments/2026-11-11_plan_following_experiment.ipynb)**
 
 这是 [Pipeline v2](2026-11-10_VLA_branch_Pipeline_v2.md) 之后的第一个训练实验，2026-11-11 由项目负责人同意后执行。它只是诊断，不是论文配置：VLM 冻结，用的是官方 4B 权重，只训练约 3100 万参数。
 
@@ -208,8 +208,8 @@ bash scripts/server/submit_queue_job.sh 108 plan_s2_other_more 14000 3 "cards=1 
     env RUN=s2_other STAGES=eval "SETS=shift ask" "EPISODES=2 3 4 5" SUFFIX=_more \
     bash ~/affordance-vla/scripts/vla/run_plan_following_gpu.sh
 
-# notebook（在 report/ 下）
-python ../scripts/report/build_plan_following_report.py 2026-11-11_plan_following_experiment.ipynb
+# notebook（在 report/experiments/ 下）
+python ../../scripts/report/build_plan_following_report.py 2026-11-11_plan_following_experiment.ipynb
 python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-11_plan_following_experiment.ipynb
 ```
 

@@ -1,4 +1,4 @@
-"""Tables and figures for report/2026-11-10_vla_datasets_sim_report.ipynb (VLA branch)."""
+"""Tables and figures for report/experiments/2026-11-10_vla_datasets_sim_report.ipynb (VLA branch)."""
 from __future__ import annotations
 
 from dataclasses import dataclass

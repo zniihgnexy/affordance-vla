@@ -1,8 +1,8 @@
 # VLA branch：预测的计划驱动闭环（LIBERO-PRO Object）
 
-**日期：2026-11-13｜分支：`main`｜状态：一轮实验，已完成｜结果 notebook：[`report/2026-11-13_plan_predictor.ipynb`](../../report/2026-11-13_plan_predictor.ipynb)**
+**日期：2026-11-13｜分支：`main`｜状态：一轮实验，已完成｜结果 notebook：[`report/experiments/2026-11-13_plan_predictor.ipynb`](../../report/experiments/2026-11-13_plan_predictor.ipynb)**
 
-这是 [2026-11-12 的决定](README.md)之后的第二步："用模型预测的 affordance 驱动闭环"。前一步（[LIBERO-PRO Object notebook](../../report/2026-11-12_libero_pro_object.ipynb)）给动作头的是真值计划，这里的计划由模型从图像和指令预测。同一晚还做了一个对照（把计划注入动作头的每一层）和三处对反事实标签的改动，一并记在这里。全部是诊断规模：VLM 冻结，官方 4B 权重，一个任务集，一个种子。
+这是 [2026-11-12 的决定](README.md)之后的第二步："用模型预测的 affordance 驱动闭环"。前一步（[LIBERO-PRO Object notebook](../../report/experiments/2026-11-12_libero_pro_object.ipynb)）给动作头的是真值计划，这里的计划由模型从图像和指令预测。同一晚还做了一个对照（把计划注入动作头的每一层）和三处对反事实标签的改动，一并记在这里。全部是诊断规模：VLM 冻结，官方 4B 权重，一个任务集，一个种子。
 
 ## 1. 结论与结果
 
@@ -149,7 +149,7 @@
 
 ### 1.8 按论文协议的结果（2026-11-14）
 
-项目负责人 2026-11-14 同意后执行。每个任务 50 个起始状态，两种扰动，评测种子 7、8、9（策略采样噪声和仿真的种子；每个配置只训练了一个模型）。结果 notebook：[`report/2026-11-14_libero_pro_full_protocol.ipynb`](../../report/2026-11-14_libero_pro_full_protocol.ipynb)。
+项目负责人 2026-11-14 同意后执行。每个任务 50 个起始状态，两种扰动，评测种子 7、8、9（策略采样噪声和仿真的种子；每个配置只训练了一个模型）。结果 notebook：[`report/experiments/2026-11-14_libero_pro_full_protocol.ipynb`](../../report/experiments/2026-11-14_libero_pro_full_protocol.ipynb)。
 
 | 配置 | 位置扰动（种子 7 / 8 / 9，各 500 次） | 均值 ± 标准差 | 任务扰动（种子 7 / 8 / 9） | 均值 ± 标准差 |
 | --- | --- | --- | --- | --- |
@@ -229,10 +229,10 @@ LIBERO-PRO 闭环（`scripts/eval/run_libero_pro_gpu.sh`）：
 | 图像格子，每次查询都预测 | `NAME=predicted_g1 ADAPTER=s2_actions PLAN=predicted PREDICTOR=g1` |
 | 真值计划，13 日动作头 | `NAME=oracle_plan_s8 ADAPTER=s8_align_release PLAN=oracle` |
 
-最后在服务器的 `report/` 下：
+最后在服务器的 `report/experiments/` 下：
 
 ```bash
-python ../scripts/report/build_plan_predictor_report.py 2026-11-13_plan_predictor.ipynb
+python ../../scripts/report/build_plan_predictor_report.py 2026-11-13_plan_predictor.ipynb
 python -m jupyter nbconvert --to notebook --execute --inplace 2026-11-13_plan_predictor.ipynb
 ```
 

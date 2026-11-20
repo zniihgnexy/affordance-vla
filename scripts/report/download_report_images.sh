@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Official project images shown in the candidate gallery of report/2026-11-09_datasets_report.ipynb.
+# Official project images shown in the candidate gallery of report/experiments/2026-11-09_datasets_report.ipynb.
 # They belong to the dataset/simulator projects and are fetched from their pages, not stored in git.
 set -euo pipefail
 
