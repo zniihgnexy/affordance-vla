@@ -31,6 +31,7 @@ select = ["E", "F", "W", "I"]
 "scripts/report/build_*.py" = ["E501"]
 "scripts/report/weekly_review_overview.py" = ["E501"]
 "scripts/report/weekly_2026_11_16_sections.py" = ["E501"]
+"scripts/report/weekly_2026_11_16_pipeline.py" = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["affordance_vla"]

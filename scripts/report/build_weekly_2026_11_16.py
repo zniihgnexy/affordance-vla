@@ -6,14 +6,15 @@ Usage on the server (starvla env, from report/):
 Reads finished runs only: runs/libero_pro/{released,predicted_g1_hold_s10,full_*_s9_seed*}, the replayed
 demonstrations, and the folders of the jobs started this week (their progress is read when the notebook runs).
 Writes its videos to report/media/weekly_2026_11_16/ (tracked). Nothing runs on a GPU. The text is in Chinese for the
-project lead. Sections 2 and 6 come from weekly_2026_11_16_sections.py; only the latest version of every figure and
-block is kept, and section 2.1 records how the pipeline changed.
+project lead. Section 2 comes from weekly_2026_11_16_pipeline.py and section 6 from weekly_2026_11_16_sections.py;
+only the latest version of every figure and block is kept, and section 2.1 records how the pipeline changed.
 """
 import sys
 from pathlib import Path
 
 import nbformat as nbf
-from weekly_2026_11_16_sections import pipeline_cells, plan_cells
+from weekly_2026_11_16_pipeline import pipeline_cells
+from weekly_2026_11_16_sections import plan_cells
 
 OUT = Path(sys.argv[1])
 cells = []

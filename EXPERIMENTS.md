@@ -131,3 +131,5 @@ Experiment notebooks (appendices of their week), from `report/experiments/`:
 `python ../../scripts/report/build_<name>.py <notebook>.ipynb`. Then
 `python -m jupyter nbconvert --to notebook --execute --inplace <notebook>.ipynb`. Each builder's docstring
 names its notebook and inputs; media go to the tracked `report/media/`.
+The layer-level pipeline figures are rendered on the Mac (needs Google Chrome):
+`python scripts/report/render_pipeline_detail.py report/media/pipeline_overview/detail/pipeline_v3_layers.html`.

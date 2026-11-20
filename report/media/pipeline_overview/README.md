@@ -9,6 +9,7 @@ the figures are real crops, and they live in this folder too.
 | `v3_model.png` | Pipeline v3 at test time. The frozen VLM feeds the interaction affordance map head, which outputs an interaction score for every object in view, depth and a direction field (gripper closing direction). A semantic gate multiplies the instruction-to-cell similarity onto the scores and so picks the named object. The plan (contact and gripper orientation) is decoded from the map into 16 numbers, and the action head follows it | **guide since 19 Nov 2026** |
 | `v3_training.png` | How v3 trains its two heads. The map head learns from gripper-object interaction labels: L1 comes from demonstration grasps, L2 from per-category 3D canonical maps in the object frame, projected by object pose onto every object in the frame (labels only). The action head learns from counterfactual samples | **guide since 19 Nov 2026** |
 | `v3_generalization.png` | v3 generalisation. Training is on LIBERO-Object and testing is zero-shot on LIBERO-PRO, with LIBERO-10 (mugs, moka pots) added later for orientation. A grasp splits into three parts: which object (semantic gate), where and in which direction (interaction map), how to move (action head, which only has to obey). Each failure is traced back to one module; E7 adds object rotation, unseen objects of a known category and combined changes | **guide since 19 Nov 2026** |
+| `detail/v3_detail_<n>_<name>.png` | five layer-level figures of v3 after round 5 (whole test-time path; how the two heads read the VLM layers; decoding a cell to a 3D point; contact weights of one grasp; rewriting a counterfactual path). Numbers checked against the code and checkpoint configs on 20 Nov 2026; shown with their formulas in sections 2.2 and 2.3 of `report/2026-11-16_weekly_review.ipynb` | **current, 20 Nov 2026** |
 | `pose_plan_pipeline.png` | first proposal (18 Nov): adds only the gripper orientation; superseded by the v3 figures | record |
 
 The v3 figures belong to `docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md`. The project lead confirmed it on
@@ -17,6 +18,7 @@ all the crops, show the current system.
 
 | File | What it is |
 | --- | --- |
+| `detail/pipeline_v3_layers.html` | source of the layer-level figures: a page with inline SVG and KaTeX formulas. `python scripts/report/render_pipeline_detail.py report/media/pipeline_overview/detail/pipeline_v3_layers.html` (needs Google Chrome, so on the Mac) writes the five PNGs at 2x, light theme |
 | `<name>.yaml` | the spec of figure `<name>`: boxes, arrows, colour roles and caption |
 | `<name>.png` | the rendered figure, at 3x its size in points |
 | `input.png`, `plan.png`, `outcome.png` | frames of a real LIBERO-PRO rollout (`runs/libero_pro/predicted_g1_hold_s10/libero_object_swap/task2_ep0`, success): position perturbation, salad dressing, the grid plan head with plan hold, and the s10 action head |
