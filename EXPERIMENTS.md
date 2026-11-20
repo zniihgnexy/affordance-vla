@@ -34,6 +34,8 @@ effector within 0.5 mm of the server's log. Walk-through of a test, in Chinese: 
 | Replay them in the simulator, one log per demonstration | `SUITE=libero_object bash scripts/data/replay_libero_states.sh` | `$W/runs/plan_following/demos/` |
 | Plan dataset (tracks, images, contact offsets) | `python scripts/data/build_plan_dataset.py --logs $W/runs/plan_following/demos --out $W/runs/plan_following/dataset10` | `dataset10/` (LIBERO-Object, 10 tasks) |
 | LIBERO-Spatial | `SUITE=libero_spatial RAW=$W/data/libero_states/libero_spatial OUT=$W/runs/plan_following/demos_spatial bash scripts/data/replay_libero_states.sh`, then `build_plan_dataset.py ... --container plate_1 --bddl-dir $W/repos/LIBERO-PRO/libero/libero/bddl_files/libero_spatial` | `dataset_spatial/` |
+| Replay with object orientations (Pipeline v3, L) | `OUT=$W/runs/plan_following/demos_pose bash scripts/data/replay_libero_states.sh`; LIBERO-10: `SUITE=libero_10 RAW=$W/data/libero_states/libero_10 OUT=$W/runs/plan_following/demos_libero10 MAX_JOBS=30 bash scripts/data/replay_libero_states.sh` | `demos_pose/` (500), `demos_libero10/` (500) |
+| 3D canonical interaction maps (Pipeline v3, L2) | `source envs/server/libero_env.sh && PYTHONPATH=.:$PYTHONPATH $LIBERO_PYTHON scripts/data/build_interaction_labels.py --suite libero_object --demos $W/runs/plan_following/demos_pose --out $W/runs/interaction_labels/object`; LIBERO-10: `--suite libero_10 --demos .../demos_libero10 --out .../interaction_labels/libero10` | `maps.npz`, `summary.json`, `check/<category>.png` |
 | Logs for the local simulator | `python scripts/data/export_sim_logs.py --root $W/runs/libero_pro --out $W/cache/sim_logs/libero_pro --runs released ...` | image-free copies |
 
 `dataset` (6 tasks) and `dataset_salad` (1 task) are earlier subsets of LIBERO-Object built the same way.
@@ -88,6 +90,18 @@ lr 3e-4, hidden 512, seed 7, tested on the first frames of the `released` LIBERO
 | --- | --- | --- | --- |
 | `p1` | regress (contact coordinates) | 3000 | `RUN=p1` |
 | `g1` | grid (scores the 8 x 8 image cells) | 2500 | `RUN=g1 HEAD=grid STEPS=2500` |
+
+**E1 of Pipeline v3 (semantic probe, no training):** for the first frame of every LIBERO-PRO rollout that kept its
+images, instruction-to-cell similarity maps of the frozen VLM on every layer, and the head `g1` scored the same way.
+
+```bash
+bash scripts/server/submit_queue_job.sh 164 semantic_probe_e1_fix2 22000 6 -- \
+    env RUN=e1 bash ~/affordance-vla/scripts/vla/run_semantic_probe_gpu.sh
+```
+
+Output `$W/runs/semantic_probe/e1/{probe.npz,summary.json}`. Defaults: `RUNS="released spatial_released_seed7"`,
+`PREDICTOR=g1`, offsets from `dataset10` (frames whose target has no grasp offset there are scored without the 3D
+error).
 
 ## 4. LIBERO-PRO evaluation (GPU policy server + CPU simulators)
 
