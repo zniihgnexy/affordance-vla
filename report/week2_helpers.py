@@ -23,6 +23,9 @@ PANEL_PX = 320  # side of one camera panel in the videos
 BAR_PX = 64  # caption bar under the panels
 ORANGE = (237, 125, 49)
 STEPS_AFTER_GRASP = 12
+# the released checkpoint on LIBERO-PRO LIBERO-10; the second run redid tasks 2 and 3 of libero_10_task, whose
+# first object of interest is a fixture (fixed in rollout_libero_logged.py on 20 Nov)
+LIBERO10_RUNS = ("libero10_released", "libero10_released_task23")
 
 
 def plan_contacts(log: RolloutLog) -> np.ndarray:
@@ -147,23 +150,42 @@ def first_failure(run: Path, suites: list[str]) -> RolloutLog | None:
     return None
 
 
+def _count(folder: Path, pattern: str) -> int:
+    return len(list(folder.glob(pattern))) if folder.is_dir() else 0
+
+
 def progress_table(work: Path) -> pd.DataFrame:
     """Where the jobs started this week stand, read from the server's folders."""
     runs = work / "runs"
-    states = work / "data" / "libero_states" / "libero_10"
+    demos = runs / "plan_following"
+    pro = runs / "libero_pro"
+    probed = (runs / "semantic_probe" / "e1" / "summary.json").exists()
     rows = [
-        ("L: LIBERO-Object demonstrations replayed with object orientations",
-         f"{len(list((runs / 'plan_following' / 'demos_pose').glob('*_demo*.npz')))} / 500"),
-        ("LIBERO-10: demonstration files fetched (states and actions)",
-         f"{len(list(states.glob('*_demo.hdf5'))) if states.is_dir() else 0} / 10"),
-        ("LIBERO-10: demonstrations replayed with object orientations",
-         f"{len(list((runs / 'plan_following' / 'demos_libero10').glob('*_demo*.npz')))} / about 500"),
-        ("LIBERO-10: released checkpoint on LIBERO-PRO (libero_10_swap, libero_10_task)",
-         f"{len(list((runs / 'libero_pro' / 'libero10_released').glob('*/task*_ep*.npz')))} / 400 episodes"),
-        ("E1: semantic probe (frozen VLM, no training)",
-         "finished" if (runs / "semantic_probe" / "e1" / "summary.json").exists() else "queued or running"),
+        ("L：LIBERO-Object 示范重新回放，补记物体朝向", f"{_count(demos / 'demos_pose', '*_demo*.npz')} / 500"),
+        ("LIBERO-10：下载示范（状态和动作）",
+         f"{_count(work / 'data' / 'libero_states' / 'libero_10', '*_demo.hdf5')} / 10"),
+        ("LIBERO-10：示范重新回放，补记物体朝向（11-20 修好后重跑）",
+         f"{_count(demos / 'demos_libero10', '*_demo*.npz')} / 约 500"),
+        ("LIBERO-10：官方权重在 LIBERO-PRO 上（位置扰动、任务扰动）",
+         f"{sum(_count(pro / run, '*/task*_ep*.npz') for run in LIBERO10_RUNS)} / 400 个回合"),
+        ("E1：语义诊断（冻结 VLM，不训练）", "已完成" if probed else "排队或运行中（第一次运行失败，已修复）"),
     ]
-    return pd.DataFrame(rows, columns=["job", "progress"]).set_index("job")
+    return pd.DataFrame(rows, columns=["任务", "进度"]).set_index("任务")
+
+
+def task_results(runs: list[Path], suite: str) -> pd.DataFrame:
+    """Successes per task of one suite from the runs' task summaries; a later run only fills tasks the earlier lack."""
+    rows = {}
+    for run in runs:
+        for path in sorted((run / suite).glob("task*_summary.json")):
+            task = int(path.stem.split("_")[0].removeprefix("task"))
+            if task not in rows:
+                episodes = json.loads(path.read_text())
+                rows[task] = {"指令": episodes[0]["instruction"], "成功": sum(bool(e["success"]) for e in episodes),
+                              "回合": len(episodes)}
+    table = pd.DataFrame.from_dict(rows, orient="index", columns=["指令", "成功", "回合"]).sort_index()
+    table.index.name = "任务"
+    return table
 
 
 def probe_table(summary_path: Path) -> pd.DataFrame | None:

@@ -6,12 +6,14 @@ Usage on the server (starvla env, from report/):
 Reads finished runs only: runs/libero_pro/{released,predicted_g1_hold_s10,full_*_s9_seed*}, the replayed
 demonstrations, and the folders of the jobs started this week (their progress is read when the notebook runs).
 Writes its videos to report/media/week2/ (tracked). Nothing runs on a GPU. The text is in Chinese for the
-project lead.
+project lead. Sections 2 and 6 come from week2_review_sections.py; only the latest version of every figure and
+block is kept, and section 2.1 records how the pipeline changed.
 """
 import sys
 from pathlib import Path
 
 import nbformat as nbf
+from week2_review_sections import pipeline_cells, plan_cells
 
 OUT = Path(sys.argv[1])
 cells = []
@@ -21,16 +23,16 @@ code = lambda s: cells.append(nbf.v4.new_code_cell(s.strip("\n")))  # noqa: E731
 md("""
 # VLA 方向周报 · 第二周：2026-11-16 至 11-22
 
-**仓库：** `affordance-vla` · **写于：** 2026-11-20（周四；本周还没结束，进行中的任务在第 4 节实时读取）
+**仓库：** `affordance-vla` · **更新于：** 2026-11-20 晚（周四；本周还没结束，进行中的任务在第 4 节实时读取）
 
 **这份 notebook 的顺序按优先级：**
 
 1. 真实 demo 的图像和视频；
-2. 现行 pipeline（v3）的三张图，以及逐块的详细解释；
+2. 现行 pipeline（v3）：这一周怎么变过来的，三张图，逐块的详细解释；
 3. 本周的实验结果（E0）；
-4. 进行中的任务；
+4. 进行中的任务和 LIBERO-10 的基线；
 5. 时间线和决定；
-6. 下一步。
+6. 下一步：实验推进计划（提议，待确认）。
 
 **说明：**
 
@@ -70,27 +72,25 @@ md("""
 
 **本周主线：**
 
-- **定下 pipeline v3。** 核心是一张带方向的交互 affordance map，它要给出三样东西：
-  - 认对哪个物体；
-  - 在哪里接触；
-  - 夹爪朝哪个方向。
-
-  计划从这张 map 解码，动作头被训练成服从计划。11-19 确认，同一天晚上修订成以交互 map 为核心。
-- **第一个实验 E0 做完了。** LIBERO-Object 上，失败的抓取不是朝向错了，而是位置偏了：夹爪离物体还远就闭合了。按事先约定的规则：
-  - 方向部分改到有把手物体的 LIBERO-10 上验证；
-  - LIBERO-Object 上先做 map 的位置部分。
+- **pipeline 定为 v3，修订了三轮**（2.1 节）。现在的设计把一次抓取拆成三件事：
+  - 抓哪个物体：语义门控；
+  - 抓哪里、朝什么方向：带方向的交互 affordance map，画面里所有物体都画；
+  - 手怎么动：动作头，被训练成服从计划。
+- **E0 做完了。** LIBERO-Object 上，失败的抓取不是朝向错了，而是位置偏了：夹爪离物体还远就闭合了。按事先约定的规则，方向部分改到有把手物体的 LIBERO-10 上验证。
+- **LIBERO-10 的基线：** 官方权重在 LIBERO-PRO 的 LIBERO-10 上几乎全失败（位置扰动 3/200，任务扰动 18/160；另 2 个任务在补跑）。
+- **提出了实验推进计划**（第 6 节，待确认）：骨架定型 → 挑下游任务 → 按对比结果有针对性地改进。
 
 **进行中：**
 
-- E1：语义诊断，不训练；
-- L：交互 map 的标签，示范正在重新回放，补记物体朝向；
-- 为方向部分准备 LIBERO-10：下载示范、回放，并跑官方权重的基线。
+- E1：语义诊断，不训练。第一次运行失败，已修复，在排队；
+- LIBERO-10 示范重新回放（修复后重跑）；
+- L：交互 map 标签的代码。
 
 **其他：**
 
 - 仓库按研究代码的要求整理过一遍（`AGENTS.md`）；
 - Mac 上可以在 MuJoCo 里打开场景、回放服务器上的测试；
-- 读了 SemanticVLA；
+- 读了 SemanticVLA 和 AROS；
 - 给记忆系统写了一份"带方向的交互 affordance map"总结页。
 
 **现在最好的数字**（第一周的结果，本周没有新的闭环训练）：LIBERO-PRO Object，按论文协议（每个任务 50 个起始状态，3 个种子）。
@@ -200,155 +200,28 @@ else:
 """)
 
 md("""
-## 2 · 现行 pipeline：v3，逐块解释
+### 1.6 LIBERO-10：官方权重在有把手物体的任务上
 
-完整设计在 [`docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md`](../docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md)。图里紫色虚线框是 v3 新增、还没实现的部分，其余部分现在都在跑。
+方向部分改到 LIBERO-10 之后，先看官方权重在那里的样子。下面是同一个两步任务（白杯子放左盘，黄白杯子放右盘）在两种扰动下的表现：
 
-### 2.1 测试时：从画面到动作
+- **左：位置扰动，物体挪了位置。** 白杯子放到了左盘；第二步伸向了没被点名的红杯子，一直没抓起来。
+- **右：任务扰动，两个杯子的去处对调了。** 两个杯子都放上了盘子，但放法和训练时的原指令一样（白杯子左盘、黄白杯子右盘），没有按改过的指令对调。
+
+最后的位置从日志里的物体坐标核对过，左右盘对应哪个物体，按任务定义文件里的目标条件确定。右边就是 LIBERO-PRO 想测的问题：模型照着训练时记住的动作做，不看改过的指令。语义门控要解决的正是这种"认错物体"。官方权重在这两套任务上几乎全失败（第 4 节的表），全部失败的逐个归类放在阶段 2 的筛选里做（第 6 节）。
 """)
 
 code("""
-Image(filename=str(FIGURES / "v3_model.png"), width=1000)
+L10 = PRO / "libero10_released"
+pair = [load_rollout_log(L10 / "libero_10_swap" / "task4_ep0.npz"),
+        load_rollout_log(L10 / "libero_10_task" / "task4_ep0.npz")]
+for log, name in zip(pair, ["position", "task"]):
+    print(f"{name}: {log.meta['instruction']} -> {'success' if log.meta['success'] else 'failure'}")
+clip = D.render_rollout_grid(pair, ["released: position perturbation", "released: task perturbation"],
+                             MEDIA / "libero10_released_mugs.mp4")
+Video(str(clip), embed=True, width=760)
 """)
 
-md("""
-**B1 输入【已实现】**
-
-- 智能体视角和腕部视角各一张 224×224 的图；
-- 指令文本；
-- 夹爪当前的位置（来自仿真，用来算"离目标还有多远"）。
-
-**B2 VLM【已实现，冻结】**
-
-- Qwen3-VL-4B，36 层，宽度 2560。
-- 每张图被切成 8×8 = 64 个格子 token，每个格子约 28×28 像素。格子 token 排在前面，指令 token 跟在后面。
-- 它输出每一层所有 token 的隐藏状态，交互 map 头和动作头都读这些状态。
-- 诊断和消融时 VLM 冻结；主对比时全量微调。
-
-**B3 交互 map 头【第一版已实现；v3 扩展】**
-
-- **已实现的第一版（8×8 格子头）：**
-  - 36 层隐藏状态按可学的权重加权平均，投影到 512 维；
-  - 前面加一个汇总 token，过 2 层双向 Transformer。在 VLM 里格子 token 排在指令前面，看不到指令；在这里，格子能"看到"指令；
-  - 每个格子输出交互分数、格内偏移（x、y）和深度；
-  - 全局输出下一个夹爪事件（抓 / 放 / 无）和接近方向。
-- **v3 计划的扩展：**
-  - 分辨率更细：先用 VLM 视觉编码器在合并之前的特征，每边 16 块，不加新模型；
-  - 每个点再输出方向场，也就是夹爪闭合方向。用 cos2θ、sin2θ 表示，转 180° 算同一方向。
-
-**B4 语义先验【v3 计划；E1 正在测】**
-
-- 取指令 token 和 64 个格子 token，算余弦相似度，在指令方向上合并成一张 8×8 的语义图。合并用取平均还是取最大值，由 E1 不训练、直接比较后选定。
-- 语义图乘一个从 0 开始学的系数，加到交互分数上。系数从 0 开始，所以刚开始训练时不会变差。
-- **为什么指令 token 有用：** 它排在图像后面，隐藏状态已经"看过"画面，含有"指的是哪个物体"的信息。
-
-**B5 解码【位置已实现；朝向 v3】**
-
-1. 取分数最高的格子：像素位置 = (格子编号 + 格内偏移) × 28，加上深度，用相机内外参换算成世界坐标下的 3D 接触点。
-2. 【v3】接近方向作为夹爪的 z 轴；峰值处的闭合方向从图像抬到 3D 后，作为 y 轴。
-
-**B6 计划向量【10 维已实现；v3 为 16 维】**
-
-- **现在的 10 个数：**
-  - reach / 10 cm，3 个数，粗略的距离；
-  - tanh(reach / 2 cm)，3 个数，最后几厘米的精细距离；
-  - 接近方向，3 个数；
-  - 事件码，1 个数：抓 +1，放 −1，无 0。
-
-  其中 reach = 接触点 − 夹爪当前位置。
-- **v3 加 6 个数：** 目标朝向相对当前夹爪朝向的旋转，用 6D 表示。
-
-**B7 计划保持【已实现】**
-
-- 预测出的接触点保持不动，直到夹爪执行完这次事件：抓的计划要连续 5 步发出"闭合"，放的计划要连续 5 步发出"张开"。之后再预测新计划。
-- 保持期间，每次查询都会按夹爪的新位置重算计划向量。
-
-**B8 计划编码器【已实现】**
-
-- 3 层 MLP，最后一层初始化为 0。
-- 输出加到动作头的每个动作 token 上。官方动作头里动作 token 之间不互相注意，放在旁边的额外 token 读不到，所以只能直接加进去。
-
-**B9 动作头【已实现】**
-
-- starVLA 的 DiT：8 个动作 token，用交叉注意力读 VLM 的隐藏状态。
-- 从噪声出发，用 flow matching 走 4 步，得到 8 步 × 7 维的动作：Δx, Δy, Δz, Δroll, Δpitch, Δyaw, 夹爪。
-- 训练的部分：DiT 的 LoRA（rank 16）和 B8。
-
-**B10 执行【已实现】**
-
-- robosuite 的 OSC 控制器把末端位姿增量换成关节力矩，逆运动学由它负责。
-- 20 Hz 下 8 步是 0.4 秒。执行完拿新画面，回到 B1。
-
-### 2.2 训练
-""")
-
-code("""
-Image(filename=str(FIGURES / "v3_training.png"), width=1000)
-""")
-
-md("""
-**T1 交互 map 头的训练**
-
-- **数据：** `dataset10`，即 LIBERO-Object 10 个任务的示范回放，每一帧都是一个样本。
-- **已实现的标签：**
-  - 夹爪指令从"张开"切到"闭合"（或者反过来）的那一刻，末端位置就是接触点；
-  - 投影到画面，得到格子、偏移、深度；
-  - 再加上事件类别和接近方向。
-- **已实现的损失：** 交叉熵（格子）+ 10 × Huber（偏移）+ 10 × Huber（深度）+ 交叉熵（事件）+ 0.5 ×（1 − cos）（接近方向）。
-- **v3 的标签：**
-  - **L1：** 抓取那一刻的夹爪位姿，加上物体分割图，得到"接触区域 + 闭合方向"的逐像素标签；
-  - **L2：** 同一类物体的所有抓取换到物体自己的坐标系里叠加，得到这类物体的标准 map，再按物体位姿投影到每一帧、每个物体上；
-  - 物体位姿只用来生成标签和做评测，测试时不输入模型。为此，本周给日志加了物体朝向，正在重新回放示范。
-- **v3 的损失：** 交互分数对"多个可行抓法"组成的标签分布算交叉熵；方向场只在接触区域内，对 cos2θ、sin2θ 算 L2。
-
-**T2 动作头的训练：反事实监督，本工作的核心【已实现】**
-
-- 每一步 8 帧 × 2 次噪声。画面不变，把计划改成下面三种之一，动作标签按挪过的计划改写：
-  - **挪位置：** 18 cm 以内；
-  - **换成另一个物体：** 前段以起点为中心旋转缩放，末段用该物体自己示范里的接近方式；
-  - **换释放点。**
-- 用 flow matching 损失只更新计划编码器和 DiT 的 LoRA。
-- 【v3】加上"转朝向"，动作的旋转一起改写。E0 之后，这一项改到 LIBERO-10 上做。
-
-### 2.3 泛化和诊断
-""")
-
-code("""
-Image(filename=str(FIGURES / "v3_generalization.png"), width=1000)
-""")
-
-md("""
-**V1 离线首帧检查**（便宜，每次改了 map 头都先做）：在 LIBERO-PRO 每个起始状态的第一帧上看 map 的输出。
-
-- **认对物体率：** 峰值落在指令点名的物体分割区域里的比例；
-- **位置误差：** 沿视线方向和垂直视线方向分开算；
-- **方向误差：** 单位是度，按 180° 对称取较小的。
-
-**V2 闭环：**
-
-- 位置扰动、任务扰动，加测语言扰动（`libero_object_lan`）；
-- 朝向的主要测试在 LIBERO-10（有杯子、摩卡壶的把手）；
-- 开发阶段每个任务 20 个起始状态，正式报告用 50 个 × 3 个种子。
-
-**V3 失败归类：** 每个失败的回合归到一个要改的模块。
-
-| 失败 | 要改的模块 |
-| --- | --- |
-| 认错物体 | 语义先验 |
-| 位置偏 | 交互分数、深度、更细的特征 |
-| 方向错 | 方向场 + 交互标签 |
-| 没跟上计划 | 动作头 + 反事实标签 |
-| 抓到后失败 | 释放阶段的标签 |
-
-**实验顺序和通过标准：** 见 v3 文档第 5 节。E0、E1、L 同时做，然后依次是：
-
-- E2 语义先验；
-- E3 朝向上界（改到 LIBERO-10）；
-- E4 交互 map 头；
-- E5 用 map 解码出的计划做闭环；
-- E6 基线：B、D、E、F 四个；
-- E7 推广。
-""")
+pipeline_cells(md, code)
 
 md("""
 ## 3 · 本周结果：E0，失败的抓取是不是朝向错了
@@ -386,21 +259,33 @@ md("""
 """)
 
 md("""
-## 4 · 进行中的任务（执行时实时读取）
+## 4 · 进行中的任务和 LIBERO-10 的基线（执行时实时读取）
 
 - **L：** LIBERO-Object 示范重新回放，补记物体朝向。只用 CPU。
-- **LIBERO-10：** 先下载示范的状态和动作；等 Object 的回放结束后再回放，这样服务器上同时跑的仿真器不超过约 50 个。
-- **LIBERO-10 基线：** 官方权重在 `libero_10_swap` 和 `libero_10_task` 上，每个任务 20 个起始状态，走 GPU 队列。
-- **E1：** 语义诊断，走 GPU 队列，不训练。
+- **LIBERO-10 示范回放：** 第一次全部失败。文件名带场景前缀（`KITCHEN_SCENE3_…`），被当成了指令。修好后重跑，只用 CPU。
+- **LIBERO-10 基线：** 官方权重在 `libero_10_swap` 和 `libero_10_task` 上，每个任务 20 个起始状态、种子 7。任务扰动的任务 2、3 第一次没跑：它们第一个关注物体是灶台和柜子，不能抓。脚本改成取第一个可抓的物体后，在单独的运行名下补跑。
+- **E1：** 第一次运行失败。提示词是"Your task is {instruction}. …"，指令的第一个词前面多了个空格，按 token 编号找不到指令。改成按字符位置匹配，用真实的分词器核对过，重新排队。
+- **要注意的一点：** LIBERO-10 的任务大多要先后抓两个物体。日志里记的"目标"取自任务定义的关注物体列表，对这些任务不一定是抓取的物体（任务 4 记的是盘子）。做 LIBERO-10 的标签时，每个阶段抓的是哪个物体，要从示范的接触记录里取。
 """)
 
 code("""
-display(K.progress_table(RUNS.resolve().parent))   # runs/ links into the NAS work folder
+WORK = RUNS.resolve().parent   # runs/ links into the NAS work folder
+display(K.progress_table(WORK))
 probe = K.probe_table(RUNS / "semantic_probe" / "e1" / "summary.json")
-if probe is None:
-    print("E1 还没出结果。")
-else:
+print("E1 还没出结果。" if probe is None else "E1：首帧 map 的峰值落在点名物体上的比例（每种合并方式取最好的层）")
+if probe is not None:
     display(probe)
+""")
+
+md("""
+**官方权重在 LIBERO-PRO 的 LIBERO-10 上**（每个任务 20 个起始状态、种子 7）：
+""")
+
+code("""
+for suite, name in [("libero_10_swap", "位置扰动"), ("libero_10_task", "任务扰动")]:
+    table = K.task_results([PRO / run for run in K.LIBERO10_RUNS], suite)
+    print(f"{name}（{suite}）：{table['成功'].sum()} / {table['回合'].sum()}，{len(table)} 个任务有结果")
+    display(table)
 """)
 
 md("""
@@ -413,36 +298,16 @@ md("""
 | 11-18 | 逐个问答理解 pipeline。发现 affordance 只给接触点、没有朝向，提出"计划里加夹爪朝向"的方案，画了第一版图 | `5d6bb35` 里的 `pose_plan_pipeline.png` |
 | 11-19 | 读 SemanticVLA；**确认 v3 的 6 条**，画三张图。晚上**修订：以带方向的交互 affordance map 为核心**（5 条） | `5d6bb35`、`1245ebb` |
 | 11-20 | **E0 完成**（不通过，失败的原因是位置）；日志加物体朝向（逐字节核对过）；L 回放、LIBERO-10 下载和基线、E1 开始；为记忆系统写方向性 map 总结页 | `ce7b263`、`2d447e0` |
+| 11-20 晚 | **v3 第三轮修订**（3D 标准 map、所有物体 + 语义门控、3D 对齐、G1–G5），文档和三张图更新；修好 E1 和 LIBERO-10 的三个问题；提出实验推进计划 | `9e41d68`、`0d60d4d`、`7bf1f63` |
 
-**本周的决定**（原文在 [`docs/vla/README.md`](../docs/vla/README.md)）：
+**本周的决定**（每条改了什么见 2.1 节，原文在 [`docs/vla/README.md`](../docs/vla/README.md)）：
 
-- **11-19，6 条：**
-  1. v3 取代 v2 的方法部分；
-  2. 按 E0–E7 的顺序和通过标准做实验；
-  3. 基线定为 B、D、E、F 四个；
-  4. 测试加语言扰动；
-  5. LIBERO-Spatial 挪到 E7；
-  6. 恢复实验。
-- **11-19 晚，修订 5 条：**
-  1. 以交互 map 为核心；
-  2. 标签用 L1 + L2，物体位姿只用来生成标签和评测；
-  3. 第一版做 2D map；
-  4. 朝向的主要测试加 LIBERO-10；
-  5. 读物体朝向放在第二阶段。
-
-  另有两条细节：语义图的合并方式由 E1 选定；"转朝向"先设 ±45°。
+- **11-19，6 条：** v3 取代 v2 的方法部分；按 E0–E7 做实验；基线定为 B、D、E、F；加语言扰动；Spatial 挪到 E7；恢复实验。
+- **11-19 晚，修订 5 条：** 以交互 map 为核心；标签用 L1 + L2；第一版做 2D map；朝向的主要测试加 LIBERO-10；读物体朝向放在第二阶段。另有两条细节：语义图的合并方式由 E1 选定；"转朝向"先设 ±45°。
+- **11-20，第三轮 4 条：** L2 做成每类物体的 3D 标准 map；交互 map 画所有物体，语义门控挑目标；读物体朝向改用 3D 对齐；E7 加泛化测试 G3–G5。
 """)
 
-md("""
-## 6 · 下一步
-
-1. **E1 出结果后：** 选定语义图的合并方式和层，做 E2（在 8×8 头上加语义先验，训练计划头 + 闭环）。
-2. **L 回放完成后：** 写 L1、L2 的标签代码，检查同一类物体的接触区域和方向是否一致。
-3. **LIBERO-10：** 回放和基线完成后，看官方权重在有把手物体上的失败是不是和朝向有关，再做 E3（真值朝向的上界）。
-4. **E4：** 更细分辨率的交互 map 头，带方向场。
-
-**需要项目负责人决定的事：** 暂时没有。E1 和 LIBERO-10 的结果出来后再汇报。
-""")
+plan_cells(md)
 
 notebook = nbf.v4.new_notebook()
 notebook["cells"] = cells
