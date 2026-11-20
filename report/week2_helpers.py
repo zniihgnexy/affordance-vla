@@ -168,7 +168,10 @@ def progress_table(work: Path) -> pd.DataFrame:
          f"{_count(demos / 'demos_libero10', '*_demo*.npz')} / 约 500"),
         ("LIBERO-10：官方权重在 LIBERO-PRO 上（位置扰动、任务扰动）",
          f"{sum(_count(pro / run, '*/task*_ep*.npz') for run in LIBERO10_RUNS)} / 400 个回合"),
-        ("E1：语义诊断（冻结 VLM，不训练）", "已完成" if probed else "排队或运行中（第一次运行失败，已修复）"),
+        ("L：每类物体的 3D 标准 map（Object、LIBERO-10）",
+         " / ".join("已完成" if (runs / "interaction_labels" / name / "maps.npz").exists() else "未完成"
+                    for name in ("object", "libero10"))),
+        ("E1：语义诊断（冻结 VLM，不训练）", "已完成" if probed else "排队或运行中（前两次运行失败，已修复）"),
     ]
     return pd.DataFrame(rows, columns=["任务", "进度"]).set_index("任务")
 
@@ -185,6 +188,18 @@ def task_results(runs: list[Path], suite: str) -> pd.DataFrame:
                               "回合": len(episodes)}
     table = pd.DataFrame.from_dict(rows, orient="index", columns=["指令", "成功", "回合"]).sort_index()
     table.index.name = "任务"
+    return table
+
+
+def label_summary(summary_path: Path) -> pd.DataFrame:
+    """L: grasps, groups of closing axes and agreement per object category (build_interaction_labels.py)."""
+    found = json.loads(summary_path.read_text())["categories"]
+    rows = {category: {"抓取数": entry["grasps"], "闭合轴分组（20° 内）": entry["axis_groups"],
+                       "最大组占比": round(entry["axis_groups"][0] / entry["grasps"], 2),
+                       "接触区域占表面": entry["contact_share"], "接触区域内方向一致度": entry["agreement_in_contact"]}
+            for category, entry in found.items()}
+    table = pd.DataFrame(rows).T
+    table.index.name = "类别"
     return table
 
 
