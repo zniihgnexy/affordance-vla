@@ -60,7 +60,7 @@ EXPERIMENTS.md       every experiment's command and settings
 
 One notebook per London calendar week (Monday to Sunday), named after its Monday; within a week newer content replaces older content. In Chinese.
 
-- [Weekly review, 16-22 Nov](report/2026-11-16_weekly_review.ipynb) — real demos first, how the pipeline changed this week, the Pipeline v3 figures with a block-by-block explanation, the new labels of 16 Nov, E0, the 3D canonical interaction maps (L), the LIBERO-10 baseline and the three-stage plan (executed notebook).
+- [Weekly review, 16-22 Nov](report/2026-11-16_weekly_review.ipynb) — real demos first, the VLA model and data we build on and how the affordance map reaches the actions, how the pipeline changed this week, the Pipeline v3 figures with a block-by-block explanation, the new labels of 16 Nov, E0, the 3D canonical interaction maps (L), the LIBERO-10 baseline and the three-stage plan (executed notebook).
 - [Weekly review, 9-15 Nov](report/2026-11-09_weekly_review.ipynb) — in Chinese: the week's timeline, the main results with tables and a figure read from the finished runs, the negative results, and the gap to the target research scope with a plan to the January checkpoint (executed notebook).
 
 ### Experiment notebooks (appendices of their week, `report/experiments/`)

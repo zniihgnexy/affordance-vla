@@ -22,7 +22,7 @@
 
 图里紫色虚线框是 v3 新增、还没实现的部分。图的规格和截图来源见[图的说明](../../report/media/pipeline_overview/README.md)。
 
-**逐层的细节图和公式**（11-20 晚，数字逐个对照代码和权重配置）：5 张图在 `report/media/pipeline_overview/detail/`，连同公式放在[第二周周报](../../report/2026-11-16_weekly_review.ipynb) 2.2、2.3 节。本文件和它说法不一致时，以代码和那两节为准，并回来改本文件。
+**逐层的细节图和公式**（11-20 晚，数字逐个对照代码和权重配置）：5 张图在 `report/media/pipeline_overview/detail/`，连同公式放在[第二周周报](../../report/2026-11-16_weekly_review.ipynb) 3.2、3.3 节。本文件和它说法不一致时，以代码和那两节为准，并回来改本文件。
 
 ## 1. 定位和泛化思路
 

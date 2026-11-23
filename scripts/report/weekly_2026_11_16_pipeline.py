@@ -1,8 +1,8 @@
-"""Section 2 of the week-2 review: how the pipeline changed, the three v3 figures, and the layer-level figures
+"""Section 3 of the week-2 review: how the pipeline changed, the three v3 figures, and the layer-level figures
 with formulas (numbers checked against the code and the checkpoint configs on 20 Nov 2026).
 
 Imported by build_weekly_2026_11_16.py, which owns the notebook. Only the latest version of every figure and block
-is kept: when the pipeline changes, the text here is replaced, and section 2.1 records what changed and why. The
+is kept: when the pipeline changes, the text here is replaced, and section 3.1 records what changed and why. The
 layer-level figures are rendered from report/media/pipeline_overview/detail/pipeline_v3_layers.html by
 scripts/report/render_pipeline_detail.py. Markdown cells are raw strings because they hold LaTeX.
 """
@@ -13,13 +13,13 @@ def figure(name: str, width: int, folder: str = "FIGURES") -> str:
 
 
 def pipeline_cells(md, code) -> None:
-    """Section 2: changes, then test time, training and generalisation, each with its figures."""
+    """Section 3: changes, then test time, training and generalisation, each with its figures."""
     md(r"""
-## 2 · Pipeline v3 (after revision round 5)
+## 3 · Pipeline v3 (after revision round 5)
 
 Full design: [`docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md`](../docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md). Three overview figures, then five layer-level figures with formulas; every number was checked against the code and the checkpoint configs. Purple dashed = planned, not built yet.
 
-### 2.1 How the pipeline changed this week
+### 3.1 How the pipeline changed this week
 
 | Version | Date | Core idea | What changed | Why |
 | --- | --- | --- | --- | --- |
@@ -35,7 +35,7 @@ Full design: [`docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md`](../docs/vla/2026-
 
 **Unchanged:** the thesis; the model's input and output stay a 2D image map plus depth — 3D is used only for labels, the orientation readout and evaluation; the counterfactually trained action head.
 
-### 2.2 Test time
+### 3.2 Test time
 """)
     code(figure("v3_model.png", 1000))
     md(r"""
@@ -64,7 +64,7 @@ A 2-layer bidirectional encoder lets the cells read the instruction; $q$ is a su
 
 $$T_c=\underbrace{\frac{e^{\alpha s_c}}{\sum_{c'}e^{\alpha s_{c'}}}}_{w_c}\cdot I_c,\qquad s_c=\cos\big(P_t\,\mathrm{mean}_{k\in\text{instr}}\,h^{(36)}_k,\ P_x\,h^{(36)}_{\mathrm{cell}(c)}\big),\qquad \alpha_{\text{init}}=0$$
 
-$\alpha=0$ at the start means no semantics. A new instruction picks another object without relearning the map. The projections $P_t,P_x$ were added after E1 (section 3.4).
+$\alpha=0$ at the start means no semantics. A new instruction picks another object without relearning the map. The projections $P_t,P_x$ were added after E1 (section 4.4).
 
 **B5 Decoding [position implemented; orientation planned]** (below):
 """)
@@ -94,7 +94,7 @@ Trained (s10, VLM frozen): LoRA 26.54M + action decoder 2.63M + plan encoder 1.5
 
 **B10 Execution [implemented]:** 8 × 7 actions (Δposition, Δrotation, gripper), de-normalised, to robosuite's OSC controller at 20 Hz (it does the inverse kinematics).
 
-### 2.3 Training
+### 3.3 Training
 """)
     code(figure("v3_training.png", 1000))
     md(r"""
@@ -136,7 +136,7 @@ $$\mathcal L=\frac{\sum m\odot\lVert\hat v(x_t,t,f)-(a-\varepsilon)\rVert^2}{\su
 
 s10: 4000 steps, lr 2e-4, 454 demonstrations, 56,852 frames. Trained with oracle plans; tested with plans predicted by the map head.
 
-### 2.4 Generalisation and diagnosis
+### 3.4 Generalisation and diagnosis
 """)
     code(figure("v3_generalization.png", 1000))
     md(r"""

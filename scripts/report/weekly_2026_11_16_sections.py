@@ -1,17 +1,18 @@
-"""Sections 4 (plan and decisions) and 5 (live demo commands for the local MuJoCo simulator) of the week-2 review.
+"""Sections 5 (plan and decisions) and 6 (live demo commands for the local MuJoCo simulator) of the week-2 review.
 
-Imported by build_weekly_2026_11_16.py, which owns the notebook; section 2 is in weekly_2026_11_16_pipeline.py.
-Only the latest version of every block is kept. The commands of section 5 were run on the Mac on 23 Nov 2026
+Imported by build_weekly_2026_11_16.py, which owns the notebook; sections 2 and 3 are in weekly_2026_11_16_vla.py
+and weekly_2026_11_16_pipeline.py.
+Only the latest version of every block is kept. The commands of section 6 were run on the Mac on 23 Nov 2026
 (scripts/local/sim.sh; the replays reproduced the server's outcomes).
 """
 
 
 def plan_cells(md) -> None:
-    """Section 4: skeleton and replaceable parts, the three stages, next steps, decisions of the week."""
+    """Section 5: skeleton and replaceable parts, the three stages, next steps, decisions of the week."""
     md("""
-## 4 · Plan and decisions
+## 5 · Plan and decisions
 
-**Approach (project lead, agreed 20 Nov):** fix the pipeline skeleton first; then pick downstream tasks; then use the comparisons to go back to specific modules or add new ideas. Each failure is attributed to one module (section 2.4), which says where to go back to.
+**Approach (project lead, agreed 20 Nov):** fix the pipeline skeleton first; then pick downstream tasks; then use the comparisons to go back to specific modules or add new ideas. Each failure is attributed to one module (section 3.4), which says where to go back to.
 
 | Skeleton (fixed at decision point 1) | Replaceable parts (changed in stage 3, by results) |
 | --- | --- |
@@ -47,9 +48,9 @@ def plan_cells(md) -> None:
 
 
 def demo_cells(md) -> None:
-    """Section 5: copy-paste commands that show the week's results live in MuJoCo on the Mac."""
+    """Section 6: copy-paste commands that show the week's results live in MuJoCo on the Mac."""
     md("""
-## 5 · Live demo in MuJoCo (Mac)
+## 6 · Live demo in MuJoCo (Mac)
 
 Run from the repository root on the Mac. Each command opens a MuJoCo window (mouse: rotate and zoom; space: pause; double-click an object, then Ctrl + right-drag to move it; close the window to end) and narrates in the terminal. **Replays** re-run the server's logged actions in the same scene, start state and seed: no model runs locally, and at the end the outcome and gripper path are compared with the server's record.
 

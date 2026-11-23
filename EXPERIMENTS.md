@@ -26,7 +26,7 @@ Defaults: `configs/sim/local.yaml`; override with `--config FILE` or `--set key=
 live in the MuJoCo viewer. `replay` reruns a server test episode with the actions the policy returned there;
 checked on three logs (success and failure, with and without plans): same outcome and step count, end
 effector within 0.5 mm of the server's log; on 23 Nov also on LIBERO-10 (same outcomes, within 6 mm). The
-terminal narration is in English. Demo commands for the week-2 meeting: section 5 of
+terminal narration is in English. Demo commands for the week-2 meeting: section 6 of
 `report/2026-11-16_weekly_review.ipynb`. Walk-through of a test, in Chinese: `docs/local_simulation.md`.
 
 ## 1. Data (server, CPU)

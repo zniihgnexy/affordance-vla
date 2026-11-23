@@ -14,8 +14,8 @@ import numpy as np
 import pandas as pd
 
 from affordance_vla.analysis.grasp_orientation import close_onsets, grasp_attempts
-from affordance_vla.analysis.semantic_probe import object_at_peak, object_means
-from affordance_vla.heads.plan_grid import CELL_PX, IMAGE_SIZE, Camera, camera_of_log, contact_pixel
+from affordance_vla.analysis.semantic_probe import MIN_COVER, object_at_peak, object_means
+from affordance_vla.heads.plan_grid import CELL_PX, CELLS, IMAGE_SIZE, Camera, camera_of_log, contact_pixel
 from affordance_vla.plan.plan_input import plan_contact
 from affordance_vla.sim.rollout_log import RolloutLog, load_rollout_log
 from report.vla_pipeline_demo_helpers import pretty
@@ -247,3 +247,43 @@ def probe_object_table(probe_path: Path) -> pd.DataFrame:
                 row[f"{tokens}/{merge}"] = f"{hits[best]:.2f} (layer {best})"
         rows[group] = row
     return pd.DataFrame(rows).T
+
+
+def map_panels(probe_path: Path, picks: list[tuple[str, str]]) -> plt.Figure:
+    """The g1 map on LIBERO-PRO first frames (E1 probe): softmax over the 8 x 8 cells, best cell, named object.
+
+    `picks` are (suite, log file) pairs of runs/semantic_probe/e1/probe.npz. The frame is the agent view as the
+    policy receives it, so cell (row, column) of the map covers the same part of the image.
+    """
+    import textwrap
+
+    probe = dict(np.load(probe_path, allow_pickle=True))
+    suites, files = probe["suite"].astype(str), probe["log_file"].astype(str)
+    fig, axes = plt.subplots(1, len(picks), figsize=(3.6 * len(picks), 4.9), squeeze=False)
+    for axis, (suite, name) in zip(axes[0], picks):
+        found = np.flatnonzero((suites == suite) & (files == name))
+        if len(found) == 0:
+            raise KeyError(f"no first frame of {suite}/{name} in {probe_path}")
+        i = int(found[0])
+        side = probe["agentview"][i].shape[0]
+        cell = side / CELLS
+        scores = probe["head_scores"][i].astype(float)
+        heat = np.exp(scores - scores.max())
+        heat = (heat / heat.sum()).reshape(CELLS, CELLS)
+        overlay = plt.get_cmap("plasma")(heat / heat.max())
+        overlay[..., 3] = 0.7 * heat / heat.max()  # opacity follows the score: the scene stays visible
+        axis.imshow(probe["agentview"][i])
+        axis.imshow(overlay, interpolation="nearest", extent=(0, side, side, 0))
+        named = probe["coverage"][i, probe["target"][i]].reshape(CELLS, CELLS) >= MIN_COVER
+        for row, column in zip(*np.nonzero(named)):
+            axis.add_patch(plt.Rectangle((column * cell, row * cell), cell, cell, fill=False,
+                                         edgecolor=np.array(ORANGE) / 255, linewidth=1.2))
+        best = int(np.argmax(scores))
+        axis.add_patch(plt.Rectangle(((best % CELLS) * cell, (best // CELLS) * cell), cell, cell, fill=False,
+                                     edgecolor="white", linewidth=2.5))
+        instruction = textwrap.fill(str(probe["instruction"][i]), 40)
+        axis.set_title(f"{suite} {name[:-4]}\n{instruction}\n"
+                       f"g1: {_head_outcome(probe, i)}; best cell {heat.max():.2f}", fontsize=8.5)
+        axis.set_axis_off()
+    fig.tight_layout()
+    return fig
