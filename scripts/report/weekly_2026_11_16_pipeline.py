@@ -17,7 +17,7 @@ def pipeline_cells(md, code) -> None:
     md(r"""
 ## 3 · Pipeline v3 (after revision round 5)
 
-Full design: [`docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md`](../docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md). Three overview figures, then five layer-level figures with formulas; every number was checked against the code and the checkpoint configs. Purple dashed = planned, not built yet.
+Full design: [`docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md`](../docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md). Three overview figures (test time, training, generalisation), then five layer-level figures with formulas; every number was checked against the code and the checkpoint configs. Colours as in section 2.1: gold = the open-source starVLA model with its released weights, orange = ours and trained, grey = data and our steps without weights, red = losses, purple dashed = planned, not built yet.
 
 ### 3.1 How the pipeline changed this week
 
@@ -93,7 +93,7 @@ Trained (s10, VLM frozen): LoRA 26.54M + action decoder 2.63M + plan encoder 1.5
 
 ### 3.3 Training
 """)
-    code(figure("v3_training.png", 1000))
+    code(figure("v3_training.png", 750))
     md(r"""
 **T1 Map head.** Data: `dataset10` (LIBERO-Object demonstrations, every frame a sample); `dataset_spatial` added from E2.
 
@@ -135,7 +135,7 @@ s10: 4000 steps, lr 2e-4, 454 demonstrations, 56,852 frames. Trained with oracle
 
 ### 3.4 Generalisation and diagnosis
 """)
-    code(figure("v3_generalization.png", 1000))
+    code(figure("v3_generalization.png", 790))
     md(r"""
 Trained on standard LIBERO only; tested zero-shot on LIBERO-PRO and LIBERO-Plus.
 

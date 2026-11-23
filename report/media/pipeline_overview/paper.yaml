@@ -1,0 +1,13 @@
+# Shared colours of the Pipeline v3 figures (v3_model, v3_training, v3_generalization), same meaning everywhere:
+#   gold    the open-source starVLA QwenPI model with its released weights (frozen in our runs)
+#   orange  our parts with trained weights (map head, plan encoder, LoRA)
+#   grey    our steps without weights, inputs, data
+#   purple  planned, not built yet (always with a dashed outline)
+#   red     training losses
+venue: generic
+font: helvetica
+roles:
+  backbone: gold.light
+  core: orange.light
+  neutral: grey.pale
+  loss: red.light

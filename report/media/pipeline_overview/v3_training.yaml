@@ -1,131 +1,120 @@
-# VLA Pipeline v3, figure 2 of 3: how the two heads are trained (docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md).
-# Purple dashed boxes are what v3 adds and is not implemented yet; everything else runs today.
-# Crops: a real LIBERO-Object demonstration (scripts/report/pipeline_figure_crops.py, README.md in this folder).
+# VLA Pipeline v3, figure 2 of 3: training (docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md). Same colours and detail
+# as v3_model (paper.yaml): gold = the open-source starVLA model, released weights, frozen; orange = ours, trained;
+# grey = data and our steps without weights; red = losses; purple dashed = planned, not built yet.
+# Numbers from the code and the metrics.json of g1 and s10 (checked 20 and 23 Nov 2026).
+# Crops: scene_train.png (a demonstration's first frame, named object outlined), counterfactual.png (its path to the
+# grasp, dark, and the same path rewritten to another object's grasp, orange); scripts/report/pipeline_figure_crops.py.
+paper: paper.yaml
 figure:
   id: v3_training
-  venue: generic
-  width: 530
-  font: helvetica
-  type_scale: 1.1
+  width: 560
   pptx_app: office
 
 layout: col
-gap: 9
+gap: 12
 
 panels:
-  - id: band_a
-    title: "① Interaction map head: which object, where, which direction (VLM frozen)"
+  - id: band_map
+    title: "① Map head g1: where is the contact of the next gripper event (VLM frozen)"
     title_align: left
     frame: dashed
-    pad: 6
-    padt: 20
+    pad: 7
     body:
       - col:
-          gap: 8
+          gap: 14
           align: start
           body:
             - row:
-                gap: 12
+                gap: 16
                 align: center
                 body:
-                  - {id: img_demo, shape: image, w: 46, src: scene_train.png, caption: "demo frame"}
+                  - {id: frame, shape: image, w: 54, src: scene_train.png, caption: "demo frame + instruction"}
+                  - group:
+                      id: g_vlm
+                      title: "starVLA QwenPI: VLM"
+                      fill: gold.pale
+                      pad: 6
+                      body:
+                        - {id: vlm, text: "**Qwen3-VL-4B, frozen**\n36 layers × 2560\nall layers kept", role: backbone}
+                  - {id: head, text: "**M2 map head g1**\n7.9M parameters, trained\nmix of 36 layers → 512\n2-layer encoder, reads instruction\nper cell: score · offset · depth\nglobal: event · approach", role: core}
                   - col:
-                      gap: 3
+                      id: c_loss
+                      gap: 5
                       align: center
                       body:
-                        - {id: m_vlm, shape: marker, kind: frozen, d: 7}
-                        - {id: vlm, shape: trapezoid, text: "Qwen3-VL-4B", role: neutral}
-                  - col:
-                      gap: 3
-                      align: center
-                      body:
-                        - {id: m_plan, shape: marker, kind: trainable, d: 7}
-                        - {id: planhead, text: "interaction map\nhead + gate", role: encoder}
-                  - group:
-                      id: pred
-                      frame: none
-                      body:
-                        - col:
-                            gap: 4
-                            align: center
-                            body:
-                              - {id: p_cell, text: "score (all objects) · depth", role: decoder, minw: 84}
-                              - {id: p_ori, text: "direction field", fill: purple.light, dash: true}
-                              - {id: p_glob, text: "event · approach", role: decoder}
-                  - group:
-                      id: loss
-                      frame: none
-                      body:
-                        - col:
-                            gap: 4
-                            align: center
-                            body:
-                              - {id: l_ce, text: "CE: cell / all objects · event", role: loss, minw: 120}
-                              - {id: l_hub, text: "Huber: offset, depth", role: loss}
-                              - {id: l_ori, text: "MSE: direction in contacts", fill: purple.light, dash: true}
-                              - {id: l_dir, text: "cosine: approach", role: loss}
+                        - {id: l_cell, text: "cell: cross-entropy over 64 cells", role: loss}
+                        - {id: l_off, text: "offset, depth: Huber, weight 10 each", role: loss}
+                        - {id: l_evt, text: "event: cross-entropy · approach: 0.5 (1 − cos)", role: loss}
+                        - {id: l_all, text: "every object: BCE · gated target: CE", fill: purple.light, dash: true}
+                        - {id: l_dir, text: "direction field: L2 in contact regions", fill: purple.light, dash: true}
             - row:
-                gap: 12
+                gap: 16
                 align: center
                 body:
-                  - {id: traj, text: "demonstrations\n+ simulator object\nposes (ORACLE)", role: input}
-                  - {id: contact, text: "now (g1): object position\n+ mean demo grasp offset", role: neutral}
-                  - group:
-                      id: labels
-                      frame: none
+                  - {id: demos, text: "**LIBERO-Object replays**\n454 demos · 56,852 frames\nsimulator object poses", role: input}
+                  - {id: oracle, text: "**ORACLE contact (now)**\nobject position\n+ mean demo grasp offset\napproach: mean of 10 steps", role: neutral}
+                  - {id: proj, text: "**project to the agent view**\ncell · in-cell offset · depth\ncamera calibration", role: neutral}
+                  - col:
+                      gap: 5
+                      align: center
                       body:
-                        - col:
-                            gap: 4
-                            align: center
-                            body:
-                              - {id: proj, text: "projected: cell · offset · depth", role: neutral}
-                              - {id: g_ori, text: "v3: 3D canonical maps (L2, L2c)\nprojected onto every object", fill: purple.light, dash: true}
+                        - {id: aug, text: "**more targets, no new demos**\ninstruction names another object\n→ its grasp point\nshifted copies of the image", role: neutral}
+                        - {id: l2, text: "**L2 / L2c (planned labels)**\n3D map per category from demo grasps\n→ projected onto every object", fill: purple.light, dash: true}
 
-  - id: band_b
-    title: "② Action head: counterfactuals, move the plan and the action label follows (core)"
-    title_pos: inside-bottom
+  - id: band_act
+    title: "② Action head: same image, plan moved, action relabelled (the core of this work)"
     title_align: left
     frame: dashed
     fill: orange.pale
-    pad: 6
-    padt: 8
+    pad: 7
     body:
-      - row:
-          gap: 8
-          align: center
+      - col:
+          gap: 14
+          align: start
           body:
-            - {id: orig, text: "same frame\n+ demo plan", role: neutral}
-            - group:
-                id: move
-                frame: none
-                body:
-                  - col:
-                      gap: 4
-                      align: center
-                      body:
-                        - {id: mv_shift, text: "shift (≤ 18 cm)", role: core}
-                        - {id: mv_other, text: "other object", role: core}
-                        - {id: mv_rel, text: "other release point", role: core}
-                        - {id: mv_rot, text: "rotate", fill: purple.light, dash: true}
-            - group:
-                id: relabel
-                frame: none
-                body:
-                  - col:
-                      gap: 4
-                      align: center
-                      body:
-                        - {id: rl_path, text: "start: rotate, scale", role: core}
-                        - {id: rl_tail, text: "end: its own approach", role: core}
-                        - {id: rl_rot, text: "rotation relabelled", fill: purple.light, dash: true}
-            - {id: img_cf, shape: image, w: 46, src: counterfactual.png, caption: "black: demo, orange: new"}
-            - col:
-                gap: 3
+            - row:
+                gap: 16
                 align: center
                 body:
-                  - {id: m_act, shape: marker, kind: trainable, d: 7}
-                  - {id: aloss, text: "flow matching\n+ 0.2 path loss", role: loss}
-            - {id: upd, text: "updates: plan\nencoder, LoRA,\ndecoder MLP", role: decoder}
+                  - {id: demo, text: "**demo frame + its plan**\ntrue contact, approach\nand gripper event", role: input}
+                  - col:
+                      id: c_kind
+                      gap: 5
+                      align: center
+                      body:
+                        - {id: k_demo, text: "demonstration, 1 cm plan noise", role: neutral}
+                        - {id: k_shift, text: "shift: contact moved ≤ 18 cm", role: neutral}
+                        - {id: k_other, text: "other object: its grasp, named", role: neutral}
+                        - {id: k_rel, text: "other release point ≤ 18 cm", role: neutral}
+                        - {id: k_rot, text: "rotate ±45° (LIBERO-10, E3)", fill: purple.light, dash: true}
+                  - col:
+                      id: c_rew
+                      gap: 5
+                      align: center
+                      body:
+                        - {id: r_tail, text: "**rewrite the path**\nlast segment moved to the new contact\nmin(18 cm, half the distance)", role: neutral}
+                        - {id: r_head, text: "first part rotated and scaled\nabout the start; other object:\nits own final approach", role: neutral}
+                        - {id: r_act, text: "translation actions relabelled\nfrom the new path", role: neutral}
+                  - {id: cf, shape: image, w: 58, src: counterfactual.png, caption: "dark: demo · orange: new"}
+            - row:
+                gap: 16
+                align: center
+                body:
+                  - group:
+                      id: g_model
+                      title: "starVLA QwenPI, frozen + our trained parts"
+                      fill: gold.pale
+                      pad: 6
+                      body:
+                        - row:
+                            gap: 8
+                            align: center
+                            body:
+                              - {id: m_vlm, text: "**VLM**\nsame image\nand instruction", role: backbone}
+                              - {id: m_penc, text: "**plan encoder**\nnew plan → added\nto action tokens", role: core}
+                              - {id: m_dit, text: "**action head DiT**\n+ our LoRA (rank 16)\n+ decoder, trained", role: backbone}
+                  - {id: loss, text: "**flow matching on the 8×7 chunk**\n+ 0.2 × path Huber (0.5 cm)\nmasked after the contact", role: loss}
+                  - {id: upd, text: "**trained: 30.75M**\nLoRA 26.54M · decoder 2.63M\nplan encoder 1.58M\ns10: 4000 steps · lr 2e-4", role: core}
 
   - id: s_key
     frame: none
@@ -134,36 +123,42 @@ panels:
           gap: 5
           align: center
           body:
-            - {id: k1, shape: marker, kind: trainable, d: 6}
-            - {id: k1t, shape: text, text: "trained", type: annot}
-            - {id: k2, shape: marker, kind: frozen, d: 6}
-            - {id: k2t, shape: text, text: "frozen (fine-tuned in the main run)", type: annot}
-            - {id: k3, shape: sharpbox, w: 11, h: 7, fill: purple.light, dash: true}
-            - {id: k3t, shape: text, text: "added by v3, not built yet", type: annot}
+            - {id: k1, shape: sharpbox, w: 11, h: 7, fill: gold.light}
+            - {id: k1_s, shape: spacer, w: 3, h: 4}
+            - {id: k1t, shape: text, text: "starVLA QwenPI (open source): released weights, frozen", type: annot}
+            - {id: k2, shape: sharpbox, w: 11, h: 7, fill: orange.light}
+            - {id: k2_s, shape: spacer, w: 3, h: 4}
+            - {id: k2t, shape: text, text: "ours, trained", type: annot}
+            - {id: k3, shape: sharpbox, w: 11, h: 7, fill: grey.pale}
+            - {id: k3_s, shape: spacer, w: 3, h: 4}
+            - {id: k3t, shape: text, text: "data, our steps without weights", type: annot}
+            - {id: k6, shape: sharpbox, w: 11, h: 7, fill: red.light}
+            - {id: k6_s, shape: spacer, w: 3, h: 4}
+            - {id: k6t, shape: text, text: "losses", type: annot}
+            - {id: k4, shape: sharpbox, w: 11, h: 7, fill: purple.light, dash: true}
+            - {id: k4_s, shape: spacer, w: 3, h: 4}
+            - {id: k4t, shape: text, text: "planned", type: annot}
 
 edges:
-  - {from: img_demo.e, to: vlm.w}
-  - {from: vlm.e, to: planhead.w}
-  - {from: planhead.e, to: pred.w}
-  - {from: pred.e, to: loss.w}
-  - {from: traj.e, to: contact.w}
-  - {from: contact.e, to: labels.w}
-  - {from: labels.e, to: loss.s, label: "labels", label_size: 7, label_dx: -22}
-  - {from: orig.e, to: move.w, color: core}
-  - {from: move.e, to: relabel.w, color: core}
-  - {from: relabel.e, to: img_cf.w, color: core}
-  - {from: img_cf.e, to: aloss.w, color: core}
-  - {from: aloss.e, to: upd.w, color: core}
+  - {from: frame.e, to: g_vlm.w}
+  - {from: g_vlm.e, to: head.w}
+  - {from: head.e, to: c_loss.w}
+  - {from: demos.e, to: oracle.w}
+  - {from: oracle.e, to: proj.w}
+  - {from: proj.e, to: aug.w}
+  - {from: aug.n, to: c_loss.s, label: "labels"}
+  - {from: demo.e, to: c_kind.w}
+  - {from: c_kind.e, to: c_rew.w}
+  - {from: c_rew.e, to: cf.w}
+  - {from: c_kind.s, to: g_model.n, label: "new plan", label_pos: 0.85, label_dx: -30}
+  - {from: g_model.e, to: loss.w}
+  - {from: cf.s, to: loss.n, label: "target", label_pos: 0.12, label_dx: 16}
+  - {from: loss.e, to: upd.w}
 
 caption: >-
-  \textbf{The two heads train separately: the map head learns to read the plan from the image, the action head
-  learns to obey the plan.}
-  ① The interaction map head trains on frozen VLM features. Today (g1) its contact label is the ORACLE contact: the
-  simulator object position plus the mean grasp offset of that object's demonstrations, projected to a cell, an
-  offset and a depth. v3 replaces it with 3D canonical maps (L2 per mesh, built; L2c per category, planned) projected
-  onto every object in view; object poses are used for labels and evaluation only, never as model input.
-  ② The action head trains on counterfactual samples: the same frame with the plan moved (shift, other object,
-  other release point; v3 adds a rotation), and the action label rewritten to the moved plan (the early part rotated
-  and scaled about the start, the last part copied from that object's own approach). Flow matching plus a 0.2-weighted
-  path loss updates only the plan encoder, the DiT's LoRA and the action decoder MLP.
-  Orange: the core of this work. Purple dashed: added by v3, not implemented yet.
+  \textbf{Both heads are trained on simulator ground truth while starVLA's weights stay frozen.} (1) The map head reads
+  the frozen VLM and learns where the next gripper event happens; its labels are ORACLE contacts (object position plus
+  the mean demonstrated grasp offset) projected into the agent view, and any object of the scene can be named. v3
+  replaces them with category-level 3D maps projected onto every object (purple). (2) The action head learns to follow
+  a plan: the same demonstration frame is paired with a moved plan, the demonstrated path is rewritten to reach it, and
+  the actions are relabelled from the new path; only the plan encoder, the LoRA and the action decoder are trained.

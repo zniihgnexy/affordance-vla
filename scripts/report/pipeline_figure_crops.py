@@ -2,6 +2,7 @@
 
 Square crops, no text (the figure's labels say what they are):
   input.png           camera frame at the first query of a LIBERO-PRO rollout
+  wrist.png           the wrist camera at the same step
   plan.png            the same frame with the 8 x 8 cells of the grid plan head, the cell of the predicted
                       grasp contact shaded and the contact marked (the plan the policy was sent)
   counterfactual.png  a demonstration's first frame: its own way to the grasp (dark) and the same way
@@ -162,6 +163,7 @@ def main() -> None:
     camera = camera_of_log(demo)  # the agent-view camera does not move between LIBERO scenes
     step, contact = first_plan_contact(args.rollout, rollout)
     _save(_canvas(rollout.agentview[step])[0], args.out / "input.png")
+    _save(_canvas(rollout.wrist[step])[0], args.out / "wrist.png")
     plan_crop(rollout.agentview[step], contact, camera, args.out / "plan.png")
     counterfactual_crop(args.demo, demo.agentview[0], args.data, args.other, camera, args.out / "counterfactual.png")
     held = np.flatnonzero(rollout.grasped[:, rollout.target_index])

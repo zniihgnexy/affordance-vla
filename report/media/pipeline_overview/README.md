@@ -8,9 +8,9 @@ the figures are real crops, and they live in this folder too.
 | Figure | What it shows | Status |
 | --- | --- | --- |
 | `pipeline_overview.png` | the pipeline as it runs now; it is the figure in the first section of `report/2026-11-09_weekly_review.ipynb` | current system |
-| `v3_model.png` | Pipeline v3 at test time. The frozen VLM feeds the interaction affordance map head, which outputs an interaction score for every object in view, depth and a direction field (gripper closing direction). A semantic gate multiplies the instruction-to-cell similarity onto the scores and so picks the named object. The plan (contact and gripper orientation) is decoded from the map into 16 numbers, and the action head follows it. Gold boxes (since 23 Nov): the open-source starVLA QwenPI model with its released weights; all other boxes are ours | **guide since 19 Nov 2026** |
-| `v3_training.png` | How v3 trains its two heads. The map head learns from gripper-object interaction labels: L1 comes from demonstration grasps, L2 from per-category 3D canonical maps in the object frame, projected by object pose onto every object in the frame (labels only). The action head learns from counterfactual samples | **guide since 19 Nov 2026** |
-| `v3_generalization.png` | v3 generalisation. Training is on LIBERO-Object and testing is zero-shot on LIBERO-PRO, with LIBERO-10 (mugs, moka pots) added later for orientation. A grasp splits into three parts: which object (semantic gate), where and in which direction (interaction map), how to move (action head, which only has to obey). Each failure is traced back to one module; E7 adds object rotation, unseen objects of a known category and combined changes | **guide since 19 Nov 2026** |
+| `v3_model.png` | Pipeline v3 at test time, redrawn on 23 Nov in the structure of `detail/v3_detail_1_overview.png`: the inputs; the open-source starVLA QwenPI model in gold (vision encoder, prompt, 36-layer LLM; the DiT action head); our map head g1, the planned semantic gate and per-object scores, decoding to a 3D contact, the 10-number plan vector, the plan hold, the plan encoder; actions out. The links ①–⑥ between starVLA and our parts are numbered as in section 2.2 of `report/2026-11-16_weekly_review.ipynb` | **current, 23 Nov 2026** |
+| `v3_training.png` | How the two heads train, redrawn on 23 Nov at the same detail: (1) the map head on the frozen VLM, its four losses and their ORACLE labels (object position + mean demo grasp offset, projected into the agent view), with the planned per-object and direction losses and the planned L2 / L2c labels; (2) the action head: the kinds of counterfactual plan, how the path is rewritten, the flow-matching + path loss, and the 30.75M trained parameters of s10 | **current, 23 Nov 2026** |
+| `v3_generalization.png` | Generalisation, redrawn on 23 Nov at the same detail: (1) trained on LIBERO-Object, tested zero-shot on LIBERO-PRO, with the best numbers so far; (2) tests G1–G5, G4 (unseen shapes of a category) the final goal; (3) the diagnosis loop from the offline first-frame check through closed loop to the five failure classes and their modules | **current, 23 Nov 2026** |
 | `detail/v3_detail_<n>_<name>.png` | five layer-level figures of v3 after round 5 (whole test-time path; how the two heads read the VLM layers; decoding a cell to a 3D point; contact weights of one grasp; rewriting a counterfactual path). Numbers checked against the code and checkpoint configs on 20 Nov 2026; shown with their formulas in sections 3.2 and 3.3 of `report/2026-11-16_weekly_review.ipynb`. Figure 1 also marks the open-source starVLA model (gold zone) and the links ①–⑥ to our parts (23 Nov; sections 2.1 and 2.2 of that review) | **current, 20 Nov 2026** |
 | `pose_plan_pipeline.png` | first proposal (18 Nov): adds only the gripper orientation; superseded by the v3 figures | record |
 
@@ -22,12 +22,13 @@ all the crops, show the current system.
 | --- | --- |
 | `detail/pipeline_v3_layers.html` | source of the layer-level figures: a page with inline SVG and KaTeX formulas. `python scripts/report/render_pipeline_detail.py report/media/pipeline_overview/detail/pipeline_v3_layers.html` (needs Google Chrome, so on the Mac) writes the five PNGs at 2x, light theme |
 | `<name>.yaml` | the spec of figure `<name>`: boxes, arrows, colour roles and caption |
+| `paper.yaml` | colours shared by the three v3 figures: gold = the open-source starVLA QwenPI model (released weights, frozen); orange = ours, trained; grey = data and our steps without weights; red = losses; purple dashed = planned |
 | `<name>.png` | the rendered figure, at 3x its size in points |
-| `input.png`, `plan.png`, `outcome.png` | frames of a real LIBERO-PRO rollout (`runs/libero_pro/predicted_g1_hold_s10/libero_object_swap/task2_ep0`, success): position perturbation, salad dressing, the grid plan head with plan hold, and the s10 action head |
+| `input.png`, `wrist.png`, `plan.png`, `outcome.png` | frames of a real LIBERO-PRO rollout (agent view, and the wrist view at the same step) (`runs/libero_pro/predicted_g1_hold_s10/libero_object_swap/task2_ep0`, success): position perturbation, salad dressing, the grid plan head with plan hold, and the s10 action head |
 | `counterfactual.png` | first frame of a real demonstration (salad dressing, demo 0). Dark is the demonstration's own way to the grasp; orange is the same way rewritten to the ketchup by the 15 Nov rule |
 | `scene_train.png`, `scene_swap.png`, `scene_task.png` | first frames with the object the instruction names outlined in orange. `scene_train`: the demonstration above (LIBERO-Object). `scene_swap`: the rollout above (position perturbation). `scene_task`: the task perturbation in the same salad-dressing scene, where the instruction names the tomato sauce (`predicted_g1_hold_s10/libero_object_task/task2_ep0`, success) |
 
-Remake the crops on the server (starvla env, no GPU). This rewrites the first four crops byte for byte:
+Remake the crops on the server (starvla env, no GPU). This rewrites the first five crops byte for byte:
 
 ```bash
 W=/mnt/nas/xinyizheng/affordance_vla; R=$W/runs/libero_pro/predicted_g1_hold_s10
@@ -38,25 +39,14 @@ python scripts/report/pipeline_figure_crops.py --rollout $R/libero_object_swap/t
     --scene scene_task=$R/libero_object_task/task2_ep0.npz
 ```
 
-To render a figure you need a machine with the cvpr-figure skill, cairosvg and a CJK font; this was done on the
-Mac. `NAME` is the stem of a spec. The skill writes Helvetica, which has no Chinese glyphs, so the font is swapped
-in the SVG before rasterising:
+Render a figure on the server, from the repository root, with a copy of the cvpr-figure skill (it lives in `~/.claude/skills/cvpr-figure` on the Mac; copy its `scripts/` folder over). `render_figure_spec.py` writes the SVG with the skill, sets the text in Liberation Sans (Helvetica's metrics, which the engine sizes boxes for) and makes the PDF with LibreOffice and the PNG from it:
 
 ```bash
-python <skill>/scripts/render.py $NAME.yaml -o out/$NAME -f svg
-sed -E "s/font-family='[^']*'/font-family='Hiragino Sans GB'/g" out/$NAME.svg > out/zh.svg
-python -c "import cairosvg; cairosvg.svg2png(url='out/zh.svg', write_to='$NAME.png', scale=3.0)"
-python <skill>/scripts/validate.py $NAME.yaml --svg out/$NAME.svg
+python scripts/report/render_figure_spec.py <skill dir> report/media/pipeline_overview/v3_model.yaml --dpi 288
+python <skill dir>/scripts/validate.py report/media/pipeline_overview/v3_model.yaml --svg report/media/pipeline_overview/v3_model.svg
 ```
 
-Audit results:
-
-- All figures pass with 0 errors. `pipeline_overview` and `pose_plan_pipeline` also have no warnings.
-- The v3 figures keep two kinds of warning:
-  - They are taller than a paper page's height budget. They are made for the docs, not for a paper.
-  - Some labels are long, because Chinese lines are counted as words.
-
-Hiragino has no U+2212 minus sign, so write labels without it.
+Only the spec and the PNG are kept in git. Audit of the v3 figures (23 Nov): 0 errors. The warnings left are deliberate: the boxes carry several lines of numbers (the detail asked for), the figures are taller than a paper page allows (they are for the notebook and the docs), and the simulator crops are 256 px.
 
 Add `-f svg,pptx` to get a PowerPoint file to edit by hand. Once that file has been edited, it becomes the source
 of the figure.

@@ -1,105 +1,92 @@
-# VLA Pipeline v3, figure 3 of 3: where generalisation comes from and how failures are traced
-# (docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md). Purple dashed: added by v3, not implemented yet.
-# Crops: first frames of a real demonstration and two real LIBERO-PRO rollouts, the named object outlined
-# (scripts/report/pipeline_figure_crops.py --scene, README.md in this folder).
+# VLA Pipeline v3, figure 3 of 3: generalisation and diagnosis (docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md). Same
+# colours and detail as v3_model (paper.yaml): orange = ours (the final goal G4 is the contribution); grey = data,
+# tests and checks that run today; purple dashed = planned, not built yet.
+# Numbers: LIBERO-PRO Object, papers' protocol (50 starts per task x 3 seeds), week 1 (docs/vla/README.md).
+# Crops: first frames with the named object outlined (scripts/report/pipeline_figure_crops.py --scene).
+paper: paper.yaml
 figure:
   id: v3_generalization
-  venue: generic
-  width: 530
-  font: helvetica
-  type_scale: 1.1
+  width: 590
   pptx_app: office
 
 layout: col
-gap: 9
+gap: 12
 
 panels:
-  - id: band_a
-    title: "① Zero-shot testing: the scene or the instruction is unseen in training"
+  - id: band_zero
+    title: "① Train on standard LIBERO only; test zero-shot on perturbed scenes"
     title_align: left
     frame: dashed
-    pad: 6
-    padt: 20
+    pad: 7
     body:
       - row:
-          gap: 14
+          gap: 16
           align: center
           body:
             - group:
-                id: train
-                frame: solid
-                pad: 6
+                id: g_train
                 title: "train"
-                title_pos: inside-top
-                body:
-                  - {id: img_train, shape: image, w: 54, src: scene_train.png, caption: "LIBERO-Object"}
-            - group:
-                id: test
-                frame: solid
                 pad: 6
-                title: "test (zero-shot): LIBERO-PRO"
-                title_pos: inside-top
+                body:
+                  - {id: tr_img, shape: image, w: 58, src: scene_train.png, caption: "LIBERO-Object, 454 demos"}
+            - group:
+                id: g_test
+                title: "test: LIBERO-PRO, never trained on"
+                pad: 6
                 body:
                   - row:
-                      gap: 14
-                      align: start
+                      gap: 12
+                      align: center
                       body:
-                        - {id: img_swap, shape: image, w: 54, src: scene_swap.png, caption: "position perturbation"}
-                        - {id: img_task, shape: image, w: 54, src: scene_task.png, caption: "task perturbation"}
+                        - {id: te_swap, shape: image, w: 58, src: scene_swap.png, caption: "position: objects swapped"}
+                        - {id: te_task, shape: image, w: 58, src: scene_task.png, caption: "task: another object named"}
                         - col:
                             gap: 5
                             align: center
                             body:
-                              - {id: lan, text: "language perturbation\nsame task, reworded", fill: purple.light, dash: true}
-                              - {id: later, text: "G3 rotation ±45°\nG4 unseen shapes · G5 mixed\nLIBERO-10, Spatial, Plus", fill: purple.light, dash: true}
+                              - {id: te_more, text: "**also run**\nSpatial, LIBERO-10:\nswap and task", role: neutral}
+                              - {id: te_plan, text: "**planned**\nreworded (\\_lan), LIBERO-Plus\nrotated, unseen shapes", fill: purple.light, dash: true}
+            - {id: result, text: "**success, 50 × 3 seeds**\nposition · task perturbation\nreleased: 0.00 · 0.09\nours, predicted plan: 0.66 · 0.68\noracle plan: 0.92 · 0.75", role: neutral}
 
-  - id: band_c
-    title: "② One part per change: which (gate), where and direction (map), how to move (action head)"
+  - id: band_tests
+    title: "② One part per change: tests G1–G5"
     title_align: left
     frame: dashed
-    pad: 6
-    padt: 20
+    pad: 7
+    body:
+      - row:
+          gap: 8
+          align: start
+          body:
+            - {id: g1, text: "**G1 position**\nthe map follows\nthe object\nLIBERO-PRO \\_swap", role: neutral}
+            - {id: g2, text: "**G2 instruction**\nthe semantic gate\npicks the object\n\\_task, \\_lan", role: neutral}
+            - {id: g3, text: "**G3 rotation ±45°**\norientation by\n3D alignment\nLIBERO-10 mugs, pots", fill: purple.light, dash: true}
+            - {id: g4, text: "**G4 unseen shape**\nfinal goal: category map\ntall, short, fat, thin mugs\n+ the red mug, never grasped", role: core, dash: true}
+            - {id: g5, text: "**G5 combined**\nseveral changes\nat once\nall three parts", fill: purple.light, dash: true}
+
+  - id: band_diag
+    title: "③ Diagnosis: every failure is traced to one module, fixed, then checked again"
+    title_align: left
+    frame: dashed
+    pad: 7
     padb: 22
     body:
       - row:
-          gap: 12
+          gap: 16
           align: center
           body:
-            - {id: offline, text: "offline first-frame check\nobject ID rate · all objects\nposition · direction error", role: neutral}
-            - {id: closed, text: "closed loop: LIBERO-PRO\ndev: 20 starts\nreport: 50 × 3 seeds", role: neutral}
+            - {id: offline, text: "**offline first-frame check**\nafter every map-head change\npicks the named object?\npeak in its contact region?\nposition and direction error", role: neutral}
+            - {id: closed, text: "**closed loop, LIBERO-PRO**\ndevelopment: 20 starts per task\nreport: 50 starts × 3 seeds\nfailures sorted into 5 classes", role: neutral}
             - col:
-                gap: 6
+                id: c_fail
+                gap: 4
                 align: center
                 body:
-                  - group:
-                      id: gen
-                      frame: region
-                      fill: blue.pale
-                      pad: 5
-                      title: "map + gate: must generalise"
-                      title_pos: inside-top
-                      body:
-                        - col:
-                            gap: 4
-                            align: center
-                            body:
-                              - {id: f_obj, text: "wrong object → semantic gate", fill: purple.light, dash: true}
-                              - {id: f_pos, text: "position off → score, depth, features", role: encoder}
-                              - {id: f_ori, text: "wrong direction → direction field + 3D map", fill: purple.light, dash: true}
-                  - group:
-                      id: obey
-                      frame: region
-                      fill: orange.pale
-                      pad: 5
-                      title: "action head: only obeys"
-                      title_pos: inside-top
-                      body:
-                        - col:
-                            gap: 4
-                            align: center
-                            body:
-                              - {id: f_obey, text: "plan not followed → action labels", role: core}
-                              - {id: f_after, text: "fails after the grasp → release labels", role: core}
+                  - {id: f_obj, text: "wrong object → semantic gate", role: neutral}
+                  - {id: f_pos, text: "contact off → map scores, depth, features", role: neutral}
+                  - {id: f_dir, text: "wrong direction → direction field, 3D map", role: neutral}
+                  - {id: f_act, text: "plan not followed → action head, its labels", role: neutral}
+                  - {id: f_rel, text: "fails after the grasp → release labels", role: neutral}
 
   - id: s_key
     frame: none
@@ -108,25 +95,27 @@ panels:
           gap: 5
           align: center
           body:
-            - {id: k3, shape: sharpbox, w: 11, h: 7, fill: purple.light, dash: true}
-            - {id: k3t, shape: text, text: "added by v3, not built yet", type: annot}
+            - {id: k2, shape: sharpbox, w: 11, h: 7, fill: orange.light, dash: true}
+            - {id: k2_s, shape: spacer, w: 3, h: 4}
+            - {id: k2t, shape: text, text: "final goal (planned)", type: annot}
+            - {id: k3, shape: sharpbox, w: 11, h: 7, fill: grey.pale}
+            - {id: k3_s, shape: spacer, w: 3, h: 4}
+            - {id: k3t, shape: text, text: "runs today", type: annot}
+            - {id: k4, shape: sharpbox, w: 11, h: 7, fill: purple.light, dash: true}
+            - {id: k4_s, shape: spacer, w: 3, h: 4}
+            - {id: k4t, shape: text, text: "planned", type: annot}
 
 edges:
-  - {from: train.e, to: test.w}
+  - {from: g_train.e, to: g_test.w, label: "zero-shot"}
+  - {from: g_test.e, to: result.w}
   - {from: offline.e, to: closed.w}
-  - {from: closed.e, to: gen.w}
-  - {from: closed.e, to: obey.w}
-  - {from: obey.s, to: offline.s, route: bus, bend: 10, color: grey, label: "fix that module, then back to the offline check",
-     label_size: 7, label_dy: -5}
+  - {from: closed.e, to: c_fail.w}
+  - {from: c_fail.s, to: offline.s, route: bus, bend: 10, color: grey, label: "fix that module, check again"}
 
 caption: >-
-  \textbf{Generalisation rests on the interaction affordance map: it turns an unseen scene into the right plan, and
-  the action head, trained to obey plans, then acts correctly.}
-  ① Training uses standard LIBERO-Object only (the salad-dressing demo; the named object is outlined in orange).
-  Testing is zero-shot on LIBERO-PRO: the position perturbation moves the salad dressing, the task perturbation
-  names the tomato sauce in the same scene; v3 adds the language perturbation, LIBERO-10 for objects with handles,
-  and the tests G3 (rotation), G4 (unseen shapes of a known category, a final goal) and G5 (combined).
-  ② A grasp splits into three parts: the semantic gate picks the named object, the interaction map finds the contact
-  and direction on every object (blue), the action head only obeys (orange). Each change is checked offline on first
-  frames, then in closed loop; every failed episode is assigned to one class and the matching module is fixed.
-  Purple dashed: added by v3, not implemented yet.
+  \textbf{Generalisation is tested zero-shot, and each kind of change is meant to be carried by one part.} (1) Trained
+  on standard LIBERO only, the model is tested on LIBERO-PRO, where objects trade places or another object is named;
+  the best numbers so far use the plan predicted by our map head. (2) Tests G1–G5: position, instruction, rotation,
+  unseen shapes of a known category (the final goal) and their combination. (3) Every failed episode is assigned to
+  the module that caused it; that module is changed and checked again offline before the next closed-loop run.
+  Orange: the final goal; grey: runs today; purple dashed: planned.

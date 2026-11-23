@@ -1,163 +1,146 @@
 # VLA Pipeline v3, figure 1 of 3: the model at test time (docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md).
-# Purple dashed boxes are what v3 adds and is not implemented yet; everything else runs today. Gold boxes are the
-# open-source starVLA QwenPI model (released weights); all others are ours.
-# Crops: real LIBERO-PRO rollout (scripts/report/pipeline_figure_crops.py, README.md in this folder).
+# Same structure and detail as detail/v3_detail_1_overview.png. Colours from paper.yaml: gold = the open-source
+# starVLA QwenPI model with its released weights; orange = ours, trained; grey = ours, no weights; purple dashed =
+# planned, not built yet. Circled numbers: the links between starVLA and our parts (week-2 review, section 2.2).
+# Crops: one real LIBERO-PRO rollout (scripts/report/pipeline_figure_crops.py; wrist.png is its wrist view).
+paper: paper.yaml
 figure:
   id: v3_model
-  venue: generic
-  width: 530
-  font: helvetica
-  type_scale: 1.1
+  width: 750
   pptx_app: office
 
 layout: col
-gap: 9
+gap: 8
 
 panels:
-  - id: band_a
-    title: "① Perception: the frozen VLM reads image and instruction, once per action chunk"
-    title_align: left
-    frame: dashed
-    pad: 6
-    padt: 20
+  - id: s_main
+    frame: none
     body:
       - row:
-          gap: 14
-          align: center
+          gap: 16
+          align: start
           body:
-            - {id: img_in, shape: image, w: 48, src: input.png, caption: "agent view 224×224"}
-            - {id: instr, text: "instruction\n“pick up the …”", role: input}
             - col:
-                gap: 3
+                id: c_in
+                gap: 7
                 align: center
                 body:
-                  - {id: m_vlm, shape: marker, kind: frozen, d: 7}
-                  - {id: vlm, shape: trapezoid, text: "Qwen3-VL-4B\n36 layers", fill: gold.light}
+                  - {id: agent, shape: image, w: 54, src: input.png, caption: "agent view 224×224"}
+                  - {id: wrist, shape: image, w: 54, src: wrist.png, caption: "wrist view 224×224"}
+                  - {id: instr, text: "**instruction**\n“pick up the\nsalad dressing …”", role: input}
+                  - {id: state, text: "**robot state 7-d**\nnot sent: off in\nstarVLA training", role: input, dash: true}
             - group:
-                id: tok
-                frame: none
+                id: g_vlm
+                title: "starVLA QwenPI: VLM"
+                fill: gold.pale
+                pad: 7
                 body:
                   - row:
-                      gap: 8
-                      align: center
+                      gap: 12
+                      align: start
                       body:
-                        - {id: cells, shape: tokengrid, rows: 8, cols: 8, cell: 3.2, cellgap: 0.4,
-                           role: encoder, caption: "8×8 cells"}
-                        - {id: itok, shape: slab, n: 6, cell: 4, cellh: 16, role: input, caption: "text tokens"}
-
-  - id: band_b
-    title: "② Interaction map head: every object · where · which direction"
-    title_pos: inside-bottom
-    title_align: left
-    frame: dashed
-    pad: 6
-    padt: 17
-    body:
-      - row:
-          gap: 12
-          align: center
-          body:
+                        - col:
+                            gap: 10
+                            align: center
+                            body:
+                              - {id: vit, text: "**vision encoder (ViT)**\n24 layers · 2×2 merge\n8×8 = 64 tokens per view\nlayers 5/11/17 → LLM 1–3", role: backbone}
+                              - {id: prompt, text: "**prompt template**\n“Your task is …”", role: backbone}
+                        - {id: llm, text: "**language model**\nQwen3-VL-4B\n36 layers × 2560\ncausal, images first\nall 36 layers kept", role: backbone, minh: 150}
             - col:
-                gap: 4
+                id: c_mid
+                gap: 14
                 align: center
                 body:
-                  - {id: mix, text: "weighted mix of\nVLM layers → 512-d", role: encoder}
-                  - {id: fine, text: "finer features\n(pre-merge, 16×16)", fill: purple.light, dash: true}
-            - col:
-                gap: 3
-                align: center
-                body:
-                  - {id: m_plan, shape: marker, kind: trainable, d: 7}
-                  - {id: enc, text: "2-layer Transformer\ncells see the instruction", role: encoder}
-            - group:
-                id: outs
-                frame: none
-                body:
-                  - col:
-                      gap: 4
-                      align: center
+                  - row:
+                      gap: 10
+                      align: end
                       body:
-                        - {id: cell, text: "score (all objects) · offset · depth", role: decoder, minw: 150}
-                        - {id: orient, text: "direction field: closing axis", fill: purple.light, dash: true}
-                        - {id: glob, text: "global: event · approach", role: decoder}
-            - {id: sem, text: "semantic gate\nlearned projection\nsimilarity × score", fill: purple.light, dash: true, align_y: cell}
-
-  - id: band_c
-    title: "③ Plan → action: the action head only follows the plan"
-    title_align: left
-    frame: dashed
-    pad: 6
-    padt: 20
-    body:
-      - row:
-          gap: 9
-          align: center
-          body:
-            - {id: decode, text: "gated peak\n→ 3D contact\n+ gripper pose", role: neutral}
-            - {id: plan, text: "plan vector\n10-d (16-d\nplanned)", role: encoder}
-            - {id: hold, text: "plan hold\nuntil the\ngripper event", role: neutral}
+                        - col:
+                            gap: 6
+                            align: center
+                            body:
+                              - {id: maphead, text: "**M2 map head g1**\n7.9M parameters, trained\nmix of 36 layers → 512\n2-layer encoder, reads instruction\nper cell: score · offset · depth\nglobal: event · approach", role: core}
+                              - {id: mapext, text: "score every object\n+ direction field", fill: purple.light, dash: true}
+                        - {id: gate, text: "**M1 semantic gate**\ninstruction–cell\nsimilarity × score", fill: purple.light, dash: true}
+                  - group:
+                      id: g_dit
+                      title: "starVLA QwenPI: action head"
+                      fill: gold.pale
+                      pad: 7
+                      body:
+                        - col:
+                            gap: 6
+                            align: center
+                            body:
+                              - {id: dit_in, text: "noisy actions 8×7 → 8 tokens\n+ our plan embedding", role: backbone}
+                              - {id: dit_blk, text: "**DiT block i**\n36 blocks × 2560\ncross-attends LLM layer i\n+ our LoRA (rank 16)", role: backbone}
+                              - {id: dit_dec, text: "decoder → velocity\n4 flow-matching steps", role: backbone}
             - col:
-                gap: 3
+                id: c_plan
+                gap: 10
                 align: center
                 body:
-                  - {id: m_act, shape: marker, kind: trainable, d: 7}
-                  - {id: penc, text: "plan encoder\nMLP, added to\naction tokens", role: decoder}
-            - {id: act, text: "action head\n(DiT) reads VLM\nlayers + our LoRA", fill: gold.light}
-            - {id: chunk, text: "8-step chunk\nOSC controller", role: neutral}
-            - {id: img_out, shape: image, w: 46, src: outcome.png, caption: "outcome"}
+                  - {id: decode, text: "**decode to a 3D contact**\ncell + offset → pixel\ndepth along the camera ray\n(planned: + gripper pose)", role: neutral}
+                  - {id: plan, text: "**plan vector**\n10 numbers\nreach / 10 cm · tanh(reach / 2 cm)\napproach 3 · event 1\n(planned: + orientation → 16)", role: neutral}
+                  - {id: hold, text: "**plan hold**\none contact per phase", role: neutral}
+                  - {id: penc, text: "**plan encoder**\n1.6M parameters, trained\nMLP 10 → 512 → 512 → 2560\nlast layer starts at zero", role: core}
+                  - {id: actions, text: "**8 actions × 7**\nΔpos · Δrot · gripper\nde-normalised (starVLA)\nOSC at 20 Hz (LIBERO)", role: neutral}
+            - col:
+                id: c_out
+                gap: 0
+                align: center
+                body:
+                  - {id: outcome, shape: image, w: 54, src: outcome.png, caption: "outcome"}
 
   - id: s_key
     frame: none
     body:
-      - col:
-          gap: 4
+      - row:
+          gap: 5
           align: center
           body:
-            - row:
-                gap: 5
-                align: center
-                body:
-                  - {id: k4, shape: sharpbox, w: 11, h: 7, fill: gold.light}
-                  - {id: k4t, shape: text, text: "starVLA QwenPI: open-source model with released weights; all other boxes are ours", type: annot}
-            - row:
-                gap: 5
-                align: center
-                body:
-                  - {id: k1, shape: marker, kind: trainable, d: 6}
-                  - {id: k1t, shape: text, text: "trained", type: annot}
-                  - {id: k2, shape: marker, kind: frozen, d: 6}
-                  - {id: k2t, shape: text, text: "frozen (fine-tuned in the main run)", type: annot}
-                  - {id: k3, shape: sharpbox, w: 11, h: 7, fill: purple.light, dash: true}
-                  - {id: k3t, shape: text, text: "added by v3, not built yet", type: annot}
+            - {id: k1, shape: sharpbox, w: 11, h: 7, fill: gold.light}
+            - {id: k1_s, shape: spacer, w: 3, h: 4}
+            - {id: k1t, shape: text, text: "starVLA QwenPI (open source): released weights, frozen", type: annot}
+            - {id: k2, shape: sharpbox, w: 11, h: 7, fill: orange.light}
+            - {id: k2_s, shape: spacer, w: 3, h: 4}
+            - {id: k2t, shape: text, text: "ours, trained", type: annot}
+            - {id: k3, shape: sharpbox, w: 11, h: 7, fill: grey.pale}
+            - {id: k3_s, shape: spacer, w: 3, h: 4}
+            - {id: k3t, shape: text, text: "ours, no weights", type: annot}
+            - {id: k4, shape: sharpbox, w: 11, h: 7, fill: purple.light, dash: true}
+            - {id: k4_s, shape: spacer, w: 3, h: 4}
+            - {id: k4t, shape: text, text: "planned", type: annot}
+            - {id: k_gap, shape: spacer, w: 8, h: 4}
+            - {id: k5t, shape: text, text: "①–⑥ links between starVLA and ours", type: annot}
 
 edges:
-  - {from: img_in.e, to: instr.w}
-  - {from: instr.e, to: vlm.w}
-  - {from: vlm.e, to: tok.w}
-  - {from: vlm.s, to: mix.n}
-  - {from: tok.s, to: sem.n, color: purple}
-  - {from: mix.e, to: enc.w}
-  - {from: fine.e, to: enc.w, color: purple}
-  - {from: enc.e, to: outs.w}
-  - {from: sem.w, to: cell.e, color: purple}
-  - {from: outs.s, to: decode.n, mid: 0.95}
-  - {from: decode.e, to: plan.w}
-  - {from: plan.e, to: hold.w}
-  - {from: hold.e, to: penc.w}
-  - {from: penc.e, to: act.w}
-  - {from: act.e, to: chunk.w}
-  - {from: chunk.e, to: img_out.w}
+  - {from: agent.e, to: vit.w, label: "①"}
+  - {from: wrist.e, to: vit.w}
+  - {from: instr.e, to: prompt.w, label: "②"}
+  - {from: vit.e, to: llm.w}
+  - {from: prompt.e, to: llm.w}
+  - {from: llm.e, to: maphead.w, label: "④", label_pos: 0.9}
+  - {from: llm.e, to: dit_blk.w}
+  - {from: maphead.e, to: decode.w, label: "now: best cell"}
+  - {from: mapext.e, to: gate.w, color: purple, dash: true}
+  - {from: gate.e, to: decode.w, color: purple, dash: true}
+  - {from: decode.s, to: plan.n}
+  - {from: plan.s, to: hold.n}
+  - {from: hold.s, to: penc.n}
+  - {from: penc.w, to: dit_in.e, label: "⑤ plan"}
+  - {from: dit_dec.e, to: actions.w, label: "⑥"}
+  - {from: actions.e, to: outcome.w}
+
+notes:
+  - {text: "③", near: state.e, dx: 5}
 
 caption: >-
-  \textbf{At test time the interaction affordance map says which object, where to touch and how to orient the
-  gripper; it is decoded into a plan vector and the action head only follows that plan.}
-  ① The frozen Qwen3-VL-4B reads the agent view and the instruction; each image becomes 8×8 cell tokens.
-  ② The interaction map head mixes all VLM layers and gives every cell an interaction score, an offset and a depth,
-  plus the next gripper event and the approach direction. v3 scores every object, adds a direction field (gripper
-  closing axis, 180°-symmetric) and a semantic gate (learned projection of instruction and cell tokens) that picks
-  the named object; the running version is the 8×8 head without direction field or gate.
-  ③ The gated peak becomes a 3D contact through the camera calibration; with the approach direction and the event
-  it forms the plan vector (10-d; 16-d with the target orientation, planned), held until the gripper event; the plan
-  encoder adds it to every action token of the DiT action head, whose 8-step chunk is executed by the OSC controller.
-  Gold: the open-source starVLA QwenPI model with its released weights (our LoRA sits in its action head); all
-  other boxes are ours. Purple dashed: added by v3, not implemented yet.
+  \textbf{At test time our map head and plan pathway sit around the open-source starVLA QwenPI model, which runs with
+  its released weights.} The VLM (Qwen3-VL-4B) reads both camera views and the instruction and keeps the hidden
+  states of all 36 layers; the map head scores the 8×8 cells of the agent view, the best cell is decoded into a 3D
+  contact and a 10-number plan, held until the gripper event, and the plan encoder adds it to the action tokens of
+  starVLA's flow-matching action head, whose block i reads LLM layer i. Gold: starVLA, released weights, frozen;
+  orange: ours, trained; grey: ours, no weights; purple dashed: planned (semantic gate, scores on every object,
+  direction field, gripper orientation). ①–⑥: images, instruction and robot state in; VLM layers out to our map
+  head; our plan in; actions out.
