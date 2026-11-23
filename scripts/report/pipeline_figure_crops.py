@@ -83,11 +83,16 @@ def first_plan_contact(path: Path, log: RolloutLog) -> tuple[int, np.ndarray]:
     return step, contact
 
 
-def plan_crop(image: np.ndarray, contact: np.ndarray, camera: Camera, out: Path) -> None:
-    fig, axis = _canvas(image)
+def _grid(axis: plt.Axes) -> None:
+    """The lines between the 8 x 8 image cells the VLM makes of the view."""
     for k in range(1, CELLS):
         axis.axhline(k * CELL_PX, color=PALE, linewidth=0.35, alpha=0.8)
         axis.axvline(k * CELL_PX, color=PALE, linewidth=0.35, alpha=0.8)
+
+
+def plan_crop(image: np.ndarray, contact: np.ndarray, camera: Camera, out: Path) -> None:
+    fig, axis = _canvas(image)
+    _grid(axis)
     u, v = contact_pixel(contact, camera)[:2]
     col, row = int(u // CELL_PX), int(v // CELL_PX)
     axis.add_patch(plt.Rectangle((col * CELL_PX, row * CELL_PX), CELL_PX, CELL_PX, facecolor=ORANGE, alpha=0.45,

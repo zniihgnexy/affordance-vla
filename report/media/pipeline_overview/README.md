@@ -25,6 +25,7 @@ all the crops, show the current system.
 | `paper.yaml` | colours shared by the three v3 figures: gold = the open-source starVLA QwenPI model (released weights, frozen); orange = ours, trained; grey = data and our steps without weights; red = losses; purple dashed = planned |
 | `<name>.png` | the rendered figure, at 3x its size in points |
 | `input.png`, `wrist.png`, `plan.png`, `outcome.png` | frames of a real LIBERO-PRO rollout (agent view, and the wrist view at the same step) (`runs/libero_pro/predicted_g1_hold_s10/libero_object_swap/task2_ep0`, success): position perturbation, salad dressing, the grid plan head with plan hold, and the s10 action head |
+| `map_now.png`, `map_label.png`, `map_v3.png` | the affordance map on real frames (`scripts/report/map_figure_crops.py`): g1's 8 × 8 map on the first frame of the same rollout (read from the E1 probe, best cell boxed); g1's training label on the demonstration's first frame (the one cell holding the ORACLE contact); the planned v3 label on that frame (every object's L2 map projected onto it, the closing direction as dashes) |
 | `counterfactual.png` | first frame of a real demonstration (salad dressing, demo 0). Dark is the demonstration's own way to the grasp; orange is the same way rewritten to the ketchup by the 15 Nov rule |
 | `scene_train.png`, `scene_swap.png`, `scene_task.png` | first frames with the object the instruction names outlined in orange. `scene_train`: the demonstration above (LIBERO-Object). `scene_swap`: the rollout above (position perturbation). `scene_task`: the task perturbation in the same salad-dressing scene, where the instruction names the tomato sauce (`predicted_g1_hold_s10/libero_object_task/task2_ep0`, success) |
 
@@ -37,6 +38,15 @@ python scripts/report/pipeline_figure_crops.py --rollout $R/libero_object_swap/t
     --data $W/runs/plan_following/dataset10 --other ketchup_1 --out report/media/pipeline_overview \
     --scene scene_train=$D --scene scene_swap=$R/libero_object_swap/task2_ep0.npz \
     --scene scene_task=$R/libero_object_task/task2_ep0.npz
+```
+
+The three map crops (same rollout and demonstration):
+
+```bash
+D=$W/runs/plan_following/demos_pose/pick_up_the_salad_dressing_and_place_it_in_the_basket_demo0.npz
+python scripts/report/map_figure_crops.py --probe runs/semantic_probe/e1/probe.npz \
+    --probe-frame libero_object_swap/task2_ep0.npz --demo $D --data $W/runs/plan_following/dataset10 \
+    --maps runs/interaction_labels/object/maps.npz --out report/media/pipeline_overview
 ```
 
 Render a figure on the server, from the repository root, with a copy of the cvpr-figure skill (it lives in `~/.claude/skills/cvpr-figure` on the Mac; copy its `scripts/` folder over). `render_figure_spec.py` writes the SVG with the skill, sets the text in Liberation Sans (Helvetica's metrics, which the engine sizes boxes for) and makes the PDF with LibreOffice and the PNG from it:

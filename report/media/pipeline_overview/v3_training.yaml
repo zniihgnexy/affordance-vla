@@ -7,7 +7,7 @@
 paper: paper.yaml
 figure:
   id: v3_training
-  width: 560
+  width: 600
   pptx_app: office
 
 layout: col
@@ -45,21 +45,29 @@ panels:
                         - {id: l_cell, text: "cell: cross-entropy over 64 cells", role: loss}
                         - {id: l_off, text: "offset, depth: Huber, weight 10 each", role: loss}
                         - {id: l_evt, text: "event: cross-entropy · approach: 0.5 (1 − cos)", role: loss}
-                        - {id: l_all, text: "every object: BCE · gated target: CE", fill: purple.light, dash: true}
-                        - {id: l_dir, text: "direction field: L2 in contact regions", fill: purple.light, dash: true}
             - row:
-                gap: 16
-                align: center
+                gap: 14
+                align: start
                 body:
                   - {id: demos, text: "**LIBERO-Object replays**\n454 demos · 56,852 frames\nsimulator object poses", role: input}
-                  - {id: oracle, text: "**ORACLE contact (now)**\nobject position\n+ mean demo grasp offset\napproach: mean of 10 steps", role: neutral}
-                  - {id: proj, text: "**project to the agent view**\ncell · in-cell offset · depth\ncamera calibration", role: neutral}
                   - col:
-                      gap: 5
+                      gap: 10
                       align: center
                       body:
-                        - {id: aug, text: "**more targets, no new demos**\ninstruction names another object\n→ its grasp point\nshifted copies of the image", role: neutral}
-                        - {id: l2, text: "**L2 / L2c (planned labels)**\n3D map per category from demo grasps\n→ projected onto every object", fill: purple.light, dash: true}
+                        - row:
+                            gap: 14
+                            align: center
+                            body:
+                              - {id: oracle, text: "**ORACLE contact (now)**\nobject position\n+ mean demo grasp offset\nany object can be named", role: neutral}
+                              - {id: proj, text: "**project to the agent view**\ncell · in-cell offset · depth\n+ shifted image copies", role: neutral}
+                              - {id: lab_now, shape: image, w: 50, src: map_label.png, caption: "label now: one cell"}
+                        - row:
+                            gap: 14
+                            align: center
+                            body:
+                              - {id: l2, text: "**L2 / L2c labels (planned)**\n3D map per category from demo grasps\nprojected onto every object", fill: purple.light, dash: true}
+                              - {id: lab_v3, shape: image, w: 50, src: map_v3.png, caption: "label v3: every object + axis"}
+                              - {id: l_v3, text: "**v3 losses (planned)**\nevery object: BCE\ngated target: CE\ndirection: L2 in contact regions", fill: purple.light, dash: true}
 
   - id: band_act
     title: "② Action head: same image, plan moved, action relabelled (the core of this work)"
@@ -145,8 +153,11 @@ edges:
   - {from: head.e, to: c_loss.w}
   - {from: demos.e, to: oracle.w}
   - {from: oracle.e, to: proj.w}
-  - {from: proj.e, to: aug.w}
-  - {from: aug.n, to: c_loss.s, label: "labels"}
+  - {from: proj.e, to: lab_now.w}
+  - {from: lab_now.n, to: c_loss.s, label: "label", label_dx: 14}
+  - {from: demos.e, to: l2.w, color: purple, dash: true}
+  - {from: l2.e, to: lab_v3.w, color: purple, dash: true}
+  - {from: lab_v3.e, to: l_v3.w, color: purple, dash: true}
   - {from: demo.e, to: c_kind.w}
   - {from: c_kind.e, to: c_rew.w}
   - {from: c_rew.e, to: cf.w}

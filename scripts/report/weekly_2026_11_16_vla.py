@@ -81,7 +81,15 @@ Each query runs **one** forward pass of the VLM over the two images and the inst
 
 ### 2.5 How the affordance map is used now
 
-The map is the output of the map head **g1**: for each of the 64 cells of the agent view (one per VLM image token, 28 × 28 px) a score for "the contact of the next gripper event is here", plus the position inside the cell and the depth; for the whole image, the event (grasp / release / none) and the approach direction.
+The map is the output of the map head **g1**: for each of the 64 cells of the agent view (one per VLM image token, 28 × 28 px) a score for "the contact of the next gripper event is here", plus the position inside the cell and the depth; for the whole image, the event (grasp / release / none) and the approach direction. In the figures of section 3 it is the orange box "affordance map", drawn on real frames.
+
+| | Now: g1 [implemented] | v3 [planned, E2 / E4] |
+| --- | --- | --- |
+| What a cell's score means | the next contact is in this cell (softmax over the 64 cells: one target) | how well this part of each object can be grasped (one score per object, several objects high) |
+| Also per cell | in-cell offset, depth | in-cell offset, depth, closing direction (cos 2θ, sin 2θ) |
+| Which object | learnt inside the head from the instruction | the semantic gate multiplies instruction–cell similarity onto the scores |
+| Training label | one cell: the ORACLE contact projected into the image | the L2 / L2c 3D map of each object's category, projected onto every object |
+| What reaches the action head | best cell → 3D contact → 10-number plan | best gated cell + its direction → contact and gripper orientation (16 numbers) |
 
 **From the map to the actions [implemented]:**
 

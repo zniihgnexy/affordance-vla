@@ -58,10 +58,10 @@ panels:
           gap: 8
           align: start
           body:
-            - {id: g1, text: "**G1 position**\nthe map follows\nthe object\nLIBERO-PRO \\_swap", role: neutral}
+            - {id: g1, text: "**G1 position**\nthe affordance map\nfollows the object\nLIBERO-PRO \\_swap", role: neutral}
             - {id: g2, text: "**G2 instruction**\nthe semantic gate\npicks the object\n\\_task, \\_lan", role: neutral}
             - {id: g3, text: "**G3 rotation ±45°**\norientation by\n3D alignment\nLIBERO-10 mugs, pots", fill: purple.light, dash: true}
-            - {id: g4, text: "**G4 unseen shape**\nfinal goal: category map\ntall, short, fat, thin mugs\n+ the red mug, never grasped", role: core, dash: true}
+            - {id: g4, text: "**G4 unseen shape**\nfinal goal: category-level\naffordance map\ntall, short, fat, thin mugs\n+ the red mug, never grasped", role: core, dash: true}
             - {id: g5, text: "**G5 combined**\nseveral changes\nat once\nall three parts", fill: purple.light, dash: true}
 
   - id: band_diag
@@ -83,7 +83,7 @@ panels:
                 align: center
                 body:
                   - {id: f_obj, text: "wrong object → semantic gate", role: neutral}
-                  - {id: f_pos, text: "contact off → map scores, depth, features", role: neutral}
+                  - {id: f_pos, text: "contact off → affordance map: scores, depth", role: neutral}
                   - {id: f_dir, text: "wrong direction → direction field, 3D map", role: neutral}
                   - {id: f_act, text: "plan not followed → action head, its labels", role: neutral}
                   - {id: f_rel, text: "fails after the grasp → release labels", role: neutral}

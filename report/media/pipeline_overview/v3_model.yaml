@@ -6,7 +6,7 @@
 paper: paper.yaml
 figure:
   id: v3_model
-  width: 750
+  width: 820
   pptx_app: office
 
 layout: col
@@ -55,13 +55,29 @@ panels:
                       gap: 10
                       align: end
                       body:
-                        - col:
-                            gap: 6
-                            align: center
+                        - group:
+                            id: g_aff
+                            title: "affordance map (ours)"
+                            fill: orange.pale
+                            pad: 6
                             body:
-                              - {id: maphead, text: "**M2 map head g1**\n7.9M parameters, trained\nmix of 36 layers → 512\n2-layer encoder, reads instruction\nper cell: score · offset · depth\nglobal: event · approach", role: core}
-                              - {id: mapext, text: "score every object\n+ direction field", fill: purple.light, dash: true}
-                        - {id: gate, text: "**M1 semantic gate**\ninstruction–cell\nsimilarity × score", fill: purple.light, dash: true}
+                              - row:
+                                  gap: 12
+                                  align: center
+                                  body:
+                                    - col:
+                                        gap: 8
+                                        align: center
+                                        body:
+                                          - {id: maphead, text: "**M2 map head g1**\n7.9M parameters, trained\nreads all 36 LLM layers\n+ the instruction\nper cell: score · offset · depth\nglobal: event · approach", role: core}
+                                          - {id: mapext, text: "**v3 map head**\nscore on every object\n+ closing direction per cell", fill: purple.light, dash: true}
+                                    - col:
+                                        gap: 6
+                                        align: center
+                                        body:
+                                          - {id: map_now, shape: image, w: 50, src: map_now.png, caption: "now: 64 cell scores"}
+                                          - {id: map_v3, shape: image, w: 50, src: map_v3.png, caption: "v3: every object + axis"}
+                        - {id: gate, text: "**M1 semantic gate**\ninstruction–cell\nsimilarity × score\n→ the named object", fill: purple.light, dash: true}
                   - group:
                       id: g_dit
                       title: "starVLA QwenPI: action head"
@@ -120,10 +136,12 @@ edges:
   - {from: instr.e, to: prompt.w, label: "②"}
   - {from: vit.e, to: llm.w}
   - {from: prompt.e, to: llm.w}
-  - {from: llm.e, to: maphead.w, label: "④", label_pos: 0.9}
+  - {from: llm.e, to: g_aff.w, label: "④", label_pos: 0.9}
   - {from: llm.e, to: dit_blk.w}
-  - {from: maphead.e, to: decode.w, label: "now: best cell"}
-  - {from: mapext.e, to: gate.w, color: purple, dash: true}
+  - {from: maphead.e, to: map_now.w}
+  - {from: map_now.e, to: decode.w, label: "best cell → contact"}
+  - {from: mapext.e, to: map_v3.w, color: purple, dash: true}
+  - {from: map_v3.e, to: gate.w, color: purple, dash: true}
   - {from: gate.e, to: decode.w, color: purple, dash: true}
   - {from: decode.s, to: plan.n}
   - {from: plan.s, to: hold.n}

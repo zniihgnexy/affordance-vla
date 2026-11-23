@@ -93,7 +93,7 @@ Trained (s10, VLM frozen): LoRA 26.54M + action decoder 2.63M + plan encoder 1.5
 
 ### 3.3 Training
 """)
-    code(figure("v3_training.png", 750))
+    code(figure("v3_training.png", 800))
     md(r"""
 **T1 Map head.** Data: `dataset10` (LIBERO-Object demonstrations, every frame a sample); `dataset_spatial` added from E2.
 
