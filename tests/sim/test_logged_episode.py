@@ -40,5 +40,5 @@ def test_a_plan_is_described_by_its_event_and_contact(tmp_path):
     query = read_queries(write_log(tmp_path / "task2_ep0.npz"))[0]
     text, contact = describe_plan(query, np.zeros(3), "predicted")
     np.testing.assert_allclose(contact, [0.1, 0.0, 0.0])  # reach of 1 = 10 cm
-    assert "抓取" in text and "10.0 cm" in text and "新预测" in text
-    assert plan_source(query, "oracle").endswith("（ORACLE）")
+    assert "grasp" in text and "10.0 cm" in text and "newly predicted" in text
+    assert plan_source(query, "oracle").endswith("(ORACLE)")

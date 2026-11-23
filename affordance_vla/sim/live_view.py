@@ -99,7 +99,7 @@ class LiveView:
         """Keep the window on the final state (simulation paused) until the user closes it."""
         if self.viewer is None:
             return
-        print("（在 MuJoCo 窗口里查看最终状态；关闭窗口结束）", flush=True)
+        print("(final state shown in the MuJoCo window; close the window to finish)", flush=True)
         while self.viewer.is_running():
             self._draw_markers(markers)
             self.viewer.sync()

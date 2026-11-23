@@ -5,8 +5,8 @@
 #   2. LIBERO-PRO's perturbed task files (libero_*_{swap,task,object,lan}), which come from its Hugging Face
 #      dataset, from the server's copy;
 #   3. LIBERO's config.yaml, pointing at the checkout;
-#   4. image-free copies of evaluation logs (scripts/data/export_sim_logs.py, run on the server) and the
-#      contact offsets of the plan datasets.
+#   4. image-free copies of evaluation logs (scripts/data/export_sim_logs.py, run on the server), the
+#      contact offsets of the plan datasets, and the 3D interaction maps of L (runs/interaction_labels).
 # Usage, from the repository root:
 #   bash scripts/local/fetch_sim_data.sh                # RUNS="..." picks other evaluation runs
 #   VERIFY=1 bash scripts/local/fetch_sim_data.sh       # also compare every LIBERO-PRO file with the server's
@@ -18,8 +18,9 @@ SERVER="${SIM_SERVER:-estar}"
 W_REMOTE="${W_REMOTE:-/mnt/nas/xinyizheng/affordance_vla}"
 REPO_REMOTE="${REPO_REMOTE:-affordance-vla}"
 COMMIT="eafdb809426b13153aa1e4c42d6601844217dfec"  # LIBERO-PRO master on 2026-03-23, unchanged since
-RUNS="${RUNS:-released predicted_g1_hold_s10 oracle_plan_s10 spatial_released_seed7}"
+RUNS="${RUNS:-released predicted_g1_hold_s10 oracle_plan_s10 spatial_released_seed7 libero10_released libero10_released_task23}"
 DATASETS="dataset10 dataset_spatial"
+LABELS="object libero10"
 SSH=(ssh -o BatchMode=yes -o ConnectTimeout=25 -o ServerAliveInterval=15 "$SERVER")
 THIRD="$REPO/third_party"
 CHECKOUT="$THIRD/LIBERO-PRO"
@@ -61,6 +62,12 @@ for dataset in $DATASETS; do
   mkdir -p "$REPO/runs/plan_following/$dataset"
   "${SSH[@]}" "cd $W_REMOTE/runs/plan_following/$dataset && tar -cf - offsets.json \$(ls phrases.json 2> /dev/null)" \
     | tar -xf - -C "$REPO/runs/plan_following/$dataset"
+done
+
+for labels in $LABELS; do
+  mkdir -p "$REPO/runs/interaction_labels/$labels"
+  "${SSH[@]}" "cd $W_REMOTE/runs/interaction_labels/$labels && tar -cf - maps.npz summary.json" \
+    | tar -xf - -C "$REPO/runs/interaction_labels/$labels"
 done
 
 if [ "${VERIFY:-0}" = 1 ]; then

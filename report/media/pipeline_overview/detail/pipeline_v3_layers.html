@@ -1,4 +1,4 @@
-<title>Pipeline v3 逐层图解</title>
+<title>Pipeline v3, layer by layer</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap">
@@ -80,59 +80,59 @@ math { font-size: 1.05em; }
 
 <div class="wrap">
 <header>
-  <h1>Pipeline v3 逐层图解</h1>
-  <p class="sub">第五轮修订后的 v3，加上 E1 之后的决定（文档 <span class="mono">b51244e</span>）。数字逐个对照服务器上的代码和权重配置。2026-11-20。</p>
+  <h1>Pipeline v3, layer by layer</h1>
+  <p class="sub">v3 after round 5, plus the decisions taken after E1 (docs <span class="mono">b51244e</span>). Every number checked against the code and the checkpoint configs on the server. 2026-11-20.</p>
   <div class="legend">
-    <span><span class="chip c-done">已实现</span> 实线框</span>
-    <span><span class="chip c-plan">计划中</span> 紫色虚线框</span>
-    <span><span class="chip c-oracle">ORACLE</span> 数值来自仿真真值</span>
-    <span><span class="chip c-frozen">冻结</span> <span class="chip c-train">训练</span></span>
-    <span><span class="tbc">待核实</span> 没能从代码确认</span>
+    <span><span class="chip c-done">implemented</span> solid box</span>
+    <span><span class="chip c-plan">planned</span> purple dashed box</span>
+    <span><span class="chip c-oracle">ORACLE</span> value from simulator ground truth</span>
+    <span><span class="chip c-frozen">frozen</span> <span class="chip c-train">trained</span></span>
+    <span><span class="tbc">to verify</span> not confirmed from the code</span>
   </div>
-  <nav class="toc" aria-label="目录">
-    <a href="#overview">1 总览</a><a href="#test">2 测试时逐层</a><a href="#train">3 训练</a><a href="#gen">4 泛化和诊断</a><a href="#tbc">5 待核实</a>
+  <nav class="toc" aria-label="Contents">
+    <a href="#overview">1 Overview</a><a href="#test">2 Test time</a><a href="#train">3 Training</a><a href="#gen">4 Generalisation</a><a href="#tbc">5 To verify</a>
   </nav>
 </header>
 
 <section id="overview" aria-labelledby="h-overview">
-<h2 id="h-overview">1 · 总览：从两张图到 8 步动作</h2>
-<p>一次抓取拆成三件事：<b>抓哪个物体</b>（M1 语义门控）、<b>抓哪里、朝什么方向</b>（M2 交互 map）、<b>手怎么动</b>（动作头，只负责服从计划）。VLM 全程冻结；训练的只有 map 头和动作头上的少量参数。</p>
+<h2 id="h-overview">1 · Overview: from two images to an 8-step action</h2>
+<p>A grasp splits into three parts: <b>which object</b> (M1 semantic gate), <b>where and in which direction</b> (M2 interaction map), <b>how to move</b> (action head, which only obeys the plan). The VLM stays frozen; only the map head and a few action-head parameters are trained.</p>
 
 <figure>
 <div class="scroll wide">
-<svg viewBox="0 0 1180 600" role="img" aria-label="测试时的数据流：两张图经视觉编码器和 36 层语言模型；map 头读全部 36 层得到 8×8 格子，解码成 3D 接触点和 10 维计划；动作头 36 块逐层交叉注意语言模型，计划嵌入加到动作 token 上，输出 8 步动作给 OSC 控制器">
+<svg viewBox="0 0 1180 600" role="img" aria-label="Test-time data flow: two images pass the vision encoder and the 36-layer LLM; the map head reads all 36 layers to give 8×8 cells, decoded to a 3D contact and a 10-d plan; the 36 action-head blocks cross-attend the LLM layer by layer, the plan embedding is added to the action tokens, and an 8-step action goes to the OSC controller">
 <defs>
   <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
   <marker id="a1p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ahp" d="M0,0 L10,5 L0,10 z"/></marker>
 </defs>
 <!-- inputs -->
 <rect class="bx" x="16" y="64" width="124" height="58" rx="5"/>
-<text class="t-b" x="78" y="88" text-anchor="middle">智能体视角</text>
-<text class="t-m" x="78" y="108" text-anchor="middle">224×224，左右镜像</text>
+<text class="t-b" x="78" y="88" text-anchor="middle">agent view</text>
+<text class="t-m" x="78" y="108" text-anchor="middle">224×224, mirrored</text>
 <rect class="bx" x="16" y="146" width="124" height="58" rx="5"/>
-<text class="t-b" x="78" y="170" text-anchor="middle">腕部视角</text>
+<text class="t-b" x="78" y="170" text-anchor="middle">wrist view</text>
 <text class="t-m" x="78" y="190" text-anchor="middle">224×224</text>
 <line class="ln" x1="140" y1="93" x2="168" y2="93" marker-end="url(#a1)"/>
 <line class="ln" x1="140" y1="175" x2="168" y2="175" marker-end="url(#a1)"/>
 <rect class="bx-in" x="170" y="270" width="200" height="70" rx="5"/>
-<text class="t-b" x="270" y="293" text-anchor="middle">提示词 + 指令</text>
-<text class="t-mono" x="270" y="315" text-anchor="middle">Your task is {指令}. …</text>
+<text class="t-b" x="270" y="293" text-anchor="middle">prompt + instruction</text>
+<text class="t-mono" x="270" y="315" text-anchor="middle">Your task is {instr}. …</text>
 <line class="ln" x1="370" y1="305" x2="408" y2="305" marker-end="url(#a1)"/>
 <!-- ViT -->
 <rect class="bx" x="170" y="40" width="200" height="210" rx="6"/>
-<text class="t-b" x="270" y="62" text-anchor="middle">视觉编码器 ViT · 冻结</text>
-<text class="t" x="270" y="88" text-anchor="middle">放大到 256×256</text>
-<text class="t" x="270" y="108" text-anchor="middle">16 px 一块 → 16×16 块</text>
-<text class="t" x="270" y="128" text-anchor="middle">24 层 · 宽 1024 · 16 头</text>
-<text class="t" x="270" y="148" text-anchor="middle">2×2 合并 → 8×8 = 64 token</text>
-<text class="t" x="270" y="168" text-anchor="middle">每个 token 宽 2560</text>
-<text class="t-d" x="270" y="198" text-anchor="middle">第 5/11/17 层的特征</text>
-<text class="t-d" x="270" y="216" text-anchor="middle">另加到 LLM 第 1–3 层</text>
+<text class="t-b" x="270" y="62" text-anchor="middle">vision encoder (ViT) · frozen</text>
+<text class="t" x="270" y="88" text-anchor="middle">upsampled to 256×256</text>
+<text class="t" x="270" y="108" text-anchor="middle">16 px patches → 16×16</text>
+<text class="t" x="270" y="128" text-anchor="middle">24 layers · width 1024 · 16 heads</text>
+<text class="t" x="270" y="148" text-anchor="middle">2×2 merge → 8×8 = 64 tokens</text>
+<text class="t" x="270" y="168" text-anchor="middle">token width 2560</text>
+<text class="t-d" x="270" y="198" text-anchor="middle">ViT layers 5/11/17</text>
+<text class="t-d" x="270" y="216" text-anchor="middle">also added to LLM layers 1–3</text>
 <line class="ln" x1="370" y1="120" x2="408" y2="120" marker-end="url(#a1)"/>
 <!-- LLM -->
 <rect class="bx" x="410" y="30" width="170" height="550" rx="6"/>
-<text class="t-b" x="495" y="54" text-anchor="middle">语言模型 LLM</text>
-<text class="t-m" x="495" y="72" text-anchor="middle">Qwen3-VL-4B · 冻结</text>
+<text class="t-b" x="495" y="54" text-anchor="middle">language model (LLM)</text>
+<text class="t-m" x="495" y="72" text-anchor="middle">Qwen3-VL-4B · frozen</text>
 <g>
 <rect class="bar-hi" x="445" y="92" width="120" height="6"/><rect class="bar-hi" x="445" y="102.6" width="120" height="6"/><rect class="bar-hi" x="445" y="113.2" width="120" height="6"/>
 <rect class="bar" x="445" y="123.8" width="120" height="6"/><rect class="bar" x="445" y="134.4" width="120" height="6"/><rect class="bar" x="445" y="145" width="120" height="6"/><rect class="bar" x="445" y="155.6" width="120" height="6"/><rect class="bar" x="445" y="166.2" width="120" height="6"/><rect class="bar" x="445" y="176.8" width="120" height="6"/><rect class="bar" x="445" y="187.4" width="120" height="6"/><rect class="bar" x="445" y="198" width="120" height="6"/><rect class="bar" x="445" y="208.6" width="120" height="6"/><rect class="bar" x="445" y="219.2" width="120" height="6"/><rect class="bar" x="445" y="229.8" width="120" height="6"/><rect class="bar" x="445" y="240.4" width="120" height="6"/><rect class="bar" x="445" y="251" width="120" height="6"/><rect class="bar" x="445" y="261.6" width="120" height="6"/><rect class="bar" x="445" y="272.2" width="120" height="6"/><rect class="bar" x="445" y="282.8" width="120" height="6"/><rect class="bar" x="445" y="293.4" width="120" height="6"/><rect class="bar" x="445" y="304" width="120" height="6"/><rect class="bar" x="445" y="314.6" width="120" height="6"/><rect class="bar" x="445" y="325.2" width="120" height="6"/><rect class="bar" x="445" y="335.8" width="120" height="6"/><rect class="bar" x="445" y="346.4" width="120" height="6"/><rect class="bar" x="445" y="357" width="120" height="6"/><rect class="bar" x="445" y="367.6" width="120" height="6"/><rect class="bar" x="445" y="378.2" width="120" height="6"/><rect class="bar" x="445" y="388.8" width="120" height="6"/><rect class="bar" x="445" y="399.4" width="120" height="6"/><rect class="bar" x="445" y="410" width="120" height="6"/><rect class="bar" x="445" y="420.6" width="120" height="6"/><rect class="bar" x="445" y="431.2" width="120" height="6"/><rect class="bar" x="445" y="441.8" width="120" height="6"/><rect class="bar" x="445" y="452.4" width="120" height="6"/><rect class="bar" x="445" y="463" width="120" height="6"/>
@@ -141,126 +141,126 @@ math { font-size: 1.05em; }
 <line class="ln-d" x1="370" y1="208" x2="442" y2="110" marker-end="url(#a1)"/>
 <text class="t-m" x="438" y="279" text-anchor="end">18</text>
 <text class="t-m" x="438" y="470" text-anchor="end">36</text>
-<text class="t" x="495" y="494" text-anchor="middle">36 层 · 宽 2560</text>
-<text class="t" x="495" y="512" text-anchor="middle">32 查询头 / 8 KV 头</text>
-<text class="t" x="495" y="530" text-anchor="middle">FFN 9728 · 因果注意</text>
-<text class="t-m" x="495" y="550" text-anchor="middle">图像 token 在指令之前</text>
+<text class="t" x="495" y="494" text-anchor="middle">36 layers · width 2560</text>
+<text class="t" x="495" y="512" text-anchor="middle">32 query / 8 KV heads</text>
+<text class="t" x="495" y="530" text-anchor="middle">FFN 9728 · causal</text>
+<text class="t-m" x="495" y="550" text-anchor="middle">image tokens come first</text>
 <!-- map head -->
 <line class="ln" x1="580" y1="120" x2="618" y2="120" marker-end="url(#a1)"/>
 <rect class="bx-train" x="620" y="40" width="190" height="170" rx="6"/>
-<text class="t-b" x="715" y="62" text-anchor="middle">M2 交互 map 头</text>
-<text class="t-g" x="715" y="80" text-anchor="middle">已实现 8×8 版 g1 · 训练 7.9M</text>
-<text class="t" x="715" y="104" text-anchor="middle">读第 1–36 层，softmax 加权</text>
-<text class="t" x="715" y="122" text-anchor="middle">LN → 线性 2560→512</text>
-<text class="t" x="715" y="140" text-anchor="middle">+ 汇总 token</text>
-<text class="t" x="715" y="158" text-anchor="middle">2 层双向 Transformer</text>
-<text class="t" x="715" y="176" text-anchor="middle">每格：分数 · 偏移 · 深度</text>
-<text class="t" x="715" y="194" text-anchor="middle">全局：事件 · 接近方向</text>
+<text class="t-b" x="715" y="62" text-anchor="middle">M2 interaction map head</text>
+<text class="t-g" x="715" y="80" text-anchor="middle">g1 (8×8) · 7.9M trained</text>
+<text class="t" x="715" y="104" text-anchor="middle">softmax mix of layers 1–36</text>
+<text class="t" x="715" y="122" text-anchor="middle">LN → linear 2560→512</text>
+<text class="t" x="715" y="140" text-anchor="middle">+ summary token</text>
+<text class="t" x="715" y="158" text-anchor="middle">2-layer bidirectional encoder</text>
+<text class="t" x="715" y="176" text-anchor="middle">per cell: score · offset · depth</text>
+<text class="t" x="715" y="194" text-anchor="middle">global: event · approach</text>
 <rect class="bx-plan" x="620" y="222" width="190" height="56" rx="6"/>
-<text class="t-p" x="715" y="244" text-anchor="middle">计划中：所有物体都画分数</text>
-<text class="t-p" x="715" y="264" text-anchor="middle">+ 方向场 (cos2θ, sin2θ)</text>
+<text class="t-p" x="715" y="244" text-anchor="middle">planned: score every object</text>
+<text class="t-p" x="715" y="264" text-anchor="middle">+ direction field (cos2θ, sin2θ)</text>
 <!-- current path to decode -->
 <line class="ln" x1="810" y1="62" x2="998" y2="62" marker-end="url(#a1)"/>
-<text class="t-m" x="905" y="54" text-anchor="middle">现在：直接取最高分的格子</text>
+<text class="t-m" x="905" y="54" text-anchor="middle">now: top cell directly</text>
 <!-- gate -->
 <rect class="bx-plan" x="840" y="96" width="130" height="118" rx="6"/>
-<text class="t-b" x="905" y="118" text-anchor="middle">M1 语义门控</text>
-<text class="t-p" x="905" y="136" text-anchor="middle">计划中</text>
-<text class="t" x="905" y="158" text-anchor="middle">s = cos(指令, 格子)</text>
+<text class="t-b" x="905" y="118" text-anchor="middle">M1 semantic gate</text>
+<text class="t-p" x="905" y="136" text-anchor="middle">planned</text>
+<text class="t" x="905" y="158" text-anchor="middle">s = cos(instr., cell)</text>
 <text class="t" x="905" y="178" text-anchor="middle">w = softmax(α·s)</text>
-<text class="t" x="905" y="198" text-anchor="middle">目标 = w × 交互分数</text>
+<text class="t" x="905" y="198" text-anchor="middle">target = w × score</text>
 <line class="ln-p" x1="810" y1="150" x2="838" y2="150" marker-end="url(#a1p)"/>
 <line class="ln-p" x1="970" y1="140" x2="998" y2="140" marker-end="url(#a1p)"/>
 <!-- decode -->
 <rect class="bx" x="1000" y="40" width="165" height="124" rx="6"/>
-<text class="t-b" x="1082" y="62" text-anchor="middle">解码成 3D 接触点</text>
-<text class="t" x="1082" y="84" text-anchor="middle">格子 + 偏移 → 像素</text>
-<text class="t" x="1082" y="102" text-anchor="middle">深度 d = 1 m + 0.1 m·ẑ</text>
+<text class="t-b" x="1082" y="62" text-anchor="middle">decode to a 3D contact</text>
+<text class="t" x="1082" y="84" text-anchor="middle">cell + offset → pixel</text>
+<text class="t" x="1082" y="102" text-anchor="middle">depth d = 1 m + 0.1 m·ẑ</text>
 <text class="t" x="1082" y="120" text-anchor="middle">p = T·d·K⁻¹[u, v, 1]</text>
-<text class="t-m" x="1082" y="140" text-anchor="middle">K、T 是相机标定</text>
-<text class="t-p" x="1082" y="157" text-anchor="middle">计划中：+ 夹爪朝向</text>
+<text class="t-m" x="1082" y="140" text-anchor="middle">K, T: camera calibration</text>
+<text class="t-p" x="1082" y="157" text-anchor="middle">planned: + gripper pose</text>
 <line class="ln" x1="1082" y1="164" x2="1082" y2="188" marker-end="url(#a1)"/>
 <!-- plan -->
 <rect class="bx" x="1000" y="190" width="165" height="100" rx="6"/>
-<text class="t-b" x="1082" y="212" text-anchor="middle">计划向量（10 维）</text>
+<text class="t-b" x="1082" y="212" text-anchor="middle">plan vector (10-d)</text>
 <text class="t" x="1082" y="232" text-anchor="middle">r/10 cm · tanh(r/2 cm)</text>
-<text class="t" x="1082" y="250" text-anchor="middle">接近方向 3 · 事件 1</text>
-<text class="t-p" x="1082" y="272" text-anchor="middle">计划中：+6D 朝向 → 16</text>
+<text class="t" x="1082" y="250" text-anchor="middle">approach 3 · event 1</text>
+<text class="t-p" x="1082" y="272" text-anchor="middle">planned: +6D → 16-d</text>
 <rect class="bx-in" x="1000" y="300" width="165" height="44" rx="5"/>
-<text class="t" x="1082" y="318" text-anchor="middle">计划保持：一个阶段</text>
-<text class="t" x="1082" y="335" text-anchor="middle">只预测一次接触点</text>
+<text class="t" x="1082" y="318" text-anchor="middle">plan hold: one contact</text>
+<text class="t" x="1082" y="335" text-anchor="middle">predicted per phase</text>
 <line class="ln" x1="1082" y1="344" x2="1082" y2="368" marker-end="url(#a1)"/>
 <!-- plan encoder -->
 <rect class="bx-train" x="1000" y="370" width="165" height="72" rx="6"/>
-<text class="t-b" x="1082" y="392" text-anchor="middle">计划编码器 · 训练</text>
+<text class="t-b" x="1082" y="392" text-anchor="middle">plan encoder · trained</text>
 <text class="t" x="1082" y="411" text-anchor="middle">MLP 10→512→512→2560</text>
-<text class="t-m" x="1082" y="429" text-anchor="middle">最后一层零初始化</text>
+<text class="t-m" x="1082" y="429" text-anchor="middle">last layer zero-initialised</text>
 <line class="ln" x1="1000" y1="406" x2="932" y2="406" marker-end="url(#a1)"/>
 <!-- DiT -->
 <line class="ln" x1="580" y1="470" x2="618" y2="470" marker-end="url(#a1)"/>
 <rect class="bx" x="620" y="330" width="310" height="250" rx="6"/>
-<text class="t-b" x="775" y="352" text-anchor="middle">动作头 DiT（36 块，宽 2560）</text>
-<text class="t-m" x="775" y="370" text-anchor="middle">底座冻结 · LoRA、计划编码器、解码 MLP 训练</text>
+<text class="t-b" x="775" y="352" text-anchor="middle">action head DiT (36 blocks, width 2560)</text>
+<text class="t-m" x="775" y="370" text-anchor="middle">base frozen; LoRA, plan encoder, decoder trained</text>
 <rect class="bx-in" x="640" y="382" width="270" height="44" rx="4"/>
-<text class="t" x="775" y="400" text-anchor="middle">加噪动作 xₜ (8×7) → 动作编码 + 位置</text>
-<text class="t-d" x="775" y="418" text-anchor="middle">+ 计划嵌入（加到 8 个动作 token 上）</text>
+<text class="t" x="775" y="400" text-anchor="middle">noisy action xₜ (8×7) → encoding + position</text>
+<text class="t-d" x="775" y="418" text-anchor="middle">+ plan embedding on all 8 action tokens</text>
 <rect class="bx-in" x="640" y="436" width="270" height="64" rx="4"/>
-<text class="t" x="775" y="455" text-anchor="middle">第 i 块：AdaLN(t)</text>
-<text class="t" x="775" y="473" text-anchor="middle">→ 交叉注意 LLM 第 i 层（40 头 × 64）</text>
+<text class="t" x="775" y="455" text-anchor="middle">block i: AdaLN(t)</text>
+<text class="t" x="775" y="473" text-anchor="middle">→ cross-attend LLM layer i (40 heads × 64)</text>
 <text class="t" x="775" y="491" text-anchor="middle">→ FFN 2560→10240→2560</text>
-<text class="t-m" x="775" y="516" text-anchor="middle">× 36 块</text>
+<text class="t-m" x="775" y="516" text-anchor="middle">× 36 blocks</text>
 <rect class="bx-in" x="640" y="526" width="270" height="44" rx="4"/>
-<text class="t" x="775" y="544" text-anchor="middle">解码 MLP 2560→1024→7 = 速度 v̂</text>
-<text class="t" x="775" y="562" text-anchor="middle">4 步欧拉积分：x ← x + v̂/4</text>
+<text class="t" x="775" y="544" text-anchor="middle">decoder MLP 2560→1024→7 = velocity v̂</text>
+<text class="t" x="775" y="562" text-anchor="middle">4 Euler steps: x ← x + v̂/4</text>
 <!-- actions -->
 <line class="ln" x1="930" y1="546" x2="998" y2="546" marker-end="url(#a1)"/>
 <rect class="bx" x="1000" y="470" width="165" height="100" rx="6"/>
-<text class="t-b" x="1082" y="492" text-anchor="middle">8 步 × 7 维动作</text>
-<text class="t" x="1082" y="511" text-anchor="middle">Δ位置 3 · Δ旋转 3 · 夹爪 1</text>
-<text class="t" x="1082" y="535" text-anchor="middle">反归一化 → OSC 控制器</text>
-<text class="t-m" x="1082" y="553" text-anchor="middle">20 Hz；走完 8 步再查询</text>
+<text class="t-b" x="1082" y="492" text-anchor="middle">8 steps × 7-d action</text>
+<text class="t" x="1082" y="511" text-anchor="middle">Δpos 3 · Δrot 3 · gripper 1</text>
+<text class="t" x="1082" y="535" text-anchor="middle">de-normalise, then OSC</text>
+<text class="t-m" x="1082" y="553" text-anchor="middle">20 Hz; re-query after 8 steps</text>
 </svg>
 </div>
-<figcaption>图 1　测试时的完整路径。上半是"计划"这条支路（map 头 → 门控 → 解码 → 计划），下半是"动作"这条支路。两条支路读的是同一次 VLM 前向的隐状态。紫色虚线是第三、五轮加的、还没实现的部分。</figcaption>
+<figcaption>Figure 1. The whole test-time path. Top: the plan branch (map head → gate → decode → plan); bottom: the action branch. Both read the hidden states of the same VLM forward pass. Purple dashed: added in rounds 3 and 5, not implemented yet.</figcaption>
 </figure>
 </section>
 
 <section id="test" aria-labelledby="h-test">
-<h2 id="h-test">2 · 测试时逐层</h2>
+<h2 id="h-test">2 · Test time, layer by layer</h2>
 
-<h3>2.1 输入和视觉编码器 <span class="chip c-done">已实现</span> <span class="chip c-frozen">冻结</span></h3>
+<h3>2.1 Input and vision encoder <span class="chip c-done">implemented</span> <span class="chip c-frozen">frozen</span></h3>
 <div class="tablewrap"><table>
-<thead><tr><th>项目</th><th class="num">数值</th><th>说明和来源</th></tr></thead>
+<thead><tr><th>item</th><th class="num">value</th><th>notes and source</th></tr></thead>
 <tbody>
-<tr><td>输入</td><td class="num">2 × 224×224</td><td>智能体视角（左右镜像后给模型）和腕部视角；官方训练数据也是这两路（训练时裁 95% 再缩放到 224）</td></tr>
-<tr><td>预处理</td><td class="num">224 → 256</td><td>处理器的最少像素是 65536 = 256²，224² 不够，于是放大到 256×256（按 32 的倍数取整）</td></tr>
-<tr><td>切块</td><td class="num">16 px，16×16 块</td><td>一张静态图在时间维复制成 2 帧（temporal patch = 2）</td></tr>
-<tr><td>ViT</td><td class="num">24 层 · 宽 1024 · 16 头 · FFN 4096</td><td><code>Qwen3-VL-4B-Instruct/config.json</code></td></tr>
-<tr><td>合并</td><td class="num">2×2 → 8×8 = 64</td><td>每张图 64 个视觉 token，投到 LLM 宽度 2560。代码里有断言：两张图共 128 个图像 token。每个 token 对应 224 图上的 28×28 像素，这就是 map 头的一个格子</td></tr>
-<tr><td>DeepStack</td><td class="num">ViT 5/11/17 → LLM 1–3</td><td>ViT 第 5、11、17 层的特征各自合并后，加到 LLM 第 1、2、3 层输出中图像 token 的位置上（transformers 4.57 的实现）</td></tr>
+<tr><td>input</td><td class="num">2 × 224×224</td><td>agent view (mirrored before the model) and wrist view; the official training data has the same two views (training crops 95% and resizes to 224)</td></tr>
+<tr><td>preprocessing</td><td class="num">224 → 256</td><td>the processor needs at least 65536 = 256² pixels; 224² is too few, so each image is upsampled to 256×256 (rounded to multiples of 32)</td></tr>
+<tr><td>patches</td><td class="num">16 px, 16×16 patches</td><td>a still image is repeated as 2 frames in time (temporal patch = 2)</td></tr>
+<tr><td>ViT</td><td class="num">24 layers · width 1024 · 16 heads · FFN 4096</td><td><code>Qwen3-VL-4B-Instruct/config.json</code></td></tr>
+<tr><td>merge</td><td class="num">2×2 → 8×8 = 64</td><td>64 visual tokens per image, projected to the LLM width 2560; the code asserts 128 image tokens for the two images. Each token covers 28×28 pixels of the 224 image: one cell of the map head</td></tr>
+<tr><td>DeepStack</td><td class="num">ViT 5/11/17 → LLM 1–3</td><td>features of ViT layers 5, 11 and 17, each merged, are added at the image-token positions of the outputs of LLM layers 1, 2 and 3 (transformers 4.57)</td></tr>
 </tbody></table></div>
 
-<h3>2.2 语言模型 <span class="chip c-done">已实现</span> <span class="chip c-frozen">冻结</span></h3>
+<h3>2.2 Language model <span class="chip c-done">implemented</span> <span class="chip c-frozen">frozen</span></h3>
 <div class="tablewrap"><table>
-<thead><tr><th>项目</th><th class="num">数值</th><th>说明</th></tr></thead>
+<thead><tr><th>item</th><th class="num">value</th><th>notes</th></tr></thead>
 <tbody>
-<tr><td>层数、宽度</td><td class="num">36 层 · 2560</td><td>FFN 9728；32 个查询头、8 个 KV 头（分组注意），每头 128 维</td></tr>
-<tr><td>位置编码</td><td class="num">MRoPE [24, 20, 20]</td><td>时间、高、宽三段交错</td></tr>
-<tr><td>提示词</td><td class="mono">Your task is {指令}. To identify the key objects for your task. Locate their bounding boxes in [x1,y1,x2,y2] format.</td><td>官方训练时的 CoT 提示词，推理时也这样拼</td></tr>
-<tr><td>注意方向</td><td class="num">因果</td><td>图像 token 在指令前面，所以图像 token 自己看不到指令。map 头里的双向 Transformer 就是为了让格子能读到指令</td></tr>
-<tr><td>输出</td><td class="num">37 份隐状态，用后 36 份</td><td>记作 <span class="m">h^{(1)},\dots,h^{(36)}</span>，即第 1–36 层的输出（不含词嵌入层）</td></tr>
+<tr><td>layers, width</td><td class="num">36 layers · 2560</td><td>FFN 9728; 32 query heads, 8 KV heads (grouped attention), 128-d per head</td></tr>
+<tr><td>position encoding</td><td class="num">MRoPE [24, 20, 20]</td><td>time, height and width interleaved</td></tr>
+<tr><td>prompt</td><td class="mono">Your task is {instruction}. To identify the key objects for your task. Locate their bounding boxes in [x1,y1,x2,y2] format.</td><td>the official CoT prompt of training, also used at inference</td></tr>
+<tr><td>attention</td><td class="num">causal</td><td>image tokens come before the instruction, so they cannot see it; the bidirectional Transformer in the map head lets the cells read the instruction</td></tr>
+<tr><td>output</td><td class="num">37 hidden states, the last 36 used</td><td>written <span class="m">h^{(1)},\dots,h^{(36)}</span>, the outputs of layers 1–36 (without the embedding layer)</td></tr>
 </tbody></table></div>
 
 <figure>
 <div class="scroll mid">
-<svg viewBox="0 0 820 360" role="img" aria-label="逐层对应：动作头第 i 块只交叉注意 LLM 第 i 层；map 头把 36 层按学到的权重加起来；计划嵌入加在动作 token 上，从第 1 块往下走">
+<svg viewBox="0 0 820 360" role="img" aria-label="Layer by layer: action-head block i cross-attends only LLM layer i; the map head sums the 36 layers with learned weights; the plan embedding is added to the action tokens and flows down from block 1">
 <defs>
   <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
   <marker id="a2d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ahd" d="M0,0 L10,5 L0,10 z"/></marker>
 </defs>
-<text class="t-b" x="335" y="30" text-anchor="middle">LLM 隐状态</text>
-<text class="t-b" x="615" y="30" text-anchor="middle">动作头 DiT 块</text>
-<text class="t-b" x="115" y="30" text-anchor="middle">M2 map 头</text>
+<text class="t-b" x="335" y="30" text-anchor="middle">LLM hidden states</text>
+<text class="t-b" x="615" y="30" text-anchor="middle">action head DiT blocks</text>
+<text class="t-b" x="115" y="30" text-anchor="middle">M2 map head</text>
 <!-- LLM rows -->
 <rect class="bx" x="265" y="60" width="140" height="30" rx="4"/><text class="t" x="335" y="80" text-anchor="middle">h⁽¹⁾ (+DeepStack)</text>
 <rect class="bx" x="265" y="105" width="140" height="30" rx="4"/><text class="t" x="335" y="125" text-anchor="middle">h⁽²⁾ (+DeepStack)</text>
@@ -268,95 +268,95 @@ math { font-size: 1.05em; }
 <text class="t-b" x="335" y="205" text-anchor="middle">⋮</text>
 <rect class="bx" x="265" y="220" width="140" height="30" rx="4"/><text class="t" x="335" y="240" text-anchor="middle">h⁽³⁶⁾</text>
 <!-- DiT rows -->
-<rect class="bx" x="545" y="60" width="140" height="30" rx="4"/><text class="t" x="615" y="80" text-anchor="middle">块 1</text>
-<rect class="bx" x="545" y="105" width="140" height="30" rx="4"/><text class="t" x="615" y="125" text-anchor="middle">块 2</text>
-<rect class="bx" x="545" y="150" width="140" height="30" rx="4"/><text class="t" x="615" y="170" text-anchor="middle">块 3</text>
+<rect class="bx" x="545" y="60" width="140" height="30" rx="4"/><text class="t" x="615" y="80" text-anchor="middle">block 1</text>
+<rect class="bx" x="545" y="105" width="140" height="30" rx="4"/><text class="t" x="615" y="125" text-anchor="middle">block 2</text>
+<rect class="bx" x="545" y="150" width="140" height="30" rx="4"/><text class="t" x="615" y="170" text-anchor="middle">block 3</text>
 <text class="t-b" x="615" y="205" text-anchor="middle">⋮</text>
-<rect class="bx" x="545" y="220" width="140" height="30" rx="4"/><text class="t" x="615" y="240" text-anchor="middle">块 36</text>
+<rect class="bx" x="545" y="220" width="140" height="30" rx="4"/><text class="t" x="615" y="240" text-anchor="middle">block 36</text>
 <!-- pairing arrows -->
 <line class="ln" x1="405" y1="75" x2="543" y2="75" marker-end="url(#a2)"/>
 <line class="ln" x1="405" y1="120" x2="543" y2="120" marker-end="url(#a2)"/>
 <line class="ln" x1="405" y1="165" x2="543" y2="165" marker-end="url(#a2)"/>
 <line class="ln" x1="405" y1="235" x2="543" y2="235" marker-end="url(#a2)"/>
-<text class="t-m" x="474" y="68" text-anchor="middle">作 K、V</text>
+<text class="t-m" x="474" y="68" text-anchor="middle">as K, V</text>
 <!-- action tokens down -->
-<text class="t-d" x="760" y="52" text-anchor="middle">动作 token ×8</text>
-<text class="t-d" x="760" y="68" text-anchor="middle">+ 计划嵌入</text>
+<text class="t-d" x="760" y="52" text-anchor="middle">action tokens ×8</text>
+<text class="t-d" x="760" y="68" text-anchor="middle">+ plan embedding</text>
 <path class="ln-d" d="M760 74 L760 88 L687 88" marker-end="url(#a2d)"/>
 <line class="ln-d" x1="615" y1="90" x2="615" y2="103" marker-end="url(#a2d)"/>
 <line class="ln-d" x1="615" y1="135" x2="615" y2="148" marker-end="url(#a2d)"/>
 <line class="ln-d" x1="615" y1="180" x2="615" y2="191" />
 <line class="ln-d" x1="615" y1="208" x2="615" y2="218" marker-end="url(#a2d)"/>
 <line class="ln-d" x1="615" y1="250" x2="615" y2="282" marker-end="url(#a2d)"/>
-<text class="t" x="615" y="300" text-anchor="middle">解码 MLP → 速度 v̂ (8×7)</text>
+<text class="t" x="615" y="300" text-anchor="middle">decoder MLP → velocity v̂ (8×7)</text>
 <!-- map head gathers -->
 <rect class="bx-train" x="30" y="60" width="170" height="190" rx="6"/>
 <text class="t" x="115" y="95" text-anchor="middle">H = Σ softmax(m)ₗ h⁽ˡ⁾</text>
-<text class="t-m" x="115" y="117" text-anchor="middle">m ∈ ℝ³⁶ 从 0 开始学</text>
-<text class="t-m" x="115" y="139" text-anchor="middle">（开始时就是 36 层平均）</text>
-<text class="t" x="115" y="175" text-anchor="middle">→ 2 层双向 Transformer</text>
-<text class="t" x="115" y="197" text-anchor="middle">→ 64 个格子的输出</text>
+<text class="t-m" x="115" y="117" text-anchor="middle">m ∈ ℝ³⁶, learned from 0</text>
+<text class="t-m" x="115" y="139" text-anchor="middle">(starts as the mean)</text>
+<text class="t" x="115" y="175" text-anchor="middle">→ 2-layer Transformer</text>
+<text class="t" x="115" y="197" text-anchor="middle">→ 64 cell outputs</text>
 <line class="ln" x1="265" y1="75" x2="202" y2="100" marker-end="url(#a2)"/>
 <line class="ln" x1="265" y1="120" x2="202" y2="125" marker-end="url(#a2)"/>
 <line class="ln" x1="265" y1="165" x2="202" y2="150" marker-end="url(#a2)"/>
 <line class="ln" x1="265" y1="235" x2="202" y2="200" marker-end="url(#a2)"/>
-<text class="t-m" x="410" y="330" text-anchor="middle">每块：AdaLN(时间 t) → 交叉注意 → LN → FFN，都带残差。官方这份权重的 DiT 块之间没有动作 token 互相看的自注意力。</text>
+<text class="t-m" x="410" y="330" text-anchor="middle">Each block: AdaLN(t) → cross-attention → LN → FFN, residual. No self-attention between action tokens.</text>
 </svg>
 </div>
-<figcaption>图 2　两个头怎么读 VLM。动作头第 i 块只读 LLM 第 i 层（逐层交叉注意）；map 头把 36 层按学到的权重加在一起。动作 token 之间不互相注意，所以计划不能作为额外 token 放进去，只能加到每个动作 token 上。</figcaption>
+<figcaption>Figure 2. How the two heads read the VLM. Action-head block i reads only LLM layer i (layer-wise cross-attention); the map head sums the 36 layers with learned weights. Action tokens do not attend to each other, so the plan cannot enter as an extra token and is added to every action token instead.</figcaption>
 </figure>
 
-<h3>2.3 M2 交互 map 头 <span class="chip c-done">已实现（8×8 版 g1）</span> <span class="chip c-train">训练</span></h3>
-<p>代码：<code>affordance_vla/heads/plan_grid.py</code>。参数 7.89M；g1 训练 2500 步，学习率 3e-4，宽度 512。</p>
+<h3>2.3 M2 interaction map head <span class="chip c-done">implemented (8×8 g1)</span> <span class="chip c-train">trained</span></h3>
+<p>Code: <code>affordance_vla/heads/plan_grid.py</code>. 7.89M parameters; g1 trained for 2500 steps, learning rate 3e-4, width 512.</p>
 <div class="eq">H=\sum_{\ell=1}^{36}\operatorname{softmax}(m)_\ell\,h^{(\ell)},\qquad X=W_{2560\to512}\,\mathrm{LN}(H)</div>
-<div class="eq">Z=\mathrm{Enc}_{2\times}\big([\,q;\,X\,]\big)\quad(\text{512 维，8 头，FFN 2048，pre-norm，双向，无 dropout})</div>
+<div class="eq">Z=\mathrm{Enc}_{2\times}\big([\,q;\,X\,]\big)\quad(\text{512-d, 8 heads, FFN 2048, pre-norm, bidirectional, no dropout})</div>
 <div class="eq">\big[\ell_c,\ \tilde o_c,\ \hat z_c\big]=W_{512\to4}\,Z_{\text{cell}(c)},\qquad o_c=\sigma(\tilde o_c)\in[0,1]^2,\quad c=1,\dots,64</div>
 <div class="eq">\big[\text{event}\in\mathbb R^{3},\ \tilde a\big]=\mathrm{MLP}_{512\to512\to6}(\mathrm{LN}(Z_q)),\qquad a=\tilde a/\lVert\tilde a\rVert</div>
 <ul>
-<li><span class="m">q</span> 是一个学到的汇总 token，放在序列最前面；<span class="m">Z_{\text{cell}(c)}</span> 是智能体视角第 <span class="m">c</span> 个图像 token 在序列里的位置（按行排）。腕部视角的 token 也在序列里，但不出格子。</li>
-<li>事件分三类：没有、抓、放。深度 <span class="m">\hat z_c</span> 的单位是 10 cm，以 1 m 为零点。</li>
+<li><span class="m">q</span> is a learned summary token at the start of the sequence; <span class="m">Z_{\text{cell}(c)}</span> is the output at agent-view image token <span class="m">c</span> (row by row). Wrist-view tokens are in the sequence but output no cells.</li>
+<li>Three event classes: none, grasp, release. Depth <span class="m">\hat z_c</span> is in units of 10 cm, zero at 1 m.</li>
 </ul>
 <div class="block plan">
-<p><span class="chip c-plan">计划中（E2、E4）</span> 同一个头扩展成 v3 的交互 map：</p>
+<p><span class="chip c-plan">planned (E2, E4)</span> the same head extended to the v3 interaction map:</p>
 <ul>
-<li>交互分数 <span class="m">I_c=\sigma(\ell_c)</span> 对画面里<b>所有物体</b>都画，不只是点名的那个。</li>
-<li>每格加方向场 <span class="m">(\cos2\theta_c,\ \sin2\theta_c)</span>：夹爪闭合方向在图上的角度，转 180° 算同一种抓法。读出时 <span class="m">\theta_c=\tfrac12\operatorname{atan2}(\sin2\theta_c,\cos2\theta_c)</span>。</li>
-<li>更细的特征：先用 ViT 合并之前的 16×16 块（不加新模型），不够再加 DINOv2。</li>
+<li>interaction score <span class="m">I_c=\sigma(\ell_c)</span> drawn for <b>every object</b> in view, not only the named one.</li>
+<li>a direction field per cell <span class="m">(\cos2\theta_c,\ \sin2\theta_c)</span>: the image angle of the gripper closing axis, 180°-symmetric; read out as <span class="m">\theta_c=\tfrac12\operatorname{atan2}(\sin2\theta_c,\cos2\theta_c)</span>. </li>
+<li>finer features: first the ViT patches before merging (16×16, no new model), then DINOv2 if needed.</li>
 </ul>
 </div>
 
-<h3>2.4 M1 语义门控 <span class="chip c-plan">计划中（E2）</span></h3>
-<div class="eq plan">s_c=\cos\!\big(\mathrm{pool}_{k\in\text{指令}}\,h^{(\ell)}_k,\ h^{(\ell)}_{\text{cell}(c)}\big),\qquad \mathrm{pool}\in\{\text{平均},\ \text{最大}\}</div>
+<h3>2.4 M1 semantic gate <span class="chip c-plan">planned (E2)</span></h3>
+<div class="eq plan">s_c=\cos\!\big(\mathrm{pool}_{k\in\text{instr}}\,h^{(\ell)}_k,\ h^{(\ell)}_{\text{cell}(c)}\big),\qquad \mathrm{pool}\in\{\text{mean},\ \text{max}\}</div>
 <div class="eq plan">w_c=\frac{e^{\alpha s_c}}{\sum_{c'}e^{\alpha s_{c'}}},\qquad T_c=w_c\cdot I_c,\qquad \alpha_{\text{init}}=0</div>
-<p>α 从 0 开始，所以刚开始 <span class="m">w</span> 是均匀的，等于没有语义。目标损失只更新门控，"抓哪个"和"抓哪里"分开学。</p>
+<p>α starts at 0, so <span class="m">w</span> is uniform at first: no semantics. The target loss updates only the gate, so "which object" and "where" are learned separately.</p>
 <div class="block">
-<p><b>E1 的结果（冻结 VLM，不训练，74 个首帧：Object 40，Spatial 34）：</b>相似度图的峰值很少落在点名物体上，随机水平约 5%（点名物体平均只占 3.3 格）。</p>
+<p><b>E1 result (frozen VLM, no training, 74 first frames: Object 40, Spatial 34): </b>the similarity maps rarely peak on the named object; chance is about 5% (the named object covers 3.3 cells on average).</p>
 <div class="tablewrap"><table>
-<thead><tr><th>相似度图</th><th class="num">最好的层</th><th class="num">峰值落在点名物体上</th></tr></thead>
+<thead><tr><th>similarity map</th><th class="num">best layer</th><th class="num">peak on the named object</th></tr></thead>
 <tbody>
-<tr><td>指令全部 token，取平均</td><td class="num">35</td><td class="num">9.5%</td></tr>
-<tr><td>指令全部 token，取最大</td><td class="num">35</td><td class="num">6.8%</td></tr>
-<tr><td>物体名的 token，取平均</td><td class="num">31</td><td class="num">4.3%</td></tr>
-<tr><td>物体名的 token，取最大</td><td class="num">0</td><td class="num">6.5%</td></tr>
+<tr><td>all instruction tokens, mean</td><td class="num">35</td><td class="num">9.5%</td></tr>
+<tr><td>all instruction tokens, max</td><td class="num">35</td><td class="num">6.8%</td></tr>
+<tr><td>object-name tokens, mean</td><td class="num">31</td><td class="num">4.3%</td></tr>
+<tr><td>object-name tokens, max</td><td class="num">0</td><td class="num">6.5%</td></tr>
 </tbody></table></div>
-<p>逐物体看（每个物体区域里的平均相似度，最高的是不是点名物体；这更接近门控的用法，因为交互分数只在物体上）：</p>
-<div class="eq">\bar s_k=\frac{\sum_c \mathrm{cov}_{k,c}\,s_c}{\sum_c \mathrm{cov}_{k,c}},\qquad \text{命中}=\big[\arg\max_k \bar s_k=\text{点名物体}\big]</div>
+<p>Per object (mean similarity over each object's region: is the named object highest? This is closer to how the gate is used, since the interaction score lives on objects only):</p>
+<div class="eq">\bar s_k=\frac{\sum_c \mathrm{cov}_{k,c}\,s_c}{\sum_c \mathrm{cov}_{k,c}},\qquad \text{hit}=\big[\arg\max_k \bar s_k=\text{named object}\big]</div>
 <div class="tablewrap"><table>
-<thead><tr><th>首帧</th><th class="num">随机水平</th><th class="num">整句指令</th><th class="num">只用物体名</th></tr></thead>
+<thead><tr><th>first frames</th><th class="num">chance</th><th class="num">whole instruction</th><th class="num">object name only</th></tr></thead>
 <tbody>
-<tr><td>LIBERO-Object（40 帧）</td><td class="num">0.14</td><td class="num">0.15–0.20</td><td class="num">0.23–0.30</td></tr>
-<tr><td>LIBERO-Spatial（34 帧）</td><td class="num">0.20</td><td class="num">0.35–0.41</td><td class="num">0.50–0.62</td></tr>
+<tr><td>LIBERO-Object (40 frames)</td><td class="num">0.14</td><td class="num">0.15–0.20</td><td class="num">0.23–0.30</td></tr>
+<tr><td>LIBERO-Spatial (34 frames)</td><td class="num">0.20</td><td class="num">0.35–0.41</td><td class="num">0.50–0.62</td></tr>
 </tbody></table></div>
-<p class="note">Spatial 的目标是两只一样的碗之一：相似度能找到"碗"，分不清是哪一只（随便挑一只就有一半）。层和合并方式之间的差别在一两个标准差以内。同样的首帧上，训练过的 g1 在 Object 上只认错 3/40（任务扰动 20/20 都在 2 cm 内；位置扰动 6/20 偏了超过 2 cm），在没训练过的 Spatial 上只有 3/34 落在点名的碗上。</p>
-<p><b>决定（11-20）：</b>按 v3 M1 的预案，E2 的门控加一个小的可学习投影，先用指令 token 求平均、最后一层：</p>
-<div class="eq plan">s_c=\cos\!\big(P_t\,\mathrm{mean}_{k\in\text{指令}}h^{(36)}_k,\ P_x\,h^{(36)}_{\text{cell}(c)}\big)\qquad(P_t,P_x\text{ 的大小待定})</div>
-<p>E2 的离线评测加上 LIBERO-PRO Spatial 的首帧（项目负责人同意）：Object 上 g1 很少认错物体，门控的作用要在两只一样的碗上才看得出来。为此 map 头的训练数据提前加入 <code>dataset_spatial</code>，对照是同样数据、不加门控的 g1。</p>
+<p class="note">In Spatial the target is one of two identical bowls: similarity finds "a bowl" but not which one (either bowl gives half). Differences between layers and merges are within one or two standard deviations. On the same frames the trained g1 picks the wrong object in only 3/40 Object frames (task perturbation 20/20 within 2 cm; position perturbation 6/20 off by more than 2 cm) and lands on the named bowl in only 3/34 Spatial frames, a suite it was not trained on.</p>
+<p><b>Decision (11-20): </b>as planned for M1 in v3, the E2 gate gets a small learned projection, starting with the mean of the instruction tokens at the last layer:</p>
+<div class="eq plan">s_c=\cos\!\big(P_t\,\mathrm{mean}_{k\in\text{instr}}h^{(36)}_k,\ P_x\,h^{(36)}_{\text{cell}(c)}\big)\qquad(\text{size of }P_t,P_x\text{ open})</div>
+<p>E2's offline check adds LIBERO-PRO Spatial first frames (agreed by the project lead): on Object g1 rarely picks the wrong object, so the gate can only show its effect on the two identical bowls. The map head therefore trains with <code>dataset_spatial</code> from E2 on; the control is g1 on the same data without the gate.</p>
 </div>
 
-<h3>2.5 解码成 3D 接触点 <span class="chip c-done">已实现</span></h3>
+<h3>2.5 Decoding to a 3D contact <span class="chip c-done">implemented</span></h3>
 <figure>
 <div class="scroll mid">
-<svg viewBox="0 0 820 270" role="img" aria-label="解码：最高分格子加格内偏移得到像素，左右镜像回日志图像，沿相机射线走深度 d 得到 3D 接触点">
+<svg viewBox="0 0 820 270" role="img" aria-label="Decoding: the top cell plus its in-cell offset gives a pixel, mirrored back to the log image; walking depth d along the camera ray gives the 3D contact">
 <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
 <g>
 <rect class="cell" x="30" y="40" width="192" height="192"/>
@@ -364,100 +364,100 @@ math { font-size: 1.05em; }
 <rect class="cell-hi" x="150" y="112" width="24" height="24"/>
 <circle class="dot" cx="164.4" cy="119.2" r="3.5"/>
 </g>
-<text class="t-m" x="126" y="30" text-anchor="middle">8×8 格子（每格 28 px）</text>
-<text class="t" x="126" y="254" text-anchor="middle">c* = 第 3 行第 5 列，偏移 (0.6, 0.3)</text>
+<text class="t-m" x="126" y="30" text-anchor="middle">8×8 cells (28 px each)</text>
+<text class="t" x="126" y="254" text-anchor="middle">c* = row 3, column 5, offset (0.6, 0.3)</text>
 <line class="ln" x1="232" y1="136" x2="330" y2="136" marker-end="url(#a3)"/>
 <text class="t" x="281" y="122" text-anchor="middle">u, v</text>
 <rect class="bx-in" x="334" y="96" width="150" height="80" rx="5"/>
-<text class="t-b" x="409" y="118" text-anchor="middle">镜像回日志图</text>
+<text class="t-b" x="409" y="118" text-anchor="middle">mirror to log image</text>
 <text class="t-mono" x="409" y="140" text-anchor="middle">u′ = 255 − u·256/224</text>
 <text class="t-mono" x="409" y="160" text-anchor="middle">v′ = v·256/224</text>
 <line class="ln" x1="484" y1="136" x2="540" y2="136" marker-end="url(#a3)"/>
 <!-- camera -->
 <path class="bx" d="M560 120 L590 136 L560 152 Z"/>
-<text class="t" x="566" y="176" text-anchor="middle">相机</text>
+<text class="t" x="566" y="176" text-anchor="middle">camera</text>
 <line class="ln-dash" x1="590" y1="136" x2="800" y2="136"/>
-<text class="t-m" x="790" y="152" text-anchor="end">光轴</text>
+<text class="t-m" x="790" y="152" text-anchor="end">optical axis</text>
 <line class="ln-d" x1="590" y1="136" x2="760" y2="58"/>
 <circle class="dot" cx="760" cy="58" r="5"/>
 <text class="t-b" x="770" y="52">p</text>
 <line class="ln-dash" x1="760" y1="58" x2="760" y2="136"/>
-<text class="t" x="680" y="84" text-anchor="middle" transform="rotate(-24 680 84)">射线 K⁻¹[u′, v′, 1]</text>
-<text class="t" x="675" y="128" text-anchor="middle">深度 d（沿光轴）</text>
+<text class="t" x="680" y="84" text-anchor="middle" transform="rotate(-24 680 84)">ray K⁻¹[u′, v′, 1]</text>
+<text class="t" x="705" y="128" text-anchor="middle">depth d (axial)</text>
 </svg>
 </div>
-<figcaption>图 3　从格子到 3D 点。深度是沿光轴的距离，不是沿射线的长度，所以直接乘 <span class="m">K^{-1}[u',v',1]^\top</span>。</figcaption>
+<figcaption>Figure 3. From a cell to a 3D point. The depth is the distance along the optical axis, not along the ray, so it multiplies <span class="m">K^{-1}[u',v',1]^\top</span>. </figcaption>
 </figure>
-<div class="eq">c^*=\arg\max_c \ell_c\quad(\text{计划中：}\arg\max_c T_c),\qquad u=(\mathrm{col}(c^*)+o_x)\cdot28,\quad v=(\mathrm{row}(c^*)+o_y)\cdot28</div>
+<div class="eq">c^*=\arg\max_c \ell_c\quad(\text{planned: }\arg\max_c T_c),\qquad u=(\mathrm{col}(c^*)+o_x)\cdot28,\quad v=(\mathrm{row}(c^*)+o_y)\cdot28</div>
 <div class="eq">d=\operatorname{clip}\big(1\,\mathrm m+0.1\,\mathrm m\cdot\hat z_{c^*},\ 0.2,\ 3\big),\qquad p_{\text{world}}=T_{\text{cam}\to\text{world}}\big(d\,K^{-1}[u',v',1]^\top\big)</div>
-<p><span class="m">K</span> 和 <span class="m">T</span> 是这台固定相机的标定，从仿真日志读。它不是物体的真值，测试时可以用。</p>
-<div class="block plan"><p><span class="chip c-plan">计划中</span> 夹爪朝向 = 接近方向 <span class="m">a</span> + 峰值格子上的闭合方向 <span class="m">\theta_{c^*}</span>。物体朝向放在第二阶段：把这类物体的 3D 标准 map 放到预测的位置，绕竖直轴每 10° 转一档，投到画面上和预测的 map 比较，取最吻合的角度：</p>
+<p><span class="m">K</span> and <span class="m">T</span> are the calibration of this fixed camera, read from the simulator log; they are not object ground truth and may be used at test time.</p>
+<div class="block plan"><p><span class="chip c-plan">planned</span> gripper orientation = approach direction <span class="m">a</span> + the closing direction at the peak cell <span class="m">\theta_{c^*}</span>. Object orientation comes in phase two: place the category's 3D canonical map at the predicted position, rotate it about the vertical axis in 10° steps, project it and compare with the predicted map; take the best angle:</p>
 <div class="eq plan">\psi^*=\arg\max_{\psi\in\{0^\circ,10^\circ,\dots,350^\circ\}}\ \mathrm{overlap}\big(\Pi(R_z(\psi)\,\mathcal M),\ \hat I\big)+\lambda\,\mathrm{agree}\big(\Pi(R_z(\psi)\,\mathcal M),\ \hat\theta\big)</div>
-<p class="note">λ 和两项的具体定义还没定。</p></div>
+<p class="note">λ and the exact definition of both terms are still open.</p></div>
 
-<h3>2.6 计划向量和计划保持 <span class="chip c-done">已实现</span></h3>
-<p>代码：<code>affordance_vla/plan/plan_input.py</code>、<code>plan/plan_hold.py</code>。<span class="m">r</span> 是接触点减去夹爪当前位置。</p>
-<div class="eq">f=\Big[\ \tfrac{r}{0.10\,\mathrm m},\ \ \tanh\!\big(\tfrac{r}{0.02\,\mathrm m}\big),\ \ a,\ \ e\ \Big]\in\mathbb R^{10},\qquad e=\begin{cases}+1&amp;\text{抓}\\-1&amp;\text{放}\end{cases},\quad\text{没有事件时 }f=0</div>
+<h3>2.6 Plan vector and plan hold <span class="chip c-done">implemented</span></h3>
+<p>Code: <code>affordance_vla/plan/plan_input.py</code>, <code>plan/plan_hold.py</code>. <span class="m">r</span> is the contact minus the current gripper position.</p>
+<div class="eq">f=\Big[\ \tfrac{r}{0.10\,\mathrm m},\ \ \tanh\!\big(\tfrac{r}{0.02\,\mathrm m}\big),\ \ a,\ \ e\ \Big]\in\mathbb R^{10},\qquad e=\begin{cases}+1&amp;\text{grasp}\\-1&amp;\text{release}\end{cases},\quad\text{no event: }f=0</div>
 <div class="tablewrap"><table>
-<thead><tr><th class="num">维</th><th>内容</th><th>作用</th></tr></thead>
+<thead><tr><th class="num">dims</th><th>content</th><th>role</th></tr></thead>
 <tbody>
-<tr><td class="num">0–2</td><td>r / 10 cm</td><td>粗：远处也不饱和</td></tr>
-<tr><td class="num">3–5</td><td>tanh(r / 2 cm)</td><td>细：最后几厘米分得清，远处饱和</td></tr>
-<tr><td class="num">6–8</td><td>接近方向 a（单位向量）</td><td>从哪个方向过来</td></tr>
-<tr><td class="num">9</td><td>事件 e</td><td>+1 抓，−1 放</td></tr>
-<tr><td class="num" style="color:var(--plan)">10–15</td><td style="color:var(--plan)">目标朝向（相对当前夹爪，6D 表示）</td><td style="color:var(--plan)">计划中，E3 决定要不要</td></tr>
+<tr><td class="num">0–2</td><td>r / 10 cm</td><td>coarse: not saturated far away</td></tr>
+<tr><td class="num">3–5</td><td>tanh(r / 2 cm)</td><td>fine: resolves the last centimetres, saturates far away</td></tr>
+<tr><td class="num">6–8</td><td>approach direction a (unit vector)</td><td>where the gripper comes from</td></tr>
+<tr><td class="num">9</td><td>event e</td><td>+1 grasp, −1 release</td></tr>
+<tr><td class="num" style="color:var(--plan)">10–15</td><td style="color:var(--plan)">target orientation (relative to the current gripper, 6D)</td><td style="color:var(--plan)">planned; E3 decides</td></tr>
 </tbody></table></div>
 <ul>
-<li><b>计划保持：</b>接触点在世界坐标里，到事件发生前不会动，所以一个阶段只预测一次。每次查询只重新算 <span class="m">r</span>。夹爪命令连续 5 步符合事件（抓后"合"、放后"开"）就算事件完成，下一次查询再预测新计划。</li>
-<li><b>查询频率：</b>动作头一次出 8 步，全部执行完再查询。</li>
-<li><span class="chip c-oracle">ORACLE</span> 对照组"真值计划"：接触点 = 物体在仿真里的位置 + 示范里这个物体的平均抓取偏移。只用来测上限。</li>
+<li><b>Plan hold: </b>the contact is in world coordinates and stays fixed until the event, so it is predicted once per phase. Each query only recomputes <span class="m">r</span>. The event is complete after 5 consecutive matching gripper commands ("close" for a grasp, "open" for a release); the next query predicts a new plan.</li>
+<li><b>Query rate: </b>the action head returns 8 steps, all executed before the next query.</li>
+<li><span class="chip c-oracle">ORACLE</span> control "oracle plan": contact = simulator object position + the mean grasp offset of that object's demonstrations. Used only as an upper bound.</li>
 </ul>
 
-<h3>2.7 动作头 <span class="chip c-done">已实现</span></h3>
-<p>代码：starVLA 的 <code>LayerwiseFM_ActionHeader.py</code>、<code>cross_attention_dit.py</code>，我们加的部分在 <code>affordance_vla/heads/plan_policy.py</code>。</p>
+<h3>2.7 Action head <span class="chip c-done">implemented</span></h3>
+<p>Code: starVLA <code>LayerwiseFM_ActionHeader.py</code>, <code>cross_attention_dit.py</code>; our additions in <code>affordance_vla/heads/plan_policy.py</code>. </p>
 <div class="eq">\mathrm{tok}_j=W_3\,\mathrm{swish}\!\big(W_2\,[\,W_1x_{t,j};\ \mathrm{sin}(\tau)\,]\big)+\mathrm{pos}_j+\mathrm{MLP}_{\text{plan}}(f),\qquad j=1,\dots,8</div>
 <div class="eq">\mathrm{tok}\leftarrow\mathrm{tok}+\mathrm{CrossAttn}\big(\mathrm{AdaLN}(\mathrm{tok},\tau),\ h^{(i)}\big),\quad \mathrm{tok}\leftarrow\mathrm{tok}+\mathrm{FFN}(\mathrm{LN}(\mathrm{tok})),\qquad i=1,\dots,36</div>
 <div class="eq">\hat v=\mathrm{MLP}_{2560\to1024\to7}(\mathrm{tok}),\qquad x_{k+1}=x_k+\tfrac14\,\hat v(x_k,\tau_k),\quad \tau_k=\lfloor 1000\cdot k/4\rfloor,\ \ x_0\sim\mathcal N(0,I)</div>
 <ul>
-<li><span class="m">W_1</span>：7→2560；<span class="m">W_2</span>：5120→2560；<span class="m">W_3</span>：2560→2560；<span class="m">\tau</span> 是时间分桶（1000 桶）的正弦编码。</li>
-<li>每块交叉注意 40 头 × 64 维，K、V 来自 LLM 第 <span class="m">i</span> 层的全部 token（图像和文字，带注意掩码）。FFN 2560→10240→2560，GELU。</li>
-<li>官方头里的 32 个可学习 token 读不到动作 token，所以不用；本体状态也不输入。</li>
-<li>计划编码器 <span class="m">\mathrm{MLP}_{\text{plan}}</span>：10→512→512→2560，SiLU，最后一层零初始化，所以训练前等于官方策略。</li>
+<li><span class="m">W_1</span>: 7→2560; <span class="m">W_2</span>: 5120→2560; <span class="m">W_3</span>: 2560→2560; <span class="m">\tau</span> is the sinusoidal encoding of the time bucket (1000 buckets).</li>
+<li>Each block cross-attends with 40 heads × 64 dims; K, V are all tokens of LLM layer <span class="m">i</span> (image and text, with the attention mask). FFN 2560→10240→2560, GELU.</li>
+<li>The 32 learnable tokens of the official head cannot see the action tokens, so they are not used; the proprioceptive state is not an input.</li>
+<li>plan encoder <span class="m">\mathrm{MLP}_{\text{plan}}</span>: 10→512→512→2560, SiLU, last layer zero-initialised, so before training it equals the official policy.</li>
 </ul>
 <div class="tablewrap"><table>
-<thead><tr><th>训练的参数（s10，冻结 VLM）</th><th class="num">参数量</th><th>说明</th></tr></thead>
+<thead><tr><th>trained parameters (s10, VLM frozen)</th><th class="num">count</th><th>notes</th></tr></thead>
 <tbody>
-<tr><td>LoRA，秩 16，α = 16</td><td class="num">26.54M</td><td>36 块 × 6 个线性层（注意的 q、k、v、out，FFN 的两层）= 216 层</td></tr>
-<tr><td>动作解码 MLP</td><td class="num">2.63M</td><td>整层训练，float32</td></tr>
-<tr><td>计划编码器</td><td class="num">1.58M</td><td>10→512→512→2560</td></tr>
-<tr><th>合计</th><th class="num">30.75M</th><th>和运行记录 <code>metrics.json</code> 的 30.75 对得上</th></tr>
+<tr><td>LoRA, rank 16, α = 16</td><td class="num">26.54M</td><td>36 blocks × 6 linear layers (attention q, k, v, out; two FFN layers) = 216 layers</td></tr>
+<tr><td>action decoder MLP</td><td class="num">2.63M</td><td>fully trained, float32</td></tr>
+<tr><td>plan encoder</td><td class="num">1.58M</td><td>10→512→512→2560</td></tr>
+<tr><th>total</th><th class="num">30.75M</th><th>matches <code>metrics.json</code> of the run (30.75)</th></tr>
 </tbody></table></div>
-<p class="note">这个合计只在 DiT 是 36 块、宽 2560 时成立。权重目录里的 <code>config.json</code> 还写着 DiT-B、16 层、宽 1024；运行时 starVLA 按 LLM 的层数和宽度重设成 36 × 2560。</p>
+<p class="note">This total holds only for a DiT of 36 blocks at width 2560. The checkpoint's <code>config.json</code> still says DiT-B, 16 layers, width 1024; starVLA resets it at runtime to the LLM's 36 × 2560.</p>
 
-<h3>2.8 执行 <span class="chip c-done">已实现</span></h3>
-<p>8 步 × 7 维的动作按数据集统计反归一化：Δ位置 3、Δ旋转 3、夹爪 1（策略里 0 = 合、1 = 开）。robosuite 的 OSC 控制器算关节力矩，20 Hz。不训练正逆运动学。</p>
+<h3>2.8 Execution <span class="chip c-done">implemented</span></h3>
+<p>The 8 × 7 action is de-normalised with dataset statistics: Δposition 3, Δrotation 3, gripper 1 (policy: 0 = close, 1 = open). robosuite's OSC controller computes joint torques at 20 Hz. No forward or inverse kinematics are trained.</p>
 </section>
 
 <section id="train" aria-labelledby="h-train">
-<h2 id="h-train">3 · 训练</h2>
+<h2 id="h-train">3 · Training</h2>
 
-<h3>3.1 map 头的标签</h3>
+<h3>3.1 Map-head labels</h3>
 <div class="block oracle">
-<p><span class="chip c-done">已实现：g1 的标签</span> <span class="chip c-oracle">ORACLE</span> 接触点 = 物体在仿真里的位置 + 示范里这个物体的平均抓取偏移（放的时候是容器位置 + 平均放置偏移）。接近方向 = 这个物体所有示范在事件前 10 步运动方向的平均。投到画面上得到格子、偏移、深度。同一帧也可以换成"点名另一个物体"的指令，目标换成那个物体的抓取点，不需要新示范。</p>
+<p><span class="chip c-done">implemented: g1 labels</span> <span class="chip c-oracle">ORACLE</span> contact = simulator object position + the mean grasp offset of that object's demonstrations (release: container position + mean place offset). Approach = the mean motion direction over the 10 steps before the event, over all demos of that object. Projected to a cell, an offset and a depth. A frame can also get an instruction naming another object, with that object's grasp point as target, without new demonstrations.</p>
 </div>
 
 <div class="block">
-<p><span class="chip c-done">已实现：L2，每个网格一张 3D 标准 map</span>（<code>plan/interaction_labels.py</code>，<span class="mono">ec1c792</span>）</p>
+<p><span class="chip c-done">implemented: L2, one 3D canonical map per mesh</span> (<code>plan/interaction_labels.py</code>, <span class="mono">ec1c792</span>) </p>
 <ol>
-<li><b>表面：</b>可视网格上按面积采 3000 个点，带法向 <span class="m">n</span>，在物体自己的坐标系里。</li>
-<li><b>抓取：</b>仿真报告"抓住"的上升沿，并且持续 ≥ 5 步（0.25 s）。<span class="chip c-oracle">ORACLE</span> 用仿真里的物体位姿把夹爪换到物体坐标系：</li>
+<li><b>Surface: </b>3000 points sampled by area on the visual meshes, with normals <span class="m">n</span>, in the object's own frame.</li>
+<li><b>Grasps: </b>rising edge of the simulator's "grasped" flag, held ≥ 5 steps (0.25 s).<span class="chip c-oracle">ORACLE</span> the simulator object pose maps the gripper into the object frame:</li>
 </ol>
-<div class="eq">g=R_o^\top(p_{ee}-p_o),\qquad y=R_o^\top R_{ee}\,e_{\text{close}}\quad(\text{闭合轴，是一条线，不分正反})</div>
+<div class="eq">g=R_o^\top(p_{ee}-p_o),\qquad y=R_o^\top R_{ee}\,e_{\text{close}}\quad(\text{closing axis: a line, sign-free})</div>
 </div>
 
 <figure>
 <div class="scroll small">
-<svg viewBox="0 0 560 290" role="img" aria-label="接触权重：表面点离闭合线越近、越正对闭合方向，权重越高；沿闭合线超出 5 厘米为 0">
+<svg viewBox="0 0 560 290" role="img" aria-label="Contact weights: the closer a surface point is to the closing line and the more its normal faces it, the higher its weight; zero beyond 5 cm along the line">
 <rect class="band" x="150" y="125" width="260" height="50"/>
 <line class="ln-dash" x1="130" y1="150" x2="430" y2="150"/>
 <circle class="obj" cx="280" cy="150" r="70"/>
@@ -469,160 +469,160 @@ math { font-size: 1.05em; }
 <text class="t-b" x="288" y="146">g</text>
 <line class="ln" x1="211" y1="150" x2="176" y2="150"/>
 <path class="ah" d="M168 150 L178 145 L178 155 Z"/>
-<text class="t" x="166" y="140" text-anchor="end">n（正对）</text>
+<text class="t" x="166" y="140" text-anchor="end">n (facing)</text>
 <line class="ln" x1="280" y1="80" x2="280" y2="46"/>
 <path class="ah" d="M280 38 L275 48 L285 48 Z"/>
 <circle class="dot-m" cx="280" cy="80" r="3.5"/>
-<text class="t" x="290" y="54">n ⟂ y → 权重 0</text>
+<text class="t" x="290" y="54">n ⟂ y → weight 0</text>
 <line class="ln-dash" x1="174" y1="70" x2="174" y2="232"/>
 <line class="ln-dash" x1="386" y1="70" x2="386" y2="232"/>
 <text class="t-m" x="174" y="250" text-anchor="middle">−5 cm</text>
 <text class="t-m" x="386" y="250" text-anchor="middle">+5 cm</text>
-<text class="t" x="440" y="154">闭合轴 y</text>
-<text class="t-d" x="420" y="120">带宽 σ = 1.2 cm</text>
-<text class="t-m" x="280" y="275" text-anchor="middle">横截面示意，比例不精确</text>
+<text class="t" x="440" y="154">closing axis y</text>
+<text class="t-d" x="420" y="120">width σ = 1.2 cm</text>
+<text class="t-m" x="280" y="275" text-anchor="middle">cross-section sketch, not to scale</text>
 </svg>
 </div>
-<figcaption>图 4　一次抓取给表面点的权重。两个手指垫（灰色）沿闭合轴 y 合拢；离这条线近、法向又正对它的点（蓝点）权重高；顶面的点法向和 y 垂直，权重为 0；沿线超出 ±5 cm 够不到。</figcaption>
+<figcaption>Figure 4. The weights one grasp gives to surface points. The two finger pads (grey) close along the axis y; points near this line whose normal faces it (blue) weigh most; top-face normals are perpendicular to y and weigh 0; beyond ±5 cm along the line is out of reach.</figcaption>
 </figure>
 
 <div class="eq">w_g(x)=\exp\!\Big(-\tfrac12\big(\tfrac{d_\perp}{1.2\,\mathrm{cm}}\big)^2\Big)\cdot\operatorname{clip}\!\Big(\tfrac{|n\cdot y|-0.3}{0.7},0,1\Big)\cdot\mathbf{1}\big[\,|(x-g)\cdot y|\le5\,\mathrm{cm}\,\big]</div>
 <div class="eq">d_\perp=\big\lVert (x-g)-((x-g)\cdot y)\,y\big\rVert,\qquad S(x)=\frac{\sum_g w_g(x)}{\max_{x'}\sum_g w_g(x')}</div>
-<div class="eq">M(x)=\sum_g w_g(x)\,y_g y_g^\top,\qquad \text{axis}(x)=\text{最大特征向量},\qquad A(x)=\frac{3\lambda_{\max}/\operatorname{tr}M-1}{2}\in[0,1]</div>
-<p><span class="m">y y^\top</span> 对 <span class="m">y</span> 和 <span class="m">-y</span> 一样，所以转 180° 的两次抓取会叠加，不会抵消。<span class="m">A=1</span> 表示这个点上所有抓取沿同一条线，<span class="m">A=0</span> 表示方向均匀散开。</p>
-<p><b>投到一帧上</b>（每个物体都投）：<span class="m">X=R_o x+p_o</span>，按镜像投到 256 的日志图上。保留的点要满足两条：落在这个物体的分割像素上；深度不超过同一 4×4 像素块里最近点 1.5 cm（去掉被物体自己挡住的背面）。</p>
+<div class="eq">M(x)=\sum_g w_g(x)\,y_g y_g^\top,\qquad \text{axis}(x)=\text{top eigenvector},\qquad A(x)=\frac{3\lambda_{\max}/\operatorname{tr}M-1}{2}\in[0,1]</div>
+<p><span class="m">y y^\top</span> is the same for <span class="m">y</span> and <span class="m">-y</span>, so two grasps 180° apart add up instead of cancelling. <span class="m">A=1</span> means all grasps at this point lie along one line; <span class="m">A=0</span> means the directions spread evenly.</p>
+<p><b>Projection to a frame</b> (every object): <span class="m">X=R_o x+p_o</span>, projected with mirroring onto the 256 log image. A point is kept if it falls on this object's segmentation pixels and its depth is within 1.5 cm of the nearest point in the same 4×4-pixel block (drops the self-occluded back).</p>
 <div class="eq">\text{score}_c=\max_{x\in c}S(x),\qquad \text{dir}_c=\frac{\sum_{x\in c}S(x)\,[\cos2\theta_x,\ \sin2\theta_x]}{\sum_{x\in c}S(x)}</div>
-<p class="note"><span class="m">\theta_x</span> 是把 1 cm 长的闭合轴投到图上后的角度。结果：LIBERO-Object 10 类、LIBERO-10 10 类都有 map，Object 的 10 类里有 9 类，八成以上的抓取闭合轴落在同一组（彼此 20° 以内）。</p>
+<p class="note"><span class="m">\theta_x</span> is the image angle of the closing axis projected over 1 cm. Result: maps for LIBERO-Object (10 categories) and LIBERO-10 (10); in 9 of the 10 Object categories, over 80% of the closing axes fall in one group (within 20° of each other).</p>
 
 <div class="block plan">
-<p><span class="chip c-plan">计划中：L2c，类别级 map（第五轮）</span> 同一类的不同网格对齐到一个类别坐标系。原点在底面中心 <span class="m">b</span>；高度 <span class="m">h</span> 和水平半径 <span class="m">\rho</span> 都归一化到 1；绕竖直轴转 <span class="m">\varphi</span>，让把手朝 +x：</p>
+<p><span class="chip c-plan">planned: L2c, category-level map (round 5)</span> The meshes of one category are aligned to a category frame: origin at the bottom centre <span class="m">b</span>; height <span class="m">h</span> and horizontal radius <span class="m">\rho</span> normalised to 1; rotated about the vertical by <span class="m">\varphi</span> so the handle points to +x:</p>
 <div class="eq plan">\tilde x=\operatorname{diag}\!\big(\tfrac1\rho,\tfrac1\rho,\tfrac1h\big)\,R_z(\varphi)\,(x-b)</div>
-<p>所有网格的抓取在 <span class="m">\tilde x</span> 里叠成一张 map。新网格的每个点取最近的类别 map 点的分数和闭合轴。</p>
-<p><b>高矮胖瘦测试集：</b>网格乘 <span class="m">S=\operatorname{diag}(s_x,s_y,s_z)</span>，档位为高 ×0.8、×1.3，粗 ×0.8、×1.2，再加两种组合。闭合轴按法向的规则变换：</p>
+<p>The grasps of all meshes are summed in <span class="m">\tilde x</span> into one map. Each point of a new mesh takes the score and axis of the nearest category-map point.</p>
+<p><b>Tall/short/fat/thin test set: </b>meshes multiplied by <span class="m">S=\operatorname{diag}(s_x,s_y,s_z)</span>, with height ×0.8, ×1.3 and width ×0.8, ×1.2, plus two combinations. Closing axes transform like normals:</p>
 <div class="eq plan">x'=Sx,\qquad y'=\frac{S^{-1}y}{\lVert S^{-1}y\rVert}</div>
-<p><b>检查（留一种杯子）：</b>留出的杯子自己的示范抓取，八成以上落在搬来的 map 分数前 20% 的表面上；闭合轴误差中位数小于 20°。</p>
+<p><b>Check (leave one mug out): </b>over 80% of the held-out mug's own demo grasps fall on the top-20% surface of the transferred map; median axis error below 20°.</p>
 </div>
-<div class="block plan"><p><span class="chip c-plan">计划中：L1</span> 抓取那一刻的夹爪位姿加物体分割图，直接给逐像素的"接触区域 + 闭合方向"。精确版借 AROS 的交互面，用夹爪网格和物体网格算。</p></div>
+<div class="block plan"><p><span class="chip c-plan">planned: L1</span> the gripper pose at the grasp plus the object segmentation gives a per-pixel "contact region + closing direction" directly. A finer version uses AROS's interaction surface between the gripper and object meshes.</p></div>
 
-<h3>3.2 map 头的损失</h3>
+<h3>3.2 Map-head losses</h3>
 <div class="eq">\mathcal L_{\text{map}}=\mathrm{CE}(\text{event})+\mathrm{CE}(\ell,\ c^{\star})+10\,\mathrm{Huber}_{0.1}(o_{c^\star})+10\,\mathrm{Huber}_{0.2}(\hat z_{c^\star})+0.5\,(1-\hat a\cdot a)</div>
-<p>事件损失每帧都算；接近方向在有事件的帧算；格子、偏移、深度只在有事件、并且接触点落在画面里时算。Huber 的阈值是格子的 1/10（约 1 cm）和 2 cm。<span class="chip c-done">已实现</span></p>
-<div class="eq plan">\mathcal L_{\text{v3}}=\underbrace{\mathrm{BCE}(I,\ \text{所有物体的标签})}_{\text{交互分数}}+\underbrace{\mathrm{CE}(T,\ \text{点名物体的标签分布})}_{\text{只更新 M1}}+\underbrace{\big\lVert\widehat{\text{dir}}-\text{dir}\big\rVert^2_{\text{接触区域内}}}_{\text{方向场}}+\mathrm{Huber}(\hat z)+\text{事件、接近方向}</div>
-<p class="note"><span class="chip c-plan">计划中</span> 各项的权重还没定。点名物体有几种可行抓法时，标签是一个分布。</p>
+<p>The event loss is computed on every frame, the approach on frames with an event, cell, offset and depth only on frames with an event whose contact is in view. Huber thresholds: 1/10 of a cell (about 1 cm) and 2 cm.<span class="chip c-done">implemented</span></p>
+<div class="eq plan">\mathcal L_{\text{v3}}=\underbrace{\mathrm{BCE}(I,\ \text{all-object labels})}_{\text{interaction score}}+\underbrace{\mathrm{CE}(T,\ \text{named-object label distribution})}_{\text{updates M1 only}}+\underbrace{\big\lVert\widehat{\text{dir}}-\text{dir}\big\rVert^2_{\text{in contact regions}}}_{\text{direction field}}+\mathrm{Huber}(\hat z)+\text{event, approach}</div>
+<p class="note"><span class="chip c-plan">planned</span> the weights of the terms are not set yet. When the named object has several feasible grasps, the label is a distribution.</p>
 
-<h3>3.3 动作头：反事实样本 <span class="chip c-done">已实现（s10）</span></h3>
-<p>同一帧画面，换一个计划，动作标签跟着改写。这样动作头学到的是"计划在哪就去哪"，而不是背场景。</p>
+<h3>3.3 Action head: counterfactual samples <span class="chip c-done">implemented (s10)</span></h3>
+<p>Same frame, different plan, and the action label is rewritten to match, so the action head learns "go where the plan is" instead of memorising scenes.</p>
 <div class="tablewrap"><table>
-<thead><tr><th>种类</th><th>计划怎么换</th><th>状态</th></tr></thead>
+<thead><tr><th>kind</th><th>how the plan changes</th><th>status</th></tr></thead>
 <tbody>
-<tr><td>示范</td><td>原样，计划输入加 1 cm 噪声</td><td><span class="chip c-done">已实现</span></td></tr>
-<tr><td>挪位置 shift</td><td>接触点在水平圆盘里挪：<span class="m">r=0.18\,\mathrm m\cdot\sqrt U,\ \phi\sim U[0,2\pi)</span></td><td><span class="chip c-done">已实现</span></td></tr>
-<tr><td>换物体 other</td><td>换成场景里另一个物体的抓取点，指令改成点名它；最后一段用那个物体自己示范里的接近</td><td><span class="chip c-done">已实现</span></td></tr>
-<tr><td>换释放点 release</td><td>搬运时，释放点在同样的圆盘里挪</td><td><span class="chip c-done">已实现</span></td></tr>
-<tr><td>转朝向 rotate</td><td>绕竖直轴 ±45°，平移和旋转一起改写（LIBERO-10）</td><td><span class="chip c-plan">计划中（E3）</span></td></tr>
+<tr><td>demonstration</td><td>unchanged; 1 cm noise on the plan input</td><td><span class="chip c-done">implemented</span></td></tr>
+<tr><td>shift</td><td>contact moved within a horizontal disc: <span class="m">r=0.18\,\mathrm m\cdot\sqrt U,\ \phi\sim U[0,2\pi)</span></td><td><span class="chip c-done">implemented</span></td></tr>
+<tr><td>other object</td><td>the grasp point of another object in the scene, instruction renamed to it; the last part uses that object's own demo approach</td><td><span class="chip c-done">implemented</span></td></tr>
+<tr><td>release point</td><td>while carrying, the release point moves within the same disc</td><td><span class="chip c-done">implemented</span></td></tr>
+<tr><td>rotate</td><td>±45° about the vertical; translation and rotation relabelled (LIBERO-10)</td><td><span class="chip c-plan">planned (E3)</span></td></tr>
 </tbody></table></div>
 <figure>
 <div class="scroll small">
-<svg viewBox="0 0 600 290" role="img" aria-label="改写路径：示范路径的最后一段原样搬到新接触点，前面一段绕起点旋转缩放去接上它">
+<svg viewBox="0 0 600 290" role="img" aria-label="Rewritten path: the last part of the demo path is copied to the new contact; the early part is rotated and scaled about the start to meet it">
 <defs><marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ahd" d="M0,0 L10,5 L0,10 z"/></marker></defs>
 <path class="ln-dash" d="M60 240 C 160 232, 290 170, 340 120"/>
 <path class="ln" d="M340 120 L380 90" style="stroke-width:3"/>
 <circle class="dot-m" cx="380" cy="90" r="5"/>
-<text class="t" x="388" y="84">示范接触点 c</text>
-<text class="t-m" x="300" y="100" text-anchor="end">示范的最后一段</text>
+<text class="t" x="388" y="84">demo contact c</text>
+<text class="t-m" x="300" y="100" text-anchor="end">last part of the demo</text>
 <circle class="dot-m" cx="60" cy="240" r="5"/>
-<text class="t" x="60" y="268" text-anchor="middle">起点 p₀</text>
+<text class="t" x="60" y="268" text-anchor="middle">start p₀</text>
 <path class="ln-d" d="M60 240 C 200 252, 380 252, 480 230"/>
 <path class="ln-d" d="M480 230 L520 200" style="stroke-width:3.5" marker-end="url(#a5)"/>
 <circle class="dot" cx="520" cy="200" r="5"/>
-<text class="t-d" x="528" y="196">新接触点 c′</text>
-<text class="t-d" x="300" y="270" text-anchor="middle">前段绕 p₀ 在水平面旋转、缩放</text>
-<text class="t-d" x="470" y="182" text-anchor="end">最后一段原样搬过去</text>
-<text class="t-m" x="160" y="200" text-anchor="middle">虚线：示范路径</text>
+<text class="t-d" x="528" y="196">new c′</text>
+<text class="t-d" x="300" y="270" text-anchor="middle">early part rotated and scaled about p₀</text>
+<text class="t-d" x="470" y="182" text-anchor="end">last part copied as is</text>
+<text class="t-m" x="140" y="200" text-anchor="middle">dashed: demo path</text>
 </svg>
 </div>
-<figcaption>图 5　俯视示意。最后一段的长度是 <span class="m">\min(18\,\mathrm{cm},\ \tfrac12\lVert c'-p_0\rVert)</span>；高度按走过的路程逐渐调整；按示范的节奏走，但每步不超过约 1.28 cm。</figcaption>
+<figcaption>Figure 5. Top view. The last part has length <span class="m">\min(18\,\mathrm{cm},\ \tfrac12\lVert c'-p_0\rVert)</span>; the height is adjusted along the travelled distance; the demo's pace is kept, at most about 1.28 cm per step.</figcaption>
 </figure>
-<div class="eq">a'_{xyz}=\operatorname{clip}\!\Big(a_{xyz}+\frac{\Delta\big(P'_{\text{走}}-P_{\text{走}}\big)}{s},\ -1,\ 1\Big),\qquad s\approx1.28\,\mathrm{cm}\ \text{（每单位平移动作的位移，实测）}</div>
+<div class="eq">a'_{xyz}=\operatorname{clip}\!\Big(a_{xyz}+\frac{\Delta\big(P'_{\text{walk}}-P_{\text{walk}}\big)}{s},\ -1,\ 1\Big),\qquad s\approx1.28\,\mathrm{cm}\ \text{ (displacement per unit action, measured)}</div>
 <ul>
-<li>旋转沿用示范，只在到达接触点之前监督；夹爪命令在示范闭合时离接触点的那个距离给出。</li>
-<li>离接触点不到 3 cm 的帧不做反事实。</li>
+<li>Rotation follows the demo and is supervised only before the contact; the gripper command comes at the demo's closing distance from the contact.</li>
+<li>Frames within 3 cm of the contact get no counterfactual.</li>
 </ul>
 
-<h3>3.4 动作头的损失 <span class="chip c-done">已实现</span></h3>
+<h3>3.4 Action-head loss <span class="chip c-done">implemented</span></h3>
 <div class="eq">x_t=(1-t)\,\varepsilon+t\,a,\qquad t=\frac{0.999-u}{0.999},\ \ u\sim\mathrm{Beta}(1.5,\,1),\qquad \varepsilon\sim\mathcal N(0,I)</div>
 <div class="eq">\mathcal L_{\text{flow}}=\frac{\sum m\odot\lVert\hat v(x_t,t,f)-(a-\varepsilon)\rVert^2}{\sum m},\qquad \hat a=x_t+(1-t)\,\hat v</div>
-<div class="eq">\mathcal L=\mathcal L_{\text{flow}}+0.2\,\mathcal L_{\text{path}},\qquad \mathcal L_{\text{path}}=\mathrm{Huber}_{0.5\,\text{cm}}\Big(p_0+s\textstyle\sum_{k\le j}\hat a_{k,xyz},\ \ \text{目标路径}_j\Big)</div>
-<p class="note"><span class="m">m</span> 是哪些动作维有标签的掩码。<span class="m">\hat a</span> 是一步估出的干净动作，<span class="m">\mathcal L_{\text{path}}</span> 比较它要走的路径和目标路径（单位 cm）。s10 的设置：4000 步，学习率 2e-4，454 条示范、56,852 帧，监督方式 actions（改写后的平移直接进流匹配损失）。</p>
+<div class="eq">\mathcal L=\mathcal L_{\text{flow}}+0.2\,\mathcal L_{\text{path}},\qquad \mathcal L_{\text{path}}=\mathrm{Huber}_{0.5\,\text{cm}}\Big(p_0+s\textstyle\sum_{k\le j}\hat a_{k,xyz},\ \ \text{target path}_j\Big)</div>
+<p class="note"><span class="m">m</span> masks the action dims that have labels. <span class="m">\hat a</span> is the one-step estimate of the clean action; <span class="m">\mathcal L_{\text{path}}</span> compares its path with the target path (in cm). s10: 4000 steps, learning rate 2e-4, 454 demos, 56,852 frames, supervision "actions" (the rewritten translation enters the flow-matching loss directly).</p>
 </section>
 
 <section id="gen" aria-labelledby="h-gen">
-<h2 id="h-gen">4 · 泛化和诊断</h2>
+<h2 id="h-gen">4 · Generalisation and diagnosis</h2>
 <div class="tablewrap"><table>
-<thead><tr><th>哪件事</th><th>由谁负责</th><th>应对哪种变化</th></tr></thead>
+<thead><tr><th>part</th><th>handled by</th><th>covers</th></tr></thead>
 <tbody>
-<tr><td>抓哪个物体</td><td>M1 语义门控</td><td>换指令、换目标</td></tr>
-<tr><td>抓哪里、朝什么方向</td><td>M2 交互 map（所有物体）+ 类别级 3D 标准 map</td><td>换位置、物体转动、同类的新形状</td></tr>
-<tr><td>手怎么动</td><td>M4 动作头，用反事实训练</td><td>不负责泛化，只服从计划</td></tr>
+<tr><td>which object</td><td>M1 semantic gate</td><td>new instruction, new target</td></tr>
+<tr><td>where and in which direction</td><td>M2 interaction map (all objects) + category-level 3D canonical map</td><td>position, rotation, unseen shapes of a category</td></tr>
+<tr><td>how to move</td><td>M4 action head, counterfactual training</td><td>does not generalise, only obeys the plan</td></tr>
 </tbody></table></div>
 
-<h3>泛化测试 G1–G5</h3>
+<h3>Generalisation tests G1–G5</h3>
 <div class="tablewrap"><table>
-<thead><tr><th>测试</th><th>改变了什么</th><th>主要考哪部分</th><th>数据</th></tr></thead>
+<thead><tr><th>test</th><th>what changes</th><th>tests mainly</th><th>data</th></tr></thead>
 <tbody>
-<tr><td>G1</td><td>物体位置</td><td>map 跟着物体走</td><td>LIBERO-PRO <code>_swap</code></td></tr>
-<tr><td>G2</td><td>指令或目标</td><td>语义门控</td><td>LIBERO-PRO <code>_task</code>、<code>_lan</code></td></tr>
-<tr><td>G3</td><td>物体绕竖直轴转 ±45°</td><td>3D 对齐读朝向</td><td>LIBERO-10 的杯子、摩卡壶，扰动自己加</td></tr>
-<tr class="goal"><td>G4 · 最终目标之一</td><td>同类没见过的形状（高矮胖瘦）</td><td>类别级 map + map 头</td><td>缩放的杯子；红杯子（训练不用，LIBERO-90 的 4 个任务只测试，也考 G2）</td></tr>
-<tr><td>G5</td><td>几种同时出现</td><td>三部分一起</td><td>自己组合</td></tr>
+<tr><td>G1</td><td>object position</td><td>map follows the object</td><td>LIBERO-PRO <code>_swap</code></td></tr>
+<tr><td>G2</td><td>instruction or target</td><td>semantic gate</td><td>LIBERO-PRO <code>_task</code>, <code>_lan</code></td></tr>
+<tr><td>G3</td><td>object rotated ±45° about the vertical</td><td>orientation by 3D alignment</td><td>LIBERO-10 mugs and moka pot; own perturbation</td></tr>
+<tr class="goal"><td>G4 · a final goal</td><td>unseen shapes of a category (tall/short/fat/thin)</td><td>category-level map + map head</td><td>scaled mugs; red mug (not in training; 4 LIBERO-90 tasks, test only, also tests G2)</td></tr>
+<tr><td>G5</td><td>several at once</td><td>all three parts</td><td>own combinations</td></tr>
 </tbody></table></div>
-<p><b>泛化雏形成立的判据：</b>G5 的每次失败都能归到某一部分；把那一部分换成真值后，成功率回升。G4 训练只用白杯子、黄白杯子；对照是每个网格一张 map 的标签、真值计划、官方权重。</p>
+<p><b>A first sign of generalisation: </b>every G5 failure can be assigned to one part, and replacing that part with ground truth restores success. G4 trains on the white and the white-yellow mug only; controls: per-mesh map labels, oracle plan, released checkpoint.</p>
 
-<h3>离线首帧检查（每次改了 map 头都先做）</h3>
+<h3>Offline first-frame check (first, after every change to the map head)</h3>
 <ul>
-<li><b>认对物体率：</b>门控后的峰值落在点名物体的分割区域里的比例。</li>
-<li><b>所有物体的 map：</b>每个物体自己区域里的峰值，是否落在它的接触区域里。</li>
-<li><b>位置误差：</b>沿视线方向和垂直视线方向分开算，单位 cm。</li>
-<li><b>闭合方向误差：</b><span class="m">\min(|\theta-\hat\theta|,\ 180^\circ-|\theta-\hat\theta|)</span>，真值来自 L2。</li>
-<li><b>物体朝向误差（第二阶段）：</b>按物体的对称性取最小。</li>
+<li><b>object ID rate: </b>share of gated peaks inside the named object's segmentation.</li>
+<li><b>all-object map: </b>whether each object's own peak lies in its contact region.</li>
+<li><b>position error: </b>along and across the viewing direction, in cm.</li>
+<li><b>closing-direction error: </b><span class="m">\min(|\theta-\hat\theta|,\ 180^\circ-|\theta-\hat\theta|)</span>, ground truth from L2.</li>
+<li><b>object orientation error (phase two): </b>minimum over the object's symmetries.</li>
 </ul>
 
-<h3>失败归到哪个模块</h3>
+<h3>Failures traced to modules</h3>
 <div class="tablewrap"><table>
-<thead><tr><th>失败</th><th>归到</th><th>先回到哪里改</th></tr></thead>
+<thead><tr><th>failure</th><th>class</th><th>fix first</th></tr></thead>
 <tbody>
-<tr><td>指向了别的物体</td><td>语义</td><td>M1 门控：可学习投影；空间语言</td></tr>
-<tr><td>物体对，位置偏</td><td>几何</td><td>M2 的分数、深度、更细的特征</td></tr>
-<tr><td>位置对，夹爪方向不对</td><td>方向</td><td>M2 方向场 + L 的标签；3D 对齐；转朝向的反事实</td></tr>
-<tr><td>计划对，动作没跟上</td><td>服从</td><td>动作头 + 反事实标签</td></tr>
-<tr><td>抓到之后失败</td><td>后段</td><td>释放阶段的计划和标签</td></tr>
+<tr><td>points at another object</td><td>semantics</td><td>M1 gate: learned projection; spatial language</td></tr>
+<tr><td>right object, position off</td><td>geometry</td><td>M2 score, depth, finer features</td></tr>
+<tr><td>right position, wrong gripper direction</td><td>direction</td><td>M2 direction field + L labels; 3D alignment; rotate counterfactuals</td></tr>
+<tr><td>right plan, action did not follow</td><td>obedience</td><td>action head + counterfactual labels</td></tr>
+<tr><td>fails after the grasp</td><td>later phase</td><td>release-phase plan and labels</td></tr>
 </tbody></table></div>
 
-<h3>三个阶段和现在的基准</h3>
+<h3>Three stages and the current baseline</h3>
 <div class="grid2">
 <div class="tablewrap"><table>
-<thead><tr><th>阶段</th><th>时间</th><th>做什么</th></tr></thead>
+<thead><tr><th>stage</th><th>time</th><th>what</th></tr></thead>
 <tbody>
-<tr><td>1 骨架定型</td><td class="num">到约 12-10</td><td>E1–E3、E4 最小版、L2c；决定点 1</td></tr>
-<tr><td>2 挑下游任务</td><td class="num">12-11 至 12-17</td><td>只做推理筛候选（含 G4 缩放集）；决定点 2</td></tr>
-<tr><td>3 对比驱动改进</td><td class="num">到 1 月底</td><td>按失败归类一轮轮改；超过噪声 2 倍（约 12/200）才保留</td></tr>
+<tr><td>1 freeze the skeleton</td><td class="num">to about 12-10</td><td>E1–E3, minimal E4, L2c; decision point 1</td></tr>
+<tr><td>2 choose downstream tasks</td><td class="num">12-11 to 12-17</td><td>inference-only screening of candidates (incl. the G4 scaled set); decision point 2</td></tr>
+<tr><td>3 comparison-driven improvement</td><td class="num">to end of January</td><td>round by round by failure class; keep a change only if it beats 2× noise (about 12/200)</td></tr>
 </tbody></table></div>
 <div class="tablewrap"><table>
-<thead><tr><th>LIBERO-PRO Object（20 个起始状态，种子 7）</th><th class="num">位置扰动</th><th class="num">任务扰动</th></tr></thead>
+<thead><tr><th>LIBERO-PRO Object (20 starts, seed 7)</th><th class="num">position perturbation</th><th class="num">task perturbation</th></tr></thead>
 <tbody>
-<tr><td>格子计划 g1 + 计划保持 + s10</td><td class="num">129/200</td><td class="num">151/200</td></tr>
-<tr><td><span class="chip c-oracle">ORACLE</span> 真值计划 + s10</td><td class="num">186/200</td><td class="num">166/200</td></tr>
+<tr><td>grid plan g1 + plan hold + s10</td><td class="num">129/200</td><td class="num">151/200</td></tr>
+<tr><td><span class="chip c-oracle">ORACLE</span> oracle plan + s10</td><td class="num">186/200</td><td class="num">166/200</td></tr>
 </tbody></table></div>
 </div>
 </section>
 
 <section id="tbc" aria-labelledby="h-tbc">
-<h2 id="h-tbc">5 · 待核实</h2>
+<h2 id="h-tbc">5 · To verify</h2>
 <ul>
-<li><b>已核实（11-20）· DiT 没有自注意力：</b>权重目录的配置写着 <code>interleave_self_attention: true</code>，但 starVLA 的 <code>cross_attention_dit.py</code>（第 223–224 行）允许用 <code>use_canonical_forward</code> 覆盖它，我们的 <code>train_plan_following.py</code> 和 <code>serve_plan_policy.py</code> 都传 <code>use_canonical_forward=false</code>（这份官方权重早于"交错自注意力"的版本）。所以运行时 36 块全是交叉注意。下面是原来的记录：权重目录的 <code>config.json</code> / <code>config.yaml</code> 写着 <code>interleave_self_attention: true</code>（奇数块会变成动作 token 之间的自注意力）；我们的 <code>plan_policy.py</code> 遇到这个标志为真会直接报错，而 s10 训练正常跑完了。</li>
-<li><span class="tbc">待核实</span> <b>官方评测是否输入本体状态：</b>官方头有状态编码器（7 维），我们的接法不输入状态。官方 LIBERO 评测时有没有给，没有查。</li>
+<li><b>Verified (11-20) · the DiT has no self-attention: </b>the checkpoint config says <code>interleave_self_attention: true</code>, but starVLA's <code>cross_attention_dit.py</code> (lines 223–224) lets <code>use_canonical_forward</code> override it, and our <code>train_plan_following.py</code> and <code>serve_plan_policy.py</code> both pass <code>use_canonical_forward=false</code> (this checkpoint predates the interleaved self-attention), so at runtime all 36 blocks are cross-attention. Earlier note: the checkpoint's <code>config.json</code> / <code>config.yaml</code> says <code>interleave_self_attention: true</code> (odd blocks would become self-attention between action tokens); our <code>plan_policy.py</code> raises an error when this flag is true, and s10 trained normally.</li>
+<li><span class="tbc">to verify</span> <b>Does the official evaluation feed the proprioceptive state: </b>the official head has a 7-d state encoder; our setup feeds no state. Not checked whether the official LIBERO evaluation does.</li>
 </ul>
-<p class="note">计划中模块里标"待定"的数（M1 投影的大小、v3 损失的权重、3D 对齐里的 λ）是还没设计，不是没核实。</p>
+<p class="note">Values marked "open" in planned modules (size of the M1 projection, v3 loss weights, λ in 3D alignment) are not designed yet, not unverified.</p>
 </section>
 </div>
 

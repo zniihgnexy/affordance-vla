@@ -1,6 +1,8 @@
 # Pipeline figures
 
-Every figure in this folder is drawn by the cvpr-figure skill from the YAML spec beside its PNG. The pictures inside
+Every figure in this folder is drawn by the cvpr-figure skill from the YAML spec beside its PNG, rendered with
+`scripts/report/render_figure_spec.py` (text in Liberation Sans, the Helvetica metrics the engine sizes boxes for). Since
+23 Nov 2026 the v3 figures and the layer-level figures are in English (week-2 group meeting). The pictures inside
 the figures are real crops, and they live in this folder too.
 
 | Figure | What it shows | Status |

@@ -1,8 +1,10 @@
-"""Local MuJoCo simulator for LIBERO-PRO: open a task's scene, run a scripted grasp in it, or replay a test
-episode that the evaluation on the server logged, all live in the MuJoCo viewer.
+"""Local MuJoCo simulator for LIBERO-PRO: open a task's scene, show the 3D interaction maps (L) on its objects,
+run a scripted grasp in it, or replay a test episode that the evaluation on the server logged, all live in the
+MuJoCo viewer.
 
 Run from the repository root; scripts/local/sim.sh starts this under mjpython, which the viewer needs on macOS:
     bash scripts/local/sim.sh scene  --suite libero_object_swap --task 2 --episode 0
+    bash scripts/local/sim.sh map    --suite libero_10 --task 4
     bash scripts/local/sim.sh grasp  --suite libero_object_swap --task 2 --object ketchup_1
     bash scripts/local/sim.sh replay runs/libero_pro/predicted_g1_hold_s10/libero_object_swap/task2_ep0.npz
     bash scripts/local/sim.sh list   runs/libero_pro/predicted_g1_hold_s10
@@ -14,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -25,10 +28,12 @@ from affordance_vla.config import load_config  # noqa: E402
 from affordance_vla.sim.live_view import LiveView, Marker, offscreen_without_windows  # noqa: E402
 
 BLUE = (0.2, 0.45, 0.9, 0.8)
+MAP_LOW, MAP_HIGH = (1.0, 0.85, 0.35, 0.45), (0.8, 0.05, 0.05, 0.95)  # score 0 -> pale yellow, 1 -> red
 SETTLE_STEPS = 30
-GRASP_PHASES = {"above": "移到抓取点正上方", "descend": "下降到抓取点", "close": "闭合夹爪",
-                "lift": "抬起", "carry": "移到放置点上方", "lower": "下降到放置点", "release": "张开夹爪",
-                "retreat": "抬起离开", "done": "完成"}
+GRASP_PHASES = {"above": "move above the grasp point", "descend": "descend to the grasp point",
+                "close": "close the gripper", "lift": "lift", "carry": "move above the place point",
+                "lower": "lower to the place point", "release": "open the gripper", "retreat": "move up and away",
+                "done": "done"}
 
 
 def prepare_libero(config: dict) -> None:
@@ -78,13 +83,64 @@ def cmd_scene(config: dict, view: LiveView) -> None:
 
     env, names, _ = open_scene(config, cameras=False)
     offsets = contact_offsets(config, config["scene"]["suite"], names, required=False)
-    print("[窗口] 橙点：各物体的抓取点（示范里夹爪闭合时的位置）。")
-    print("  拖动物体：双击选中，再按住 Ctrl + 鼠标右键拖动；空格暂停；关闭窗口结束。")
+    print("[window] orange dots: each object's grasp point (where the gripper closed in the demonstrations).")
+    print("  Drag an object: double-click it, then Ctrl + right mouse button; space pauses; close the window to end.")
     while True:
         where = positions(env, names)
         markers = () if offsets is None else tuple(
             Marker(grasp_contact(offsets, name, where[name])) for name in names if name in offsets.grasp)
         if not view.show(env, markers):
+            break
+        env.step(DUMMY_ACTION)
+
+
+def category_of(name: str) -> str:
+    """'porcelain_mug_1' -> 'porcelain_mug', the category the interaction maps are keyed by."""
+    return re.sub(r"_\d+$", "", name)
+
+
+def map_markers(maps: dict, env, names: list[str], settings: dict) -> tuple[Marker, ...]:
+    """Each object's 3D interaction map at the object's current pose: its highest-scoring surface points coloured
+    by score, and the closing axis through the hottest point as a short blue line."""
+    from affordance_vla.plan.interaction_labels import map_in_world
+    from affordance_vla.sim.object_surface import quat_wxyz_matrix
+
+    inner, markers = env.env, []
+    for name in names:
+        cmap = maps.get(category_of(name))
+        if cmap is None:
+            continue
+        body = inner.obj_body_id[name]
+        points, axes = map_in_world(cmap, inner.sim.data.body_xpos[body],
+                                    quat_wxyz_matrix(inner.sim.data.body_xquat[body]))
+        order = np.argsort(-cmap.score)[:int(settings["points"])]
+        order = order[cmap.score[order] >= float(settings["min_score"])]
+        for k in order:
+            score = float(cmap.score[k])
+            rgba = tuple(low + score * (high - low) for low, high in zip(MAP_LOW, MAP_HIGH))
+            markers.append(Marker(points[k], rgba=rgba, radius=float(settings["radius"])))
+        if len(order):
+            half = float(settings["axis_m"]) / 2
+            markers += [Marker(points[order[0]] + t * axes[order[0]], rgba=BLUE, radius=0.003)
+                        for t in np.linspace(-half, half, 9)]
+    return tuple(markers)
+
+
+def cmd_map(config: dict, view: LiveView) -> None:
+    from affordance_vla.plan.interaction_labels import load_maps
+    from affordance_vla.sim.episode import DUMMY_ACTION, base_suite
+
+    env, names, _ = open_scene(config, cameras=False)
+    path = REPO / config["maps"].get(base_suite(config["scene"]["suite"]), "")
+    if not path.is_file():
+        raise SystemExit(f"no interaction maps at {path}; run scripts/local/fetch_sim_data.sh first")
+    maps = load_maps(path)
+    shown = [name for name in names if category_of(name) in maps]
+    print(f"[map] 3D interaction maps (L, from the demonstrations' grasps) on: {', '.join(shown) or 'no object'}")
+    print("  yellow -> red: how much grasp contact lands on that surface point; blue line: the closing axis of the")
+    print("  gripper at the hottest point. The maps follow the objects: drag one (double-click, Ctrl + right drag).")
+    while True:
+        if not view.show(env, map_markers(maps, env, names, config["map"])):
             break
         env.step(DUMMY_ACTION)
 
@@ -109,7 +165,7 @@ def cmd_grasp(config: dict, view: LiveView) -> None:
     if target not in names:
         raise SystemExit(f"{target!r} is not a movable object here; choose one of {names}")
     offsets = contact_offsets(config, config["scene"]["suite"], names)
-    print(f"[抓取] 物体 {target}；橙点 = 抓取点，蓝点 = 放置点（都和 ORACLE 计划用的一样）")
+    print(f"[grasp] object {target}; orange = grasp point, blue = place point (the same points the ORACLE plan uses)")
     state, targets, phase = GraspState(), grasp_targets(offsets, env, names, target), None
     gripper, obj = env.env.robots[0].gripper, env.env.objects_dict[target]
     held_after_lift = None
@@ -119,7 +175,7 @@ def cmd_grasp(config: dict, view: LiveView) -> None:
         if state.phase != phase:
             if phase == "lift":
                 held_after_lift = bool(env.env._check_grasp(gripper=gripper, object_geoms=obj))
-                print(f"    抬起后{'抓住了' if held_after_lift else '没有抓住'} {target}", flush=True)
+                print(f"    after the lift {target} is {'held' if held_after_lift else 'not held'}", flush=True)
             phase = state.phase
             print(f"  {GRASP_PHASES[phase]}", flush=True)
         action, state = next_action(state, obs["robot0_eef_pos"], targets, settings)
@@ -133,9 +189,10 @@ def cmd_grasp(config: dict, view: LiveView) -> None:
         view.show(env, (Marker(targets.grasp), Marker(targets.release, rgba=BLUE)))
     template = goal_template(env)
     placed = bool(template and env.env._eval_predicate([template[0], target, template[1]]))
-    task_goal = "满足" if env.check_success() else "不满足"
-    print(f"[结果] 抬起时{'抓住了' if held_after_lift else '没有抓住'}；{target} {'在' if placed else '不在'}目标区域"
-          f"（{template[1] if template else '-'}）里；任务本身的目标判定：{task_goal}")
+    task_goal = "met" if env.check_success() else "not met"
+    print(f"[result] {'held' if held_after_lift else 'not held'} at the lift; {target} is "
+          f"{'inside' if placed else 'outside'} the goal region ({template[1] if template else '-'}); "
+          f"the task's own goal check: {task_goal}")
     if config["viewer"]["hold"]:
         view.hold((Marker(targets.grasp), Marker(targets.release, rgba=BLUE)))
 
@@ -162,7 +219,7 @@ def cmd_replay(log_path: Path, view: LiveView, hold: bool) -> None:
                                       on_step=narrator)
     except WindowClosed:
         return
-    print(f"[结束] 第 {len(arrays['actions'])} 步，{'LIBERO 的目标判定成功' if success else '没有成功'}")
+    print(f"[end] step {len(arrays['actions'])}, {'LIBERO goal check succeeded' if success else 'no success'}")
     compare(meta, log.ee_pos, arrays, success)
     if hold:
         view.hold(narrator.markers)
@@ -174,15 +231,15 @@ def cmd_list(folder: Path) -> None:
     if not rows:
         raise SystemExit(f"no task summaries under {folder}")
     for row in rows:
-        changed = "" if row["instruction"] == row["task"] else f"  指令: {row['instruction']}"
-        print(f"{row['suite']}/{row['file']:16s} {'成功' if row['success'] else '失败'} {row['steps']:3d} 步  "
+        changed = "" if row["instruction"] == row["task"] else f"  instruction: {row['instruction']}"
+        print(f"{row['suite']}/{row['file']:16s} {'success' if row['success'] else 'failure'} {row['steps']:3d} steps  "
               f"{row['task']}{changed}")
-    print(f"共 {len(rows)} 条，成功 {sum(bool(row['success']) for row in rows)} 条")
+    print(f"{len(rows)} episodes, {sum(bool(row['success']) for row in rows)} successful")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=("scene", "grasp", "replay", "list"))
+    parser.add_argument("command", choices=("scene", "map", "grasp", "replay", "list"))
     parser.add_argument("path", nargs="?", type=Path, help="replay: a rollout log; list: a run folder")
     parser.add_argument("--config", type=Path, default=REPO / "configs" / "sim" / "local.yaml")
     parser.add_argument("--set", dest="overrides", action="append", default=[], metavar="KEY=VALUE")
@@ -207,7 +264,8 @@ def main() -> None:
     offscreen_without_windows()
     view = LiveView(float(config["viewer"]["realtime"]))
     try:
-        {"scene": lambda: cmd_scene(config, view), "grasp": lambda: cmd_grasp(config, view),
+        {"scene": lambda: cmd_scene(config, view), "map": lambda: cmd_map(config, view),
+         "grasp": lambda: cmd_grasp(config, view),
          "replay": lambda: cmd_replay(args.path, view, bool(config["viewer"]["hold"]))}[args.command]()
     finally:
         view.close()

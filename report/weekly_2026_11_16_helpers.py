@@ -151,32 +151,6 @@ def first_failure(run: Path, suites: list[str]) -> RolloutLog | None:
     return None
 
 
-def _count(folder: Path, pattern: str) -> int:
-    return len(list(folder.glob(pattern))) if folder.is_dir() else 0
-
-
-def progress_table(work: Path) -> pd.DataFrame:
-    """Where the jobs started this week stand, read from the server's folders."""
-    runs = work / "runs"
-    demos = runs / "plan_following"
-    pro = runs / "libero_pro"
-    probed = (runs / "semantic_probe" / "e1" / "summary.json").exists()
-    rows = [
-        ("L：LIBERO-Object 示范重新回放，补记物体朝向", f"{_count(demos / 'demos_pose', '*_demo*.npz')} / 500"),
-        ("LIBERO-10：下载示范（状态和动作）",
-         f"{_count(work / 'data' / 'libero_states' / 'libero_10', '*_demo.hdf5')} / 10"),
-        ("LIBERO-10：示范重新回放，补记物体朝向（11-20 修好后重跑）",
-         f"{_count(demos / 'demos_libero10', '*_demo*.npz')} / 约 500"),
-        ("LIBERO-10：官方权重在 LIBERO-PRO 上（位置扰动、任务扰动）",
-         f"{sum(_count(pro / run, '*/task*_ep*.npz') for run in LIBERO10_RUNS)} / 400 个回合"),
-        ("L：每类物体的 3D 标准 map（Object、LIBERO-10）",
-         " / ".join("已完成" if (runs / "interaction_labels" / name / "maps.npz").exists() else "未完成"
-                    for name in ("object", "libero10"))),
-        ("E1：语义诊断（冻结 VLM，不训练）", "已完成" if probed else "排队或运行中（前两次运行失败，已修复）"),
-    ]
-    return pd.DataFrame(rows, columns=["任务", "进度"]).set_index("任务")
-
-
 def task_results(runs: list[Path], suite: str) -> pd.DataFrame:
     """Successes per task of one suite from the runs' task summaries; a later run only fills tasks the earlier lack."""
     rows = {}
@@ -185,17 +159,17 @@ def task_results(runs: list[Path], suite: str) -> pd.DataFrame:
             task = int(path.stem.split("_")[0].removeprefix("task"))
             if task not in rows:
                 episodes = json.loads(path.read_text())
-                rows[task] = {"指令": episodes[0]["instruction"], "成功": sum(bool(e["success"]) for e in episodes),
-                              "回合": len(episodes)}
-    table = pd.DataFrame.from_dict(rows, orient="index", columns=["指令", "成功", "回合"]).sort_index()
-    table.index.name = "任务"
+                rows[task] = {"instruction": episodes[0]["instruction"],
+                              "successes": sum(bool(e["success"]) for e in episodes), "episodes": len(episodes)}
+    table = pd.DataFrame.from_dict(rows, orient="index", columns=["instruction", "successes", "episodes"]).sort_index()
+    table.index.name = "task"
     return table
 
 
-LABEL_COLUMNS = {"真值计划：位置扰动": ("oracle_plan_{}", "libero_object_swap"),
-                 "真值计划：任务扰动": ("oracle_plan_{}", "libero_object_task"),
-                 "图像格子计划保持：位置扰动": ("predicted_g1_hold_{}", "libero_object_swap"),
-                 "图像格子计划保持：任务扰动": ("predicted_g1_hold_{}", "libero_object_task")}
+LABEL_COLUMNS = {"oracle plan, position": ("oracle_plan_{}", "libero_object_swap"),
+                 "oracle plan, task": ("oracle_plan_{}", "libero_object_task"),
+                 "g1 plan kept, position": ("predicted_g1_hold_{}", "libero_object_swap"),
+                 "g1 plan kept, task": ("predicted_g1_hold_{}", "libero_object_task")}
 
 
 def label_runs_table(pro: Path, heads: dict[str, str]) -> pd.DataFrame:
@@ -205,19 +179,20 @@ def label_runs_table(pro: Path, heads: dict[str, str]) -> pd.DataFrame:
         rows[label] = {}
         for column, (pattern, suite) in LABEL_COLUMNS.items():
             table = task_results([pro / pattern.format(head)], suite)
-            rows[label][column] = f"{table['成功'].sum()}/{table['回合'].sum()}"
+            rows[label][column] = f"{table['successes'].sum()}/{table['episodes'].sum()}"
     return pd.DataFrame(rows).T
 
 
 def label_summary(summary_path: Path) -> pd.DataFrame:
     """L: grasps, groups of closing axes and agreement per object category (build_interaction_labels.py)."""
     found = json.loads(summary_path.read_text())["categories"]
-    rows = {category: {"抓取数": entry["grasps"], "闭合轴分组（20° 内）": entry["axis_groups"],
-                       "最大组占比": round(entry["axis_groups"][0] / entry["grasps"], 2),
-                       "接触区域占表面": entry["contact_share"], "接触区域内方向一致度": entry["agreement_in_contact"]}
+    rows = {category: {"grasps": entry["grasps"], "axis groups (20°)": entry["axis_groups"],
+                       "largest group": round(entry["axis_groups"][0] / entry["grasps"], 2),
+                       "contact share of surface": entry["contact_share"],
+                       "axis agreement in contact": entry["agreement_in_contact"]}
             for category, entry in found.items()}
     table = pd.DataFrame(rows).T
-    table.index.name = "类别"
+    table.index.name = "category"
     return table
 
 
@@ -226,29 +201,29 @@ def probe_table(summary_path: Path) -> pd.DataFrame | None:
     if not summary_path.exists():
         return None
     summary = json.loads(summary_path.read_text())
-    rows = {variant: {"最好的层": found["best_layer"], "峰值落在点名物体上": found["best_share"]}
+    rows = {variant: {"best layer": found["best_layer"], "peak on the named object": found["best_share"]}
             for variant, found in summary["maps"].items()}
-    return pd.DataFrame(rows).T.astype({"最好的层": int})
+    return pd.DataFrame(rows).T.astype({"best layer": int})
 
 
-SUITE_GROUPS = {"LIBERO-Object（g1 训练过）": "libero_object", "LIBERO-Spatial（g1 没训练过）": "libero_spatial"}
+SUITE_GROUPS = {"LIBERO-Object (g1 trained)": "libero_object", "LIBERO-Spatial (g1 not trained)": "libero_spatial"}
 
 
 def _head_outcome(probe: dict, i: int) -> str:
     k = object_at_peak(probe["head_scores"][i], probe["coverage"][i])
     if k is None:
-        return "背景"
+        return "background"
     if k != probe["target"][i]:
-        return "别的物体"
+        return "another object"
     error = probe["head_error_m"][i]
-    return "点名物体，没有抓取点" if np.isnan(error) else "点名物体，2 cm 内" if error < 0.02 else "点名物体，超过 2 cm"
+    return "named, no grasp point" if np.isnan(error) else "named, within 2 cm" if error < 0.02 else "named, over 2 cm"
 
 
 def probe_head_table(probe_path: Path) -> pd.DataFrame:
     """E1 (1): where the g1 grid head's best first-frame cell lands, per LIBERO-PRO suite."""
     probe = dict(np.load(probe_path, allow_pickle=True))
     outcomes = [(str(suite), _head_outcome(probe, i)) for i, suite in enumerate(probe["suite"])]
-    return pd.crosstab([s for s, _ in outcomes], [o for _, o in outcomes]).rename_axis(index="套件", columns=None)
+    return pd.crosstab([s for s, _ in outcomes], [o for _, o in outcomes]).rename_axis(index="suite", columns=None)
 
 
 def probe_object_table(probe_path: Path) -> pd.DataFrame:
@@ -263,12 +238,12 @@ def probe_object_table(probe_path: Path) -> pd.DataFrame:
     for group, prefix in SUITE_GROUPS.items():
         frames = np.flatnonzero(np.char.startswith(probe["suite"].astype(str), prefix))
         in_view = (coverage[frames].sum(axis=2) > 0).sum(axis=1)
-        row = {"帧数": len(frames), "随机水平": round(float((1 / in_view).mean()), 2)}
+        row = {"frames": len(frames), "chance": round(float((1 / in_view).mean()), 2)}
         for t, tokens in enumerate(probe["token_sets"]):
             for m, merge in enumerate(probe["merges"]):
                 hits = [np.mean([np.argmax(object_means(maps[i, t, m, layer], coverage[i])) == target[i]
                                  for i in frames]) for layer in range(maps.shape[3])]
                 best = int(np.argmax(hits))
-                row[f"{tokens}/{merge}"] = f"{hits[best]:.2f}（第 {best} 层）"
+                row[f"{tokens}/{merge}"] = f"{hits[best]:.2f} (layer {best})"
         rows[group] = row
     return pd.DataFrame(rows).T

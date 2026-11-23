@@ -179,6 +179,12 @@ def project_map(cmap: CanonicalMap, object_pos: np.ndarray, object_quat: np.ndar
     return FrameLabel(score, direction, int(visible.sum()))
 
 
+def map_in_world(cmap: CanonicalMap, position: np.ndarray, rotation: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Surface points and closing axes of a canonical map placed at an object pose (rotation matrix, body frame)."""
+    rotation = np.asarray(rotation, dtype=float)
+    return cmap.points @ rotation.T + np.asarray(position, dtype=float), cmap.axis @ rotation.T
+
+
 def save_maps(path, maps: Sequence[CanonicalMap]) -> None:
     arrays = {}
     for cmap in maps:

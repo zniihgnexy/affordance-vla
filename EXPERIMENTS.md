@@ -14,8 +14,9 @@ these settings into `configs/` is still open (AGENTS.md, Part B).
 
 ```bash
 bash envs/local/setup_sim_env.sh            # conda env affordance-vla-sim (MuJoCo 3.2.3, robosuite 1.4.0, ...)
-bash scripts/local/fetch_sim_data.sh        # LIBERO-PRO at eafdb80 + task files + image-free evaluation logs
+bash scripts/local/fetch_sim_data.sh        # LIBERO-PRO at eafdb80 + task files + image-free evaluation logs + L maps
 bash scripts/local/sim.sh scene  --suite libero_object_swap --task 2 --episode 0     # open a task's scene
+bash scripts/local/sim.sh map    --suite libero_10 --task 4                          # L's 3D interaction maps on the objects
 bash scripts/local/sim.sh grasp  --suite libero_object_swap --task 2 --object ketchup_1  # scripted pick-and-place
 bash scripts/local/sim.sh list   runs/libero_pro/predicted_g1_hold_s10              # logged test episodes
 bash scripts/local/sim.sh replay runs/libero_pro/predicted_g1_hold_s10/libero_object_swap/task2_ep0.npz
@@ -24,7 +25,9 @@ bash scripts/local/sim.sh replay runs/libero_pro/predicted_g1_hold_s10/libero_ob
 Defaults: `configs/sim/local.yaml`; override with `--config FILE` or `--set key=value`. Everything is shown
 live in the MuJoCo viewer. `replay` reruns a server test episode with the actions the policy returned there;
 checked on three logs (success and failure, with and without plans): same outcome and step count, end
-effector within 0.5 mm of the server's log. Walk-through of a test, in Chinese: `docs/local_simulation.md`.
+effector within 0.5 mm of the server's log; on 23 Nov also on LIBERO-10 (same outcomes, within 6 mm). The
+terminal narration is in English. Demo commands for the week-2 meeting: section 5 of
+`report/2026-11-16_weekly_review.ipynb`. Walk-through of a test, in Chinese: `docs/local_simulation.md`.
 
 ## 1. Data (server, CPU)
 

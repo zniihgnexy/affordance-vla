@@ -15,7 +15,7 @@ gap: 9
 
 panels:
   - id: band_a
-    title: "① 训练和测试不一样：测试是零样本，场景或指令在训练里没见过"
+    title: "① Zero-shot testing: the scene or the instruction is unseen in training"
     title_align: left
     frame: dashed
     pad: 6
@@ -29,7 +29,7 @@ panels:
                 id: train
                 frame: solid
                 pad: 6
-                title: "训练"
+                title: "train"
                 title_pos: inside-top
                 body:
                   - {id: img_train, shape: image, w: 54, src: scene_train.png, caption: "LIBERO-Object"}
@@ -37,24 +37,24 @@ panels:
                 id: test
                 frame: solid
                 pad: 6
-                title: "测试（零样本）：LIBERO-PRO"
+                title: "test (zero-shot): LIBERO-PRO"
                 title_pos: inside-top
                 body:
                   - row:
                       gap: 14
                       align: start
                       body:
-                        - {id: img_swap, shape: image, w: 54, src: scene_swap.png, caption: "位置扰动"}
-                        - {id: img_task, shape: image, w: 54, src: scene_task.png, caption: "任务扰动"}
+                        - {id: img_swap, shape: image, w: 54, src: scene_swap.png, caption: "position perturbation"}
+                        - {id: img_task, shape: image, w: 54, src: scene_task.png, caption: "task perturbation"}
                         - col:
                             gap: 5
                             align: center
                             body:
-                              - {id: lan, text: "语言扰动\n同一任务换说法", fill: purple.light, dash: true}
-                              - {id: later, text: "E7：物体转动 ±45°\n同类新物体 · 组合变化\nLIBERO-10、Spatial、Plus", fill: purple.light, dash: true}
+                              - {id: lan, text: "language perturbation\nsame task, reworded", fill: purple.light, dash: true}
+                              - {id: later, text: "G3 rotation ±45°\nG4 unseen shapes · G5 mixed\nLIBERO-10, Spatial, Plus", fill: purple.light, dash: true}
 
   - id: band_c
-    title: "② 三件事各管一种变化：抓哪个（语义门控）、抓哪里和方向（交互 map）、怎么动（动作头）"
+    title: "② One part per change: which (gate), where and direction (map), how to move (action head)"
     title_align: left
     frame: dashed
     pad: 6
@@ -65,8 +65,8 @@ panels:
           gap: 12
           align: center
           body:
-            - {id: offline, text: "离线：首帧检查\n认对物体率 · 所有物体\n位置误差 · 方向误差", role: neutral}
-            - {id: closed, text: "闭环：LIBERO-PRO\n开发：20 个起始状态\n报告：50 个 × 3 种子", role: neutral}
+            - {id: offline, text: "offline first-frame check\nobject ID rate · all objects\nposition · direction error", role: neutral}
+            - {id: closed, text: "closed loop: LIBERO-PRO\ndev: 20 starts\nreport: 50 × 3 seeds", role: neutral}
             - col:
                 gap: 6
                 align: center
@@ -76,30 +76,30 @@ panels:
                       frame: region
                       fill: blue.pale
                       pad: 5
-                      title: "交互 map + 语义门控：必须泛化（感知）"
+                      title: "map + gate: must generalise"
                       title_pos: inside-top
                       body:
                         - col:
                             gap: 4
                             align: center
                             body:
-                              - {id: f_obj, text: "认错物体 → 语义门控", fill: purple.light, dash: true}
-                              - {id: f_pos, text: "位置偏 → 交互分数 · 深度、细特征", role: encoder}
-                              - {id: f_ori, text: "方向错 → 方向场 + 3D 标准 map", fill: purple.light, dash: true}
+                              - {id: f_obj, text: "wrong object → semantic gate", fill: purple.light, dash: true}
+                              - {id: f_pos, text: "position off → score, depth, features", role: encoder}
+                              - {id: f_ori, text: "wrong direction → direction field + 3D map", fill: purple.light, dash: true}
                   - group:
                       id: obey
                       frame: region
                       fill: orange.pale
                       pad: 5
-                      title: "动作头负责：只要服从（反事实训练）"
+                      title: "action head: only obeys"
                       title_pos: inside-top
                       body:
                         - col:
                             gap: 4
                             align: center
                             body:
-                              - {id: f_obey, text: "没跟上计划 → 动作头 + 反事实标签", role: core}
-                              - {id: f_after, text: "抓到后失败 → 释放阶段的标签", role: core}
+                              - {id: f_obey, text: "plan not followed → action labels", role: core}
+                              - {id: f_after, text: "fails after the grasp → release labels", role: core}
 
   - id: s_key
     frame: none
@@ -109,18 +109,24 @@ panels:
           align: center
           body:
             - {id: k3, shape: sharpbox, w: 11, h: 7, fill: purple.light, dash: true}
-            - {id: k3t, shape: text, text: "v3 新增，尚未实现", type: annot}
+            - {id: k3t, shape: text, text: "added by v3, not built yet", type: annot}
 
 edges:
   - {from: train.e, to: test.w}
   - {from: offline.e, to: closed.w}
   - {from: closed.e, to: gen.w}
   - {from: closed.e, to: obey.w}
-  - {from: obey.s, to: offline.s, route: bus, bend: 10, color: grey, label: "改对应的模块，再回到离线检查",
+  - {from: obey.s, to: offline.s, route: bus, bend: 10, color: grey, label: "fix that module, then back to the offline check",
      label_size: 7, label_dy: -5}
 
 caption: >-
-  \textbf{泛化全部压在交互 affordance map 上：它把没见过的场景读成正确的计划，动作头因为被训练成服从计划，计划对了就能做对。}
-  ① 只在标准 LIBERO-Object 上训练（图中是沙拉酱任务的示范，橙色轮廓是指令点名的物体）；测试用 LIBERO-PRO，零样本：位置扰动把沙拉酱挪了位置，任务扰动在同一场景里点名番茄酱，v3 再加语言扰动，朝向的主要测试加上有把手物体的 LIBERO-10；E7 再加物体绕竖直轴转动、同类没见过的物体和几种变化同时出现的测试。
-  ② 一次抓取拆成三件事：语义门控挑出点名的物体，交互 map 对所有物体找准接触位置、给出方向（蓝），动作头只负责服从（橙）；每次改动先做离线首帧检查，再跑闭环，把每个失败的回合归到一类，改对应的模块。
-  紫色虚线框是 v3 新增、尚未实现的部分。
+  \textbf{Generalisation rests on the interaction affordance map: it turns an unseen scene into the right plan, and
+  the action head, trained to obey plans, then acts correctly.}
+  ① Training uses standard LIBERO-Object only (the salad-dressing demo; the named object is outlined in orange).
+  Testing is zero-shot on LIBERO-PRO: the position perturbation moves the salad dressing, the task perturbation
+  names the tomato sauce in the same scene; v3 adds the language perturbation, LIBERO-10 for objects with handles,
+  and the tests G3 (rotation), G4 (unseen shapes of a known category, a final goal) and G5 (combined).
+  ② A grasp splits into three parts: the semantic gate picks the named object, the interaction map finds the contact
+  and direction on every object (blue), the action head only obeys (orange). Each change is checked offline on first
+  frames, then in closed loop; every failed episode is assigned to one class and the matching module is fixed.
+  Purple dashed: added by v3, not implemented yet.

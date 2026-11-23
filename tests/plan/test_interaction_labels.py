@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from affordance_vla.plan.interaction_labels import (
+    CanonicalMap,
     Grasp,
     axis_groups,
     canonical_map,
@@ -12,6 +13,7 @@ from affordance_vla.plan.interaction_labels import (
     held_grasp_steps,
     line_angle_deg,
     load_maps,
+    map_in_world,
     project_map,
     save_maps,
 )
@@ -121,3 +123,12 @@ def test_maps_survive_saving_and_loading(tmp_path):
     save_maps(tmp_path / "maps.npz", [cmap])
     loaded = load_maps(tmp_path / "maps.npz")["cube"]
     assert loaded.grasps == 1 and np.array_equal(loaded.score, cmap.score) and np.array_equal(loaded.axis, cmap.axis)
+
+
+def test_map_in_world_moves_points_and_turns_axes_with_the_object():
+    cmap = CanonicalMap("mug", points=np.array([[0.1, 0.0, 0.0]]), normals=np.array([[1.0, 0.0, 0.0]]),
+                        score=np.array([1.0]), axis=np.array([[1.0, 0.0, 0.0]]), agreement=np.array([1.0]), grasps=1)
+    quarter_turn = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])  # 90 degrees about z
+    points, axes = map_in_world(cmap, np.array([1.0, 2.0, 3.0]), quarter_turn)
+    np.testing.assert_allclose(points, [[1.0, 2.1, 3.0]])
+    np.testing.assert_allclose(axes, [[0.0, 1.0, 0.0]])

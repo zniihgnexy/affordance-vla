@@ -6,6 +6,9 @@ logs: runs/libero_pro                       # image-free copies of the server's 
 offsets:                                    # gripper position at grasp / release relative to the object, from
   libero_object: runs/plan_following/dataset10/offsets.json         # the training demonstrations (the
   libero_spatial: runs/plan_following/dataset_spatial/offsets.json  # oracle plan uses the same numbers)
+maps:                                       # 3D interaction maps per object category (L of Pipeline v3)
+  libero_object: runs/interaction_labels/object/maps.npz
+  libero_10: runs/interaction_labels/libero10/maps.npz
 
 scene:                    # which scene `scene` and `grasp` open
   suite: libero_object_swap
@@ -16,6 +19,12 @@ scene:                    # which scene `scene` and `grasp` open
 viewer:
   realtime: 1.0           # 1 = LIBERO's 20 Hz control rate; 0.5 = half speed; 0 = as fast as possible
   hold: true              # keep the window on the final state until it is closed
+
+map:                      # what `map` draws per object
+  points: 250             # at most this many of the highest-scoring surface points
+  min_score: 0.15         # and only points scoring at least this (scores are in [0, 1])
+  radius: 0.0035          # marker sphere radius, m
+  axis_m: 0.08            # length of the closing-axis line through the hottest point, m
 
 grasp:
   object: null            # null: the object the task's goal names

@@ -1,112 +1,105 @@
-"""Section 6 (the experiment plan) of the week-2 review; section 2 is in weekly_2026_11_16_pipeline.py.
+"""Sections 4 (plan and decisions) and 5 (live demo commands for the local MuJoCo simulator) of the week-2 review.
 
-Imported by build_weekly_2026_11_16.py, which owns the notebook. Only the latest version of every figure and block
-is kept: when the pipeline changes, the text here is replaced, and section 2.1 records what changed and why.
+Imported by build_weekly_2026_11_16.py, which owns the notebook; section 2 is in weekly_2026_11_16_pipeline.py.
+Only the latest version of every block is kept. The commands of section 5 were run on the Mac on 23 Nov 2026
+(scripts/local/sim.sh; the replays reproduced the server's outcomes).
 """
 
 
 def plan_cells(md) -> None:
-    """Section 6: the way forward, agreed by the project lead on 20 Nov."""
+    """Section 4: skeleton and replaceable parts, the three stages, next steps, decisions of the week."""
     md("""
-## 6 · 下一步：实验推进计划（11-20 项目负责人已同意）
+## 4 · Plan and decisions
 
-**项目负责人的思路：**
+**Approach (project lead, agreed 20 Nov):** fix the pipeline skeleton first; then pick downstream tasks; then use the comparisons to go back to specific modules or add new ideas. Each failure is attributed to one module (section 2.4), which says where to go back to.
 
-1. 先让 pipeline 按期望的方向定型，确认基本框架不再变；
-2. 再挑合适的下游任务；
-3. 按下游任务上的对比结果，有针对性地回到 pipeline 的某个模块改进，或者加新的创新点。
-
-**对应的做法：** 把 pipeline 分成"骨架"和"可替换的部分"。
-
-- 骨架定型后不再改；之后的改进，都是替换某个可替换的部分，或者在骨架上加一个模块。
-- 失败归类（2.4 节 V3）把下游任务上的每次失败指到一个模块，这就是"有针对性地回去改"的依据。
-
-| 骨架（定型后不变） | 可替换的部分（第三阶段按结果改） |
+| Skeleton (fixed at decision point 1) | Replaceable parts (changed in stage 3, by results) |
 | --- | --- |
-| VLM 读画面和指令 | 冻结，还是全量微调 |
-| 交互 map 头：所有物体的分数、深度、方向；全局的事件和接近方向 | 特征：8×8 → 合并前 16×16 → DINOv2 → 加腕部视角 |
-| 语义门控挑目标 | 余弦相似度 → 加可学习投影 |
-| 解码成计划向量，计划保持 | 物体朝向：不读 → 3D 对齐 |
-| 动作头用反事实样本训练成服从计划 | 反事实的种类和标签规则 |
-| 标签来自仿真里的交互（L1、L2，L2 是类别级的） | L1 → 交互面；类别级 map 的搬运：最近点 → 按部位 → 语义对应；训练数据：Object → 加 LIBERO-10、Spatial |
-| 评测：离线首帧检查 + 闭环 + 失败归类 | 下游任务集（第二阶段定） |
+| VLM reads image and instruction | frozen vs full fine-tuning |
+| interaction map head: scores for every object, depth, direction; event and approach | features: 8×8 → pre-merge 16×16 → DINOv2 → wrist view |
+| semantic gate picks the target | size of the learnable projection; spatial language |
+| decode to a plan vector; plan hold | object orientation: none → 3D alignment |
+| action head trained to obey through counterfactuals | kinds of counterfactual, label rules |
+| labels from simulated interaction (L1, category-level L2) | L1 → interaction surface; map transfer: nearest point → parts → semantic correspondence |
+| evaluation: offline first-frame checks, closed loop, failure attribution | downstream task set (stage 2) |
 
-### 阶段 1：骨架定型（11-20 至约 12-10）
+| Stage | When | What | Ends with |
+| --- | --- | --- | --- |
+| 1 · skeleton | to ~10 Dec | E1 ✓, L ✓; E2 semantic gate (with Spatial); E3 orientation upper bound on LIBERO-10; minimal E4 (8×8 head + direction field); L2c category-level mug map + tall/short/fat/thin test set | decision point 1: skeleton fixed |
+| 2 · pick tasks | ~11–17 Dec | inference only on candidate sets (LIBERO-PRO Object / 10 / Spatial, LIBERO-Plus, G3 and G4 sets, drawers and knobs): released vs skeleton vs skeleton + oracle plan, failures in 5 classes | decision point 2: task set and protocol |
+| 3 · improve | ~18 Dec – end of Jan | rounds: find the failure class we lose most, change its module, keep a change only above 2× noise (~12/200); baselines B, D, E, F; full fine-tuning mid-Jan; paper-protocol numbers end of Jan | NeurIPS 2027 or IROS 2027 |
 
-回答下面四个问题，骨架就定了。
+**Next steps (stage 1)**
 
-| 问题 | 实验 | 结果怎么用 |
-| --- | --- | --- |
-| 语义门控能不能挑对物体？ | E1（已完成，3.4 节：冻结的相似度太弱，门控加可学习投影）→ E2（8×8 头 + 门控 + 所有物体的标签；训练数据加 Spatial，离线评测含 Spatial，对照是同数据不加门控的 g1） | 能：门控进骨架。不能：回到 g1 的做法，map 头直接学点名的物体 |
-| 画所有物体，位置会不会变差？ | E2 的离线位置误差，和 g1 比 | 变差就先查标签 |
-| 朝向要不要进计划？ | E3：LIBERO-10 上，真值朝向进计划和不进比较 | 有用：计划 16 维，方向场进骨架（8×8 版本，E4 的最小版本）。没用：计划保持 10 维，方向场只做分析 |
-| 类别级 map 能不能搬到没见过的杯子上？（第五轮） | L2c，只用 CPU，和 E2 同时做：下载 LIBERO-90 里抓杯子的 10 个任务的示范，回放补记位姿；建杯子的类别级 map，三种杯子轮流留出；按几档缩放建高矮胖瘦测试集 | 留出的杯子自己的示范抓取八成以上落在搬来的 map 的高分区域、闭合轴误差中位数小于 20°：类别级标签进骨架。不行：先查对齐，再改成按部位记；仍不行，G4 只用缩放集 |
+1. **E2:** project the 3D maps onto the training frames (labels for every object); gate with a learnable projection; map head trained with Spatial; offline check including Spatial, then closed loop on Object. Pass: better object picking than g1 on the same data by > 2× noise; closed loop above 129 (position) and at least 145 (task).
+2. **L2c** (CPU, alongside E2): LIBERO-90 mug demonstrations; category-level mug map with a leave-one-mug-out check; the scaled mug test set.
+3. **E3:** LIBERO-10 plan dataset with the object of each phase from the contact records; oracle orientation in the plan (16 numbers) vs not.
 
-- **前提：** L 的标签代码；LIBERO-10 的训练数据。LIBERO-10 的任务大多要先后抓两个物体，每个阶段抓的是哪个物体，要从示范的接触记录里取。
-- **产出：** 骨架版 v3 在 LIBERO-PRO Object 和 LIBERO-10 上的闭环结果（开发协议）；建好的高矮胖瘦测试集。
-- **决定点 1：** 项目负责人确认骨架定型。之后 v3 文档的骨架部分不再改。
+**Decisions this week** (full text in [`docs/vla/README.md`](../docs/vla/README.md))
 
-### 阶段 2：挑下游任务（约 12-11 至 12-17）
+- **19 Nov:** Pipeline v3 replaces v2's method; baselines B, D, E, F; add the `_lan` suite. Evening: the directional interaction map is the core; labels L1 + L2; first version is a 2D map plus depth.
+- **20 Nov, round 3:** L2 = per-category 3D map; a map for every object plus a multiplicative semantic gate; object orientation by 3D alignment; generalisation tests G1–G5.
+- **20 Nov:** the three-stage plan; this project's GPU jobs use queue priority 164 and GPU 7.
+- **20 Nov, round 5:** generalisation to unseen shapes of a category is a final goal → category-level L2, the scaled mug set, the G4 protocol.
+- **20 Nov, after E1:** learnable projection in the gate; Spatial in E2.
+- **Reporting:** one review per London calendar week; experiment notebooks are appendices in `report/experiments/`.
+""")
 
-| 候选 | 考什么 | 现状 |
-| --- | --- | --- |
-| LIBERO-PRO Object（位置、任务、语言扰动） | 认物体、找位置 | 在用 |
-| LIBERO-PRO LIBERO-10 | 有把手的物体、两步任务 | 官方权重 3/200、18/200（第 4 节） |
-| LIBERO-PRO Spatial | 一样的碗，按位置区分 | 数据已备好 |
-| LIBERO-Plus | 换视角、光照、背景、初始位姿等 | 还没下载 |
-| G3（自己加的扰动） | 物体转动 | 扰动要写 |
-| G4：高矮胖瘦的杯子、红杯子 | 同类没见过的形状（最终目标之一） | 阶段 1 的 L2c 建好 |
-| 带抽屉、旋钮的任务（LIBERO-Goal 类） | 推、拉、转，不是抓 | 骨架现在不覆盖 |
 
-- **筛选方法：** 不训练新模型，只做推理。每个候选跑三组：官方权重、骨架版（预测的计划）、骨架版加真值计划；每个任务 20 个起始状态、种子 7；失败按五类归。
-- **挑选标准：**
-  1. 有提升空间：真值计划比官方权重高很多；
-  2. 我们和真值计划之间的差距，能归到骨架里的模块；
-  3. 失败类型和论点对得上（认错物体、位置偏、方向错），而不是骨架不覆盖的问题；
-  4. 有已发表的数字可以并列；
-  5. 算力和数据成本可以接受。
-- **产出：** 主任务集、次要任务集和固定的测试协议。
-- **决定点 2：** 项目负责人确认任务集。
+def demo_cells(md) -> None:
+    """Section 5: copy-paste commands that show the week's results live in MuJoCo on the Mac."""
+    md("""
+## 5 · Live demo in MuJoCo (Mac)
 
-### 阶段 3：对比驱动的改进（约 12-18 至 2027 年 1 月底）
+Run from the repository root on the Mac. Each command opens a MuJoCo window (mouse: rotate and zoom; space: pause; double-click an object, then Ctrl + right-drag to move it; close the window to end) and narrates in the terminal. **Replays** re-run the server's logged actions in the same scene, start state and seed: no model runs locally, and at the end the outcome and gripper path are compared with the server's record.
 
-**每一轮：**
+**Once:**
 
-1. 在选定的任务上跑骨架版和基线（B、D、E、F，官方权重作参考行）；
-2. 把失败按五类归，找出"我们输得最多"的那一类；
-3. 回到对应模块的可替换部分，或者加一个创新点（下表）；
-4. 先离线检查，再闭环（开发协议）。超过噪声才保留：200 次试验时一个标准差约 6 次，取 2 倍；
-5. 在 v3 文档的"进展"里记一行：改了什么、针对哪类失败、结果如何。
+```bash
+bash envs/local/setup_sim_env.sh       # conda env affordance-vla-sim: MuJoCo 3.2.3, robosuite 1.4.0 (as on the server)
+bash scripts/local/fetch_sim_data.sh   # LIBERO-PRO, perturbed task files, evaluation logs, the L maps
+```
 
-| 输得最多的一类 | 先回到哪里 | 可以加的创新点 |
-| --- | --- | --- |
-| 认错物体 | 语义门控 | 可学习投影；空间语言（"左边那个碗"） |
-| 位置偏 | map 的特征和标签 | 更细的特征；腕部视角的 map；在闭环帧上训练 map；交互面标签 |
-| 方向错 | 方向场、3D 标准 map | 3D 对齐读物体朝向；"转朝向"的反事实 |
-| 没跟上计划 | 动作头的标签 | 更多反事实种类；计划噪声 |
-| 抓到后失败、两步任务做不完 | 释放阶段、计划的先后 | 子目标选择：两步任务里先抓哪个 |
+**1. The test scene, with each object's demonstrated grasp point (orange):**
 
-**G4 上的失败**（同类没见过的形状）也按这五类归。位置偏或方向错是主要失败时，可以加：
+```bash
+bash scripts/local/sim.sh scene --suite libero_object_swap --task 2 --episode 0
+```
 
-- 用缩放或换了网格的物体渲染训练帧，训练 map 头。map 头不需要动作，所以不需要新示范；测试用的缩放档位不进训练。
-- 标签改成按部位记。
-- 用语义对应搬运 map（Robo-ABC 的做法）。
+**2. Position perturbation, the salad dressing moved: released checkpoint (fails), then ours (succeeds; orange dot = the plan's contact):**
 
-- **1 月中：** 主对比的全量微调，要整机时段，12 月中提前通知。
-- **1 月底：** 按论文协议（50 个起始状态 × 3 个种子）出数字，按 11-12 的决定判断投 NeurIPS 还是 IROS。
+```bash
+bash scripts/local/sim.sh replay runs/libero_pro/released/libero_object_swap/task2_ep0.npz
+bash scripts/local/sim.sh replay runs/libero_pro/predicted_g1_hold_s10/libero_object_swap/task2_ep0.npz
+```
 
-### 和 v3 文档的关系
+**3. Task perturbation, the tomato sauce named: released (fails), ours (succeeds):**
 
-- E0–E3 归到阶段 1；E4 的最小版本（8×8 加方向场）也在阶段 1；第五轮加的 L2c 也在阶段 1。
-- 更细的特征（原 E4 的其余部分）和 E5，变成阶段 3 里按失败类型触发的改进。
-- E6 基线放进阶段 3；E7 的推广拆进阶段 2 的筛选（S）和阶段 3。
-- 已写进 v3 文档第 3、4、5、7、8、9、10 节。
+```bash
+bash scripts/local/sim.sh replay runs/libero_pro/released/libero_object_task/task2_ep0.npz
+bash scripts/local/sim.sh replay runs/libero_pro/predicted_g1_hold_s10/libero_object_task/task2_ep0.npz
+```
 
-### 项目负责人的决定（11-20 晚）
+**4. A failure of ours: the predicted contact is ~3 cm off and the gripper closes beside the tomato sauce (E0):**
 
-1. 同意按这三个阶段推进。
-2. GPU 队列：本项目的作业可以设优先级 164，排在另一个项目的作业前面。
-3. **泛化是最终目标之一**（第五轮）：L2 改成类别级；加高矮胖瘦测试集和红杯子；G4 按上面的测法和对照做。
-4. 本项目的 GPU 作业提交时用 `cards=7`，优先用 GPU 7，控制用卡。
-5. E2 的离线评测加上 Spatial（E1 之后）：Object 上 g1 很少认错物体，门控的作用要在 Spatial 上才看得出来。
+```bash
+bash scripts/local/sim.sh replay runs/libero_pro/predicted_g1_hold_s10/libero_object_swap/task5_ep0.npz
+```
+
+**5. L: the 3D interaction maps on the objects** (yellow → red = grasp contact score, blue line = closing axis; the maps follow an object when you drag it):
+
+```bash
+bash scripts/local/sim.sh map --suite libero_10 --task 4            # mugs: rim
+bash scripts/local/sim.sh map --suite libero_10 --task 8            # moka pots: handle
+bash scripts/local/sim.sh map --suite libero_object_swap --task 2   # LIBERO-Object: both sides
+```
+
+**6. LIBERO-10, released checkpoint on the mug task:** position perturbation (reaches for the red mug), then task perturbation (places both mugs as in training, ignoring the swapped instruction):
+
+```bash
+bash scripts/local/sim.sh replay runs/libero_pro/libero10_released/libero_10_swap/task4_ep0.npz
+bash scripts/local/sim.sh replay runs/libero_pro/libero10_released/libero_10_task/task4_ep0.npz
+```
+
+**Options:** `--set viewer.realtime=0.5` plays at half speed; `bash scripts/local/sim.sh list runs/libero_pro/predicted_g1_hold_s10` lists every episode of a run with its outcome. Details: [`docs/local_simulation.md`](../docs/local_simulation.md).
 """)
