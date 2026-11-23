@@ -39,11 +39,8 @@ Full design: [`docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md`](../docs/vla/2026-
 """)
     code(figure("v3_model.png", 1000))
     md(r"""
-**Layer by layer** (below): the plan branch (map head → gate → decoding → plan) and the action branch read the same VLM forward pass.
-""")
-    code('DETAIL = FIGURES / "detail"   # layer-level figures, rendered from pipeline_v3_layers.html\n'
-         + figure("v3_detail_1_overview.png", 1000, "DETAIL"))
-    md(r"""
+**Layer by layer:** the overview with every block is in section 2.1 (gold = the open-source starVLA model, ①–⑥ = its links to our parts). The plan branch (map head → gate → decoding → plan) and the action branch read the same VLM forward pass.
+
 **B1 Inputs [implemented]:** agent view (mirrored) and wrist view, 224×224 each, upsampled to 256×256 (the processor's minimum is 256² pixels); the instruction; the current gripper position.
 
 **B2 VLM [implemented, frozen]:** Qwen3-VL-4B. ViT: 16-px patches, 24 layers × 1024; 2×2 merge → **8×8 = 64 tokens per view** (one token = one 28×28-px cell of the 224 image = one map cell). DeepStack adds ViT layers 5/11/17 to LLM layers 1–3. LLM: 36 layers × 2560, causal; image tokens come before the instruction, so image tokens cannot see it. Outputs $h^{(1)},\dots,h^{(36)}$. Frozen for diagnostics, fully fine-tuned for the main comparison.

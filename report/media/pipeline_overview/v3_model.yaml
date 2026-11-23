@@ -1,5 +1,6 @@
 # VLA Pipeline v3, figure 1 of 3: the model at test time (docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md).
-# Purple dashed boxes are what v3 adds and is not implemented yet; everything else runs today.
+# Purple dashed boxes are what v3 adds and is not implemented yet; everything else runs today. Gold boxes are the
+# open-source starVLA QwenPI model (released weights); all others are ours.
 # Crops: real LIBERO-PRO rollout (scripts/report/pipeline_figure_crops.py, README.md in this folder).
 figure:
   id: v3_model
@@ -31,7 +32,7 @@ panels:
                 align: center
                 body:
                   - {id: m_vlm, shape: marker, kind: frozen, d: 7}
-                  - {id: vlm, shape: trapezoid, text: "Qwen3-VL-4B\n36 layers", role: neutral}
+                  - {id: vlm, shape: trapezoid, text: "Qwen3-VL-4B\n36 layers", fill: gold.light}
             - group:
                 id: tok
                 frame: none
@@ -101,23 +102,33 @@ panels:
                 body:
                   - {id: m_act, shape: marker, kind: trainable, d: 7}
                   - {id: penc, text: "plan encoder\nMLP, added to\naction tokens", role: decoder}
-            - {id: act, text: "action head\n(DiT) reads\nVLM layers", role: decoder}
+            - {id: act, text: "action head\n(DiT) reads VLM\nlayers + our LoRA", fill: gold.light}
             - {id: chunk, text: "8-step chunk\nOSC controller", role: neutral}
             - {id: img_out, shape: image, w: 46, src: outcome.png, caption: "outcome"}
 
   - id: s_key
     frame: none
     body:
-      - row:
-          gap: 5
+      - col:
+          gap: 4
           align: center
           body:
-            - {id: k1, shape: marker, kind: trainable, d: 6}
-            - {id: k1t, shape: text, text: "trained", type: annot}
-            - {id: k2, shape: marker, kind: frozen, d: 6}
-            - {id: k2t, shape: text, text: "frozen (fine-tuned in the main run)", type: annot}
-            - {id: k3, shape: sharpbox, w: 11, h: 7, fill: purple.light, dash: true}
-            - {id: k3t, shape: text, text: "added by v3, not built yet", type: annot}
+            - row:
+                gap: 5
+                align: center
+                body:
+                  - {id: k4, shape: sharpbox, w: 11, h: 7, fill: gold.light}
+                  - {id: k4t, shape: text, text: "starVLA QwenPI: open-source model with released weights; all other boxes are ours", type: annot}
+            - row:
+                gap: 5
+                align: center
+                body:
+                  - {id: k1, shape: marker, kind: trainable, d: 6}
+                  - {id: k1t, shape: text, text: "trained", type: annot}
+                  - {id: k2, shape: marker, kind: frozen, d: 6}
+                  - {id: k2t, shape: text, text: "frozen (fine-tuned in the main run)", type: annot}
+                  - {id: k3, shape: sharpbox, w: 11, h: 7, fill: purple.light, dash: true}
+                  - {id: k3t, shape: text, text: "added by v3, not built yet", type: annot}
 
 edges:
   - {from: img_in.e, to: instr.w}
@@ -148,4 +159,5 @@ caption: >-
   ③ The gated peak becomes a 3D contact through the camera calibration; with the approach direction and the event
   it forms the plan vector (10-d; 16-d with the target orientation, planned), held until the gripper event; the plan
   encoder adds it to every action token of the DiT action head, whose 8-step chunk is executed by the OSC controller.
-  Purple dashed: added by v3, not implemented yet.
+  Gold: the open-source starVLA QwenPI model with its released weights (our LoRA sits in its action head); all
+  other boxes are ours. Purple dashed: added by v3, not implemented yet.
