@@ -1,4 +1,4 @@
-> **VLA 方向（本仓库的主线）** 的文档在 [`vla/`](vla/README.md)；本机仿真说明见 [local_simulation.md](local_simulation.md)。下面是 2026-11-10 拆分前从 affordance3D 带过来的环境记忆方向资料，只作参考，不在这里维护。
+> **VLA 方向（本仓库的主线）** 的文档在 [`vla/`](vla/README.md)；现状和交接摘要见 [HANDOVER.md](HANDOVER.md)；本机仿真说明见 [local_simulation.md](local_simulation.md)。下面是 2026-11-10 拆分前从 affordance3D 带过来的环境记忆方向资料，只作参考，不在这里维护。
 
 # 研究文档
 
