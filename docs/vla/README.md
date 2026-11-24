@@ -123,6 +123,8 @@
 
 ## 入口
 
+现状、还缺什么、约束和工作流的摘要：[交接摘要](../HANDOVER.md)（2026-11-24 起，每个阶段更新）。
+
 1. [Pipeline v3（2026-11-19）](2026-11-19_VLA_branch_Pipeline_v3.md)：现行的方法和实验指导，包括三张图、模块、训练、测试、实验顺序和通过标准、基线、不做的事、停止规则。
 2. [Pipeline v2（2026-11-10）](2026-11-10_VLA_branch_Pipeline_v2.md)：方法部分已被 v3 取代；backbone 和 benchmark 选型、实验配置、算力部分仍然有效。
 3. [检索结果：backbone、benchmark 与近邻（2026-11-10）](2026-11-10_VLA_branch_检索结果_backbone_benchmark_近邻.md)：三个检索 agent 的原始报告。
