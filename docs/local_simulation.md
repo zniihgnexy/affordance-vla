@@ -10,6 +10,7 @@ bash scripts/local/fetch_sim_data.sh # LIBERO-PRO（GitHub 固定提交 eafdb80�
 ```
 
 Mac 上只放仿真需要的东西，都在 git 忽略的目录里：
+
 - `third_party/LIBERO-PRO`：约 650 MB，和服务器上的副本逐文件一致，可以用 `VERIFY=1` 核对；
 - `runs/libero_pro/<运行>/`：每条日志约 36 kB；
 - `runs/plan_following/<数据集>/offsets.json`：抓取点和放置点的偏移。
@@ -30,27 +31,32 @@ bash scripts/local/sim.sh list   runs/libero_pro/predicted_g1_hold_s10     # 列
 - **replay**：把服务器上某次测试原样再跑一遍。用的是同一个任务文件、同一个起始状态、同一个随机种子和同一条指令；每一步执行的都是服务器上策略当时给出的动作。终端按步骤讲解，窗口里的橙点是策略当时拿到的计划接触点。最后和服务器的记录对比：成功与否、步数、末端轨迹偏差。
 
 默认设置在 `configs/sim/local.yaml`。可以用 `--set` 改单项，例如：
+
 - `--set viewer.realtime=0.5`：半速播放；
 - `--set grasp.place=false`：只抓不放。
 
 ## 一次 LIBERO-PRO 测试的流程（replay 终端输出的就是这几段）
 
 1. **任务**：任务集加任务编号，对应一个 BDDL 场景文件和它的目标判定，例如 `(in salad_dressing_1 basket_1_contain_region)`。
+
    - 位置扰动（`*_swap`）：把目标物体和另一个物体换了位置；
    - 任务扰动（`*_task`）：把指令和目标换成场景里的另一个物体。
 2. **指令**：交给策略的那句话。任务扰动下，用的是扰动后任务文件里改过的说法。
 3. **起始状态**：任务集预先记录的第 k 个初始状态，加上随机种子；先执行 10 步空动作，让物体落稳。
 4. **闭环**：每次查询交给策略两样东西：
+
    - 两张相机图：第三人称和手腕视角，都旋转 180°，和训练时一样；
    - 指令；我们的方法还附带计划，也就是下一个夹爪事件、接触点和接近方向。
 
    策略一次返回 8 步动作（一个动作块），执行完再查询。用预测计划时，计划会一直保持到夹爪完成这次抓取或放下。
 5. **结束**：满足以下任一条件就结束：
+
    - LIBERO 的目标判定成功；
    - 指令要的物体满足了目标；
    - 到了步数上限：Object 280 步，Spatial 220 步。
 
 代码：
+
 - 这套循环在 `affordance_vla/sim/episode.py`，服务器评测（`scripts/eval/rollout_libero_logged.py`）和本机回放用的是同一份；
 - 讲解文字在 `affordance_vla/sim/narration.py`；
 - 窗口在 `affordance_vla/sim/live_view.py`。
