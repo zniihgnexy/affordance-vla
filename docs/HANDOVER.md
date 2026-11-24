@@ -164,6 +164,7 @@
 - `s2b_actions` 的 rollout 目录在 11-13 之后被改写过，notebook 里那一列的数字变了，没有追查（`[笔记:v0-status]` 末段）。
 - 官方 LIBERO 评测有没有输入 7 维本体状态：`[v3]` 进展写“还没核实”，`[会话:4ad7]` 11-23 的摘要写已从源码确认训练时关闭、我们也不发送。文档没有跟着改。
 - `[EXP]` 的示例命令还是 `cards=5` 和优先级 160、162，是历史运行的原样；新作业按 `AGENTS.md` 用 `cards=0`。
+- `tests/test_config.py::test_the_resolved_config_records_its_source` 从 Multica 的任务 worktree 里 push 时会失败：Mac 的 pre-push hook 会跑 pytest，git 在 linked worktree 里给 hook 导出了 `GIT_DIR`，测试里“临时目录不是仓库”的假设就不成立了。2026-11-24 实测：任务 worktree 里 448 过 1 败，push 被挡住；普通 clone 里 449 全过。要改的是这个测试，不是 hook。在改好之前，从 Mac push 文档要用一个普通 clone。
 - **【推断】** 夜间自动接续作业的脚本（`chain_*.sh`）放在 NAS 的缓存目录里，不在仓库里（`[笔记:v0-status]` 多处提到）；作业的先后关系因此没有版本记录。
 - **【未核实】** 服务器工作副本现在的状态：有没有未提交的改动、队列里有没有本项目的作业。11-23 的会话摘要说服务器、GitHub 和 Mac 三处都在 `f3f9da2`。
 
@@ -188,6 +189,8 @@
 | 提交前检查 | 服务器上没有 git hook，提交前手动跑 `pytest` 和 `ruff`；Mac 上的 pre-push hook 会跑 pytest | `[笔记:git-workflow-quirks]` |
 
 **Mac clone 的状态（2026-11-24 `git fetch` 后比较）：** `main` 和 `origin/main` 都在 `f3f9da2`，不落后。工作区里有两处没提交的本地改动：`docs/local_simulation.md` 多了几个空行，第二周周报有两个单元格的执行计数被清空。成员 11-24 决定保留。进来的提交如果改到这两个文件，快进 pull 会被挡住，到时要先处理。
+
+**分支（2026-11-24）：** 交接文档在 `agent/vla-lead/affo-2-docs`，已 push，从 `main` 起只有文档改动，等成员合并。Mac 本地的 `agent/vla-lead/affo-2` 是 AFFO-2 的任务分支，历史里有一个意外提交（`8cbb4ec`，读历史时从此前会话抽出的对话文本），不要 push，也不要整条合并。
 
 ## 8. 成员的工作偏好
 
