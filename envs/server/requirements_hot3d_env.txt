@@ -1,0 +1,14 @@
+# HOT3D demo environment (envs/server/setup_hot3d_env.sh); torch 2.2.2+cpu is installed before this file
+numpy==1.26.4
+scipy==1.13.1
+trimesh==4.4.9
+opencv-python-headless==4.10.0.84
+matplotlib==3.9.2
+imageio==2.36.0
+pillow==10.4.0
+tqdm==4.66.5
+webdataset==0.2.100
+typing_extensions==4.12.2
+pytest==8.3.3
+ruff==0.7.4
+pyyaml==6.0.2
