@@ -136,3 +136,37 @@ Experiment notebooks (appendices of their week), from `report/experiments/`:
 names its notebook and inputs; media go to the tracked `report/media/`.
 The layer-level pipeline figures are rendered on the Mac (needs Google Chrome):
 `python scripts/report/render_pipeline_detail.py report/media/pipeline_overview/detail/pipeline_v3_layers.html`.
+
+## 6. RoboCasa365 set-up check (Pipeline v4 step 0, AFFO-10; server)
+
+Record: `docs/vla/2026-11-25_VLA_branch_第0步_RoboCasa365搭建.md`. Needs the conda env
+`/data/xinyizheng/envs/robocasa365` (simulator, CPU) and `starvla` (training, GPU); data and assets on the NAS.
+
+```bash
+bash envs/server/setup_robocasa365_env.sh                 # env, pinned code, assets (22 GB), idempotent
+bash scripts/data/fetch_robocasa365.sh [--dry-run] [TASK ...]   # default CoffeeSetupMug OpenDrawer TurnOffStove, 1.4 GB
+source envs/server/robocasa365_env.sh                     # $RC365_PYTHON, software rendering
+"$RC365_PYTHON" scripts/data/replay_robocasa365.py --task CoffeeSetupMug OpenDrawer TurnOffStove --episodes 5 \
+    --out $W/runs/robocasa365_replay/<run>                # re-render from saved states; depth, segmentation, PSNR, timings
+"$RC365_PYTHON" scripts/report/make_rc365_figures.py --replay $W/runs/robocasa365_replay/<run> \
+    --out report/media/weekly_2026_11_23/robocasa365      # figures of the weekly review
+```
+
+Training and evaluation of starVLA on three tasks (configs `configs/rc365/`; wrappers document their settings):
+
+```bash
+# QwenOFT (MLP head), frozen VLM; FREEZE= trains everything; CONFIG=...qwenpi_rc365_3tasks.yaml is QwenPI
+bash scripts/server/submit_queue_job.sh 164 rc365_oft 30000 1 "cards=6 7" -- \
+    env RUN=<run> CONFIG=$PWD/configs/rc365/qwenoft_rc365_3tasks.yaml BATCH=8 STEPS=300 \
+    bash $PWD/scripts/rc365/run_train_gpu.sh              # -> $W/runs/robocasa365_starvla/<run>/{train.log,PEAK_MEMORY.txt,checkpoints/}
+bash scripts/server/submit_queue_job.sh 164 rc365_eval 20000 1 "cards=6 7" -- \
+    env CKPT=$W/runs/robocasa365_starvla/<run>/checkpoints/steps_300_pytorch_model.pt EPISODES=10 \
+    bash $PWD/scripts/rc365/run_eval_gpu.sh               # -> $W/runs/robocasa365_eval/eval_<run>/{summary.txt,client_<Task>.log,videos/}
+```
+
+| Run | Settings | Result |
+| --- | --- | --- |
+| `qwenoft_rc365_frozen` | QwenOFT, frozen VLM, batch 8, 300 steps | peak 11.42 GiB, 0.445 s/step model time |
+| `qwenpi_rc365_3tasks_frozen` | QwenPI, frozen VLM, batch 8 | out of memory (46.41 GiB) |
+| `qwenpi_rc365_frozen_b1` | QwenPI, frozen VLM, batch 1 | out of memory (41.46 GiB) |
+| `qwenpi_rc365_full_b1` | QwenPI, all weights, batch 1 | out of memory (37.30 GiB) |
