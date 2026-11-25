@@ -5,6 +5,7 @@
 #   RUN [qwenpi_rc365_3tasks_frozen]  outputs go to $W/runs/robocasa365_starvla/$RUN
 #   STEPS [300]  BATCH [8]  SAVE [300]  (checkpoint every SAVE steps)
 #   FREEZE [qwen_vl_interface]  "" = train the whole model (full fine-tune)
+#   CONFIG [configs/rc365/qwenpi_rc365_3tasks.yaml]  or qwenoft_rc365_3tasks.yaml (MLP head)
 # Submit (never run directly; the queue sets CUDA_VISIBLE_DEVICES), from the repo root:
 #   bash scripts/server/submit_queue_job.sh 164 rc365_frozen 30000 1 "cards=6 7" -- \
 #       env RUN=qwenpi_rc365_3tasks_frozen bash ~/wt-affo-10/scripts/rc365/run_train_gpu.sh
@@ -17,6 +18,7 @@ PY_ENV="${PY_ENV:-/data/xinyizheng/envs/starvla}"
 RUN="${RUN:-qwenpi_rc365_3tasks_frozen}"
 STEPS="${STEPS:-300}"; BATCH="${BATCH:-8}"; SAVE="${SAVE:-300}"
 FREEZE="${FREEZE-qwen_vl_interface}"
+CONFIG="${CONFIG:-$REPO/configs/rc365/qwenpi_rc365_3tasks.yaml}"
 OUT="$W/runs/robocasa365_starvla/$RUN"
 [ ! -e "$OUT" ] || { echo "$OUT exists; choose another RUN" >&2; exit 1; }
 mkdir -p "$OUT"
@@ -33,7 +35,7 @@ echo "git: $(git -C "$REPO" rev-parse HEAD)  starVLA snapshot: $(basename "$(ls 
   date; nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv
   accelerate launch --config_file starVLA/config/deepseeds/deepspeed_zero2.yaml --num_processes 1 \
     "$REPO/scripts/rc365/peak_memory_launcher.py" starVLA/training/train_starvla.py \
-    --config_yaml "$REPO/configs/rc365/qwenpi_rc365_3tasks.yaml" \
+    --config_yaml "$CONFIG" \
     --framework.qwenvl.base_vlm "$W/models/Qwen3-VL-4B-Instruct" \
     --datasets.vla_data.data_root_dir "$W/data/robocasa365" \
     --datasets.vla_data.per_device_batch_size "$BATCH" \
