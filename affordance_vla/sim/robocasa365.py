@@ -7,6 +7,7 @@ state and render what the videos do not contain: depth and instance segmentation
 
 Needs the robocasa365 env (envs/server/robocasa365_env.sh): software rendering, no GPU.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,8 +30,8 @@ def dataset_dir(root: str | Path, task: str, split: str = "target") -> Path:
 
 def make_env(ds: Path):
     """The task's environment with the arguments the demonstrations were recorded with, offscreen, no obs."""
-    import robosuite
     import robocasa.utils.lerobot_utils as lu
+    import robosuite
 
     meta = lu.get_env_metadata(ds)
     kwargs = dict(meta["env_kwargs"], env_name=meta["env_name"])

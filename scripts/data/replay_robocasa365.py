@@ -10,8 +10,10 @@ Also times reset, step and render. CPU only (software rendering, robocasa365 env
 
 Usage (repo root, server):
   source envs/server/robocasa365_env.sh
-  "$RC365_PYTHON" scripts/data/replay_robocasa365.py --task OpenDrawer --episodes 5 --out $W/runs/robocasa365_replay/<run>
+  "$RC365_PYTHON" scripts/data/replay_robocasa365.py --task OpenDrawer --episodes 5 \
+      --out $W/runs/robocasa365_replay/<run>
 """
+
 from __future__ import annotations
 
 import argparse
@@ -52,8 +54,14 @@ def state_replay(env, ds, ep, episode, stride, size, keep) -> tuple[dict, dict]:
                 aux, dt = _t(rc.render_view, env, cam, size, True, True)
                 t_aux.append(dt)
                 if t in keep:
-                    samples[t] = dict(video=videos[cam][t], rgb=view["rgb"], depth=aux["depth"], geom=aux["geom"],
-                                      body=rc.body_of_geom(env, aux["geom"]), names=rc.instance_names(env))
+                    samples[t] = dict(
+                        video=videos[cam][t],
+                        rgb=view["rgb"],
+                        depth=aux["depth"],
+                        geom=aux["geom"],
+                        body=rc.body_of_geom(env, aux["geom"]),
+                        names=rc.instance_names(env),
+                    )
     summary = {cam: {str(d): float(np.mean(v)) for d, v in by.items()} for cam, by in ps.items()}
     summary["frames"] = len(range(0, n, stride))
     summary["min_psnr_aligned"] = min(min(ps[cam][0]) for cam in rc.CAMERAS)
@@ -69,8 +77,15 @@ def action_replay(env, episode) -> dict:
         t_step.append(dt)
         err.append(float(np.linalg.norm(env.sim.get_state().flatten() - states[t + 1])))
     err = np.array(err)
-    return dict(steps=len(err), step_s=float(np.mean(t_step)), state_err_first=float(err[0]), state_err_mid=float(err[len(err) // 2]),
-                state_err_last=float(err[-1]), state_err_max=float(err.max()), exact_steps=int((err == 0).sum()))
+    return dict(
+        steps=len(err),
+        step_s=float(np.mean(t_step)),
+        state_err_first=float(err[0]),
+        state_err_mid=float(err[len(err) // 2]),
+        state_err_last=float(err[-1]),
+        state_err_max=float(err.max()),
+        exact_steps=int((err == 0).sum()),
+    )
 
 
 def save_figure(path: Path, samples: dict) -> None:
@@ -78,7 +93,9 @@ def save_figure(path: Path, samples: dict) -> None:
 
     def depth_img(d):
         lo, hi = np.percentile(d, [1, 99])
-        return cv2.applyColorMap((255 * (1 - np.clip((d - lo) / max(hi - lo, 1e-6), 0, 1))).astype(np.uint8), cv2.COLORMAP_VIRIDIS)[..., ::-1]
+        return cv2.applyColorMap(
+            (255 * (1 - np.clip((d - lo) / max(hi - lo, 1e-6), 0, 1))).astype(np.uint8), cv2.COLORMAP_VIRIDIS
+        )[..., ::-1]
 
     def seg_img(body, names):
         out = np.zeros(body.shape + (3,), np.uint8)
@@ -87,8 +104,19 @@ def save_figure(path: Path, samples: dict) -> None:
                 out[body == b] = np.random.default_rng(zlib.crc32(names[int(b)].encode())).integers(40, 255, 3)
         return out
 
-    rows = [np.concatenate([s["video"], s["rgb"], np.abs(s["video"].astype(int) - s["rgb"]).clip(0, 255).astype(np.uint8) * 4,
-                            depth_img(s["depth"]), seg_img(s["body"], s["names"])], axis=1) for _, s in sorted(samples.items())]
+    rows = [
+        np.concatenate(
+            [
+                s["video"],
+                s["rgb"],
+                np.abs(s["video"].astype(int) - s["rgb"]).clip(0, 255).astype(np.uint8) * 4,
+                depth_img(s["depth"]),
+                seg_img(s["body"], s["names"]),
+            ],
+            axis=1,
+        )
+        for _, s in sorted(samples.items())
+    ]
     cv2.imwrite(str(path), np.concatenate(rows, axis=0)[..., ::-1])
 
 
@@ -114,14 +142,24 @@ def main() -> None:
             keep = {0, len(episode["states"]) // 2, len(episode["states"]) - 1}
             keep = {t - t % args.stride for t in keep}
             res, samples = state_replay(env, ds, ep, episode, args.stride, args.size, keep)
-            res.update(episode=ep, frames=len(episode["states"]), reset_s=t_reset, actions=action_replay(env, episode),
-                       lang=episode["ep_meta"].get("lang"))
+            res.update(
+                episode=ep,
+                frames=len(episode["states"]),
+                reset_s=t_reset,
+                actions=action_replay(env, episode),
+                lang=episode["ep_meta"].get("lang"),
+            )
             results["episodes"].append(res)
             if ep == 0:
                 save_figure(out / f"{task}_ep0_video_replay_diff_depth_seg.png", samples)
                 names = {int(b): n for b, n in next(iter(samples.values()))["names"].items()}
                 (out / f"{task}_ep0_instances.json").write_text(json.dumps(sorted(set(names.values())), indent=1))
-            print(task, ep, json.dumps({k: res[k] for k in ("psnr", "reset_s", "render_rgb_s")}, default=float)[:300], flush=True)
+            print(
+                task,
+                ep,
+                json.dumps({k: res[k] for k in ("psnr", "reset_s", "render_rgb_s")}, default=float)[:300],
+                flush=True,
+            )
             (out / f"{task}_replay.json").write_text(json.dumps(results, indent=1, default=float))
         env.close()
 

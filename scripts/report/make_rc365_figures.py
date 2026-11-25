@@ -5,8 +5,10 @@
   category_surface_points.png    surface points of mug / cup / bowl instances, exported from the object meshes
 
 Usage (repo root, server, robocasa365 env):
-  "$RC365_PYTHON" scripts/report/make_rc365_figures.py --replay $W/runs/robocasa365_replay/<run> --out report/media/weekly_2026_11_23/robocasa365
+  "$RC365_PYTHON" scripts/report/make_rc365_figures.py --replay $W/runs/robocasa365_replay/<run> \
+      --out report/media/weekly_2026_11_23/robocasa365
 """
+
 from __future__ import annotations
 
 import argparse
@@ -47,7 +49,10 @@ def three_cameras(root: str, out: Path) -> None:
             video = rc.read_video(ds, cam, 0)
             frames.append(video[len(video) // 2])
         rows.append(side_label(np.concatenate(frames, axis=1), f"{task}|episode 0|frame {len(video) // 2}"))
-    header = np.concatenate([np.full((28, 130, 3), BG, np.uint8)] + [label(np.zeros((0, 256, 3), np.uint8), c)[:28] for c in rc.CAMERAS], axis=1)
+    header = np.concatenate(
+        [np.full((28, 130, 3), BG, np.uint8)] + [label(np.zeros((0, 256, 3), np.uint8), c)[:28] for c in rc.CAMERAS],
+        axis=1,
+    )
     cv2.imwrite(str(out), np.concatenate([header] + rows, axis=0)[..., ::-1])
 
 
@@ -56,8 +61,16 @@ def replay_figure(replay_dir: Path, out: Path) -> None:
     for task in TASKS:
         full = cv2.imread(str(replay_dir / f"{task}_ep0_video_replay_diff_depth_seg.png"))[..., ::-1]
         rows.append(side_label(full[256:512], f"{task}|episode 0|middle frame"))  # the middle of the three saved frames
-    titles = ["recorded video", "re-rendered from state", "|difference| x4", "depth (yellow = near)", "instance segmentation"]
-    header = np.concatenate([np.full((28, 130, 3), BG, np.uint8)] + [label(np.zeros((0, 256, 3), np.uint8), t)[:28] for t in titles], axis=1)
+    titles = [
+        "recorded video",
+        "re-rendered from state",
+        "|difference| x4",
+        "depth (yellow = near)",
+        "instance segmentation",
+    ]
+    header = np.concatenate(
+        [np.full((28, 130, 3), BG, np.uint8)] + [label(np.zeros((0, 256, 3), np.uint8), t)[:28] for t in titles], axis=1
+    )
     cv2.imwrite(str(out), np.concatenate([header] + rows, axis=0)[..., ::-1])
 
 
@@ -69,25 +82,36 @@ def project(points: np.ndarray, axes: tuple[int, int], depth_axis: int, size: in
     u = (points[:, axes[0]] - c[axes[0]]) * scale + size / 2
     v = size / 2 - (points[:, axes[1]] - c[axes[1]]) * scale
     z = points[:, 2]
-    colour = cv2.applyColorMap(((z - z.min()) / max(np.ptp(z), 1e-6) * 255).astype(np.uint8)[:, None], cv2.COLORMAP_VIRIDIS)[:, 0, ::-1]
+    colour = cv2.applyColorMap(
+        ((z - z.min()) / max(np.ptp(z), 1e-6) * 255).astype(np.uint8)[:, None], cv2.COLORMAP_VIRIDIS
+    )[:, 0, ::-1]
     for i in np.argsort(-points[:, depth_axis]):  # far to near
         cv2.circle(img, (int(u[i]), int(v[i])), 1, colour[i].tolist(), -1)
     return img
 
 
 def surface_figure(out: Path, per_split: int = 2) -> None:
-    rows, header = [], []
+    rows = []
     for category in ("mug", "cup", "bowl"):
         inst = rc.category_instances(category)
         reg = max(inst, key=lambda r: len(inst[r]["all"]))  # the registry with most instances
-        picks = [("train", p) for p in inst[reg]["pretrain"][:per_split]] + [("held-out", p) for p in inst[reg]["target"][:per_split]]
+        picks = [("train", p) for p in inst[reg]["pretrain"][:per_split]] + [
+            ("held-out", p) for p in inst[reg]["target"][:per_split]
+        ]
         tiles = []
         for split, path in picks:
             pts = rc.surface_points(path, 3000)
             pair = np.concatenate([project(pts, (0, 2), 1), project(pts, (0, 1), 2)], axis=1)
             tiles.append(label(pair, f"{Path(path).parent.name} ({split})", 22))
-        counts = {r: (len(d["all"]), len(d["target"])) for r, d in inst.items()}
-        rows.append(side_label(np.concatenate(tiles, axis=1), f"{category}|{sum(a for a, _ in counts.values())} instances|{sum(t for _, t in counts.values())} held-out", 150))
+        n_all = sum(len(d["all"]) for d in inst.values())
+        n_target = sum(len(d["target"]) for d in inst.values())
+        rows.append(
+            side_label(
+                np.concatenate(tiles, axis=1),
+                f"{category}|{n_all} instances|{n_target} held-out",
+                150,
+            )
+        )
     cv2.imwrite(str(out), np.concatenate(rows, axis=0)[..., ::-1])
 
 
@@ -95,7 +119,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--replay", required=True, help="output folder of replay_robocasa365.py")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--root", default=str(Path(os.environ.get("W", "/mnt/nas/xinyizheng/affordance_vla")) / "data/robocasa365"))
+    ap.add_argument(
+        "--root", default=str(Path(os.environ.get("W", "/mnt/nas/xinyizheng/affordance_vla")) / "data/robocasa365")
+    )
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
