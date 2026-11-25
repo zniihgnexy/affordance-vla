@@ -38,8 +38,8 @@ rendering, no GPU) and adds what the videos do not hold: depth and instance segm
 - **Held-out objects are built in:** `split="target"` holds out the last ≤ 5 instances of every category and uses 10 fixed kitchens; the leaderboard protocol and the demonstrations use it. Mugs: 27 instances, 10 held out; cups 22 / 7; bowls 22 / 7; all export surface points.
 - **Composite demonstrations carry per-frame subtask labels** (language, skill name, stage, index), as documented; atomic ones do not.
 - **No public RoboCasa365 weights** (the public RoboCasa checkpoints are the GR1 tabletop benchmark).
-- **QwenOFT trains and evaluates:** frozen VLM, batch 8, 300 steps: 11.4 GiB, 0.445 s/step. ⟦EVAL⟧
-- **QwenPI does not fit one 48 GB card:** its action head alone has 3.35 B parameters (7.79 B in total); out of memory with a frozen VLM at batch 8 and 1, and with all weights at batch 1. Step 1 needs LoRA on frozen weights, several cards, or the QwenOFT backbone.
+- **QwenOFT trains and evaluates:** frozen VLM, batch 8, 300 steps: 11.4 GiB, 0.445 s/step. Evaluation of that 300-step model, 10 episodes on each of the 3 tasks, 3 clients in parallel: 4.2–5.2 min per episode (4.8 on average, about 0.41 s per environment step), 0/30 successes (a speed check of an under-trained model with a camera and state mismatch, not a capability).
+- **QwenPI does not fit one 48 GB card:** its action head alone has 3.35 B parameters (7.79 B in total); out of memory with a frozen VLM at batch 8 and 1, and with all weights at batch 1. Full fine-tuning of QwenOFT (4.5 B) at batch 1 does not fit either (needs roughly 70 GiB, inference). Step 1 needs a frozen QwenOFT VLM, LoRA on frozen weights, or several cards.
 """)
     md(r"""
 ### Try it (server `estar`, repository root of the task branch; all CPU except the last two, which go through the queue)

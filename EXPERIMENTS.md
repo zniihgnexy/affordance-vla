@@ -170,3 +170,5 @@ bash scripts/server/submit_queue_job.sh 164 rc365_eval 20000 1 "cards=6 7" -- \
 | `qwenpi_rc365_3tasks_frozen` | QwenPI, frozen VLM, batch 8 | out of memory (46.41 GiB) |
 | `qwenpi_rc365_frozen_b1` | QwenPI, frozen VLM, batch 1 | out of memory (41.46 GiB) |
 | `qwenpi_rc365_full_b1` | QwenPI, all weights, batch 1 | out of memory (37.30 GiB) |
+| `qwenoft_rc365_full_b1` | QwenOFT, all weights, batch 1 | out of memory in the first backward (29.64 GiB allocated, 42.22 GiB reserved) |
+| `eval_qwenoft_frozen_300` | evaluation of the 300-step QwenOFT, 10 episodes x 3 tasks | 0/30 successes, 4.2 / 5.1 / 5.2 min per episode, 55 min wall |
