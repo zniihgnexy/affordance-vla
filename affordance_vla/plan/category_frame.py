@@ -52,6 +52,15 @@ def up_at_rest(object_quats: np.ndarray) -> np.ndarray:
     return _unit(ups.mean(axis=0))
 
 
+def scene_aligned_frame(frame: CategoryFrame, rest_quat: np.ndarray) -> CategoryFrame:
+    """The same frame with its x axis turned from the handle to the scene's world +x, as the object rests (diagnostic:
+    it keeps where the demonstrators stood, which for LIBERO's fixed mug orientations is not tied to the handle)."""
+    up = frame.rotation[2]
+    x_axis = rotation_matrices(np.asarray(rest_quat)).T @ np.array([1.0, 0.0, 0.0])
+    x_axis = _unit(x_axis - (x_axis @ up) * up)
+    return CategoryFrame(frame.origin, np.stack([x_axis, np.cross(up, x_axis), up]), frame.scale)
+
+
 def fit_frame(points: np.ndarray, up: np.ndarray) -> CategoryFrame:
     """The category frame of one mesh from its surface points (body frame) and its up direction."""
     points, up = np.asarray(points, dtype=float), _unit(np.asarray(up, dtype=float))

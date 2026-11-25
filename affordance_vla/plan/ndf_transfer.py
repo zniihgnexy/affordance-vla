@@ -35,6 +35,7 @@ HAND_BOX_MAX = np.array([0.0316, 0.1004, 0.0660 - 0.1034])
 QUERY_POINTS = 500
 SHAPE_POINTS = 1500
 LATENT_DIM = 256
+ENCODER_CHUNK = 8  # clouds encoded at once: the graph features of the point-net encoder take about 0.35 GB per cloud
 
 
 def ndf_scale(points: np.ndarray) -> float:
@@ -130,7 +131,8 @@ def optimise_transfers(model, demos: Sequence[tuple[np.ndarray, np.ndarray]], ta
         start_rotation = torch.from_numpy(turns).float().to(device).reshape(count, starts, 3, 3)
         centred = torch.einsum("gmij,gnj->gmni", start_rotation, torch.stack(queries)).reshape(count * starts, -1, 3)
         clouds = torch.stack([cloud(target_points) for _ in range(count * starts)])
-        target_latent = torch.cat([model.extract_latent({"point_cloud": chunk}) for chunk in clouds.split(40)])
+        encoded = [model.extract_latent({"point_cloud": chunk}) for chunk in clouds.split(ENCODER_CHUNK)]
+        target_latent = torch.cat(encoded)
     turn = torch.zeros(count * starts, 3, device=device, requires_grad=True)
     shift = (torch.rand(count * starts, 3, device=device) * 0.1).requires_grad_()
     optimiser = torch.optim.Adam([turn, shift], lr=lr)
