@@ -125,7 +125,7 @@
 
 现状、还缺什么、约束和工作流的摘要：[交接摘要](../HANDOVER.md)（2026-11-24 起，每个阶段更新）。
 
-**等批准的提案：**[Pipeline v4（2026-11-25）](2026-11-25_VLA_branch_Pipeline_v4_提案.md)。范围从桌面抓取扩到 RoboCasa365 的仿真厨房，加组合任务和阶段理解。批准之前，下面的 Pipeline v3 仍是依据。
+**现行 pipeline：**[Pipeline v4（2026-11-25 批准）](2026-11-25_VLA_branch_Pipeline_v4.md)。范围从桌面抓取扩到 RoboCasa365 的仿真厨房，加组合任务和阶段理解。它取代 Pipeline v3 的测试、实验推进和时间三部分；下面 v3 的方法核心继续有效。
 
 1. [Pipeline v3（2026-11-19）](2026-11-19_VLA_branch_Pipeline_v3.md)：现行的方法和实验指导，包括三张图、模块、训练、测试、实验顺序和通过标准、基线、不做的事、停止规则。
 2. [Pipeline v2（2026-11-10）](2026-11-10_VLA_branch_Pipeline_v2.md)：方法部分已被 v3 取代；backbone 和 benchmark 选型、实验配置、算力部分仍然有效。
