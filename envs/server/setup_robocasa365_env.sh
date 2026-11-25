@@ -57,25 +57,28 @@ if ! python -c "import torch" 2> /dev/null; then   # lerobot (pinned by robocasa
   curl -fsSL --retry 5 -C - -o "$wheel" "$TORCH_CPU_WHEEL"
   pip_install "$wheel"
 fi
-pip_install -e "$ROBOSUITE" -e "$ROBOCASA"
+python -c "import robosuite, robocasa" 2> /dev/null || pip_install -e "$ROBOSUITE" -e "$ROBOCASA"
 
-# Assets: "<Box id> <name> <folder it creates, relative to robocasa/models/assets>". Each zip holds its own
-# top-level folder and is unpacked next to where that folder belongs.
+# Assets: "<Box id> <name> <folder it creates, relative to robocasa/models/assets> <unpack dir>". Each zip holds
+# its own top-level folder; the zips fixtures and fixtures_lightwheel share the top-level folder fixtures, so
+# the folder column names one that only its own zip creates (the repository itself already ships a
+# partial fixtures/, so a check on fixtures/ alone would skip both).
 ASSETS="$ROBOCASA/robocasa/models/assets"
-while read -r id name folder; do
+while read -r id name folder dest; do
   [ ! -d "$ASSETS/$folder" ] || continue
   curl -fL --http2 --retry 8 --retry-delay 10 --connect-timeout 20 -C - -o "$ASSET_ZIPS/$name.zip" "$BOX/$id.zip"
   python -c "import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" \
-    "$ASSET_ZIPS/$name.zip" "$(dirname "$ASSETS/$folder")"
+    "$ASSET_ZIPS/$name.zip" "$ASSETS/$dest"
   [ -d "$ASSETS/$folder" ] || { echo "$name.zip did not create $folder" >&2; exit 1; }
   echo "unpacked $name"
 done <<LIST
-4i85ileasdvstmlln5sbvzptz7keuoy1 textures textures
-ebaad09k82tmfmlq6ohdkmrh8izl9vn5 generative_textures generative_textures
-idbncsadpnaz1jfl4i6m8qejawk7p9pi fixtures_lightwheel fixtures
-03eionyo8fk3a9dsksq9jb8du5lqfw8h objaverse objects/objaverse
-nwi1vrn5pgbo95kushkasa3nx1i012ff aigen_objs objects/aigen_objs
-vckqvvkh1z8t69k8qcpcmee6k66stii4 objects_lightwheel objects/lightwheel
+4i85ileasdvstmlln5sbvzptz7keuoy1 textures textures .
+ebaad09k82tmfmlq6ohdkmrh8izl9vn5 generative_textures generative_textures .
+zt9vbo38yb9f1alw9iuahck55hoa65y6 fixtures fixtures/accessories/stools .
+idbncsadpnaz1jfl4i6m8qejawk7p9pi fixtures_lightwheel fixtures/windows .
+03eionyo8fk3a9dsksq9jb8du5lqfw8h objaverse objects/objaverse objects
+nwi1vrn5pgbo95kushkasa3nx1i012ff aigen_objs objects/aigen_objs objects
+vckqvvkh1z8t69k8qcpcmee6k66stii4 objects_lightwheel objects/lightwheel objects
 LIST
 
 # private macros: the dataset root goes to the NAS
