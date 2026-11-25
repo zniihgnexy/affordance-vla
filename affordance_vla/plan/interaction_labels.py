@@ -96,22 +96,36 @@ def contact_weights(surface: Surface, grasp: Grasp) -> np.ndarray:
     return np.exp(-0.5 * (off_line / PAD_RADIUS_M) ** 2) * facing * (np.abs(along) <= MAX_REACH_M)
 
 
-def canonical_map(category: str, surface: Surface, grasps: Sequence[Grasp]) -> CanonicalMap:
-    """Sum the grasps of one category on its surface: score, dominant closing axis and agreement per point."""
-    if not grasps:
-        raise ValueError(f"no grasps of {category}")
+def grasp_sums(surface: Surface, grasps: Sequence[Grasp],
+               closings: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """Per surface point: the summed contact weight (N,) and the weighted sum of d·dᵀ over the grasps' closing
+    axes (N, 3, 3). `closings` (G, 3) replaces the grasps' own closing axes in the second sum, e.g. their
+    coordinates in another frame; the weights always come from the grasps in the surface's own frame."""
     weights = np.stack([contact_weights(surface, grasp) for grasp in grasps])  # (G, N)
-    closings = np.stack([grasp.closing for grasp in grasps])  # (G, 3)
-    total = weights.sum(axis=0)
-    score = total / total.max() if total.max() > 0 else total
+    if closings is None:
+        closings = np.stack([grasp.closing for grasp in grasps])  # (G, 3)
     tensor = np.einsum("gn,gi,gj->nij", weights, closings, closings)  # axial: d and -d add up the same
+    return weights.sum(axis=0), tensor
+
+
+def dominant_axis(tensor: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Dominant closing axis (N, 3, zero where no grasp touches) and agreement (N,) in [0, 1] of summed d·dᵀ."""
     values, vectors = np.linalg.eigh(tensor)  # ascending eigenvalues
     trace = values.sum(axis=1)
     touched = trace > 1e-9
     axis = np.where(touched[:, None], vectors[:, :, -1], 0.0)
     agreement = np.where(touched, (3 * values[:, -1] / np.where(touched, trace, 1.0) - 1) / 2, 0.0)
-    return CanonicalMap(category, surface.points, surface.normals, score, axis, np.clip(agreement, 0.0, 1.0),
-                        len(grasps))
+    return axis, np.clip(agreement, 0.0, 1.0)
+
+
+def canonical_map(category: str, surface: Surface, grasps: Sequence[Grasp]) -> CanonicalMap:
+    """Sum the grasps of one category on its surface: score, dominant closing axis and agreement per point."""
+    if not grasps:
+        raise ValueError(f"no grasps of {category}")
+    total, tensor = grasp_sums(surface, grasps)
+    score = total / total.max() if total.max() > 0 else total
+    axis, agreement = dominant_axis(tensor)
+    return CanonicalMap(category, surface.points, surface.normals, score, axis, agreement, len(grasps))
 
 
 def line_angle_deg(a: np.ndarray, b: np.ndarray) -> float:
