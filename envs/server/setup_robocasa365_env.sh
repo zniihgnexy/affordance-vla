@@ -58,6 +58,8 @@ if ! python -c "import torch" 2> /dev/null; then   # lerobot (pinned by robocasa
   pip_install "$wheel"
 fi
 python -c "import robosuite, robocasa" 2> /dev/null || pip_install -e "$ROBOSUITE" -e "$ROBOCASA"
+# the starVLA RoboCasa365 evaluation client (examples/simBenchmarks/Robocasa_365/eval_files) also imports these
+python -c "import tyro, websockets, msgpack_numpy" 2> /dev/null || pip_install tyro websockets msgpack msgpack-numpy
 
 # Assets: "<Box id> <name> <folder it creates, relative to robocasa/models/assets> <unpack dir>". Each zip holds
 # its own top-level folder; the zips fixtures and fixtures_lightwheel share the top-level folder fixtures, so

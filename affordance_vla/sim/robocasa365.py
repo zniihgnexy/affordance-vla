@@ -107,3 +107,58 @@ def read_video(ds: Path, cam: str, ep: int) -> np.ndarray:
 def psnr(a: np.ndarray, b: np.ndarray) -> float:
     mse = np.mean((a.astype(np.float64) - b.astype(np.float64)) ** 2)
     return float("inf") if mse == 0 else float(10 * np.log10(255.0**2 / mse))
+
+
+def category_instances(category: str) -> dict:
+    """{registry: {"all": [model.xml paths], "pretrain": [...], "target": [...]}} with RoboCasa's own split rule
+    (robocasa/models/objects/kitchen_object_utils.py, sample_kitchen_object): per registry the first
+    max(n - 5, ceil(n / 2)) instances are `pretrain`, the rest `target`."""
+    import math
+
+    from robocasa.models.objects.kitchen_objects import OBJ_CATEGORIES
+
+    out = {}
+    for registry, cat in OBJ_CATEGORIES[category].items():
+        paths = list(cat.mjcf_paths)
+        cut = max(len(paths) - 5, math.ceil(len(paths) / 2))
+        out[registry] = {"all": paths, "pretrain": paths[:cut], "target": paths[cut:]}
+    return out
+
+
+def _read_obj(path: Path) -> tuple[np.ndarray, np.ndarray]:
+    verts, faces = [], []
+    for line in path.read_text().splitlines():
+        if line.startswith("v "):
+            verts.append([float(x) for x in line.split()[1:4]])
+        elif line.startswith("f "):  # "f a/b/c ..." (1-based); polygons are fanned into triangles
+            idx = [int(tok.split("/")[0]) - 1 for tok in line.split()[1:]]
+            faces += [[idx[0], idx[k], idx[k + 1]] for k in range(1, len(idx) - 1)]
+    return np.array(verts), np.array(faces)
+
+
+def surface_points(mjcf_path: str | Path, n: int = 2048, seed: int = 0) -> np.ndarray:
+    """n points on the visual surface of an object, in the object's own frame in metres (mesh scale and the
+    mesh reference rotation of its model.xml applied), by area-weighted sampling of the triangles."""
+    import xml.etree.ElementTree as ET
+
+    from scipy.spatial.transform import Rotation
+
+    mjcf_path = Path(mjcf_path)
+    parts = []
+    for mesh in ET.parse(mjcf_path).getroot().iter("mesh"):
+        if not mesh.get("file", "").startswith("visual/"):
+            continue
+        v, f = _read_obj(mjcf_path.parent / mesh.get("file"))
+        scale = np.array([float(x) for x in mesh.get("scale", "1 1 1").split()])
+        w, x, y, z = (float(q) for q in mesh.get("refquat", "1 0 0 0").split())
+        v = Rotation.from_quat([x, y, z, w]).apply(v * scale)
+        parts.append(v[f])  # (F, 3, 3)
+    tris = np.concatenate(parts)
+    area = 0.5 * np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
+    rng = np.random.default_rng(seed)
+    pick = rng.choice(len(tris), n, p=area / area.sum())
+    a, b = rng.random((2, n, 1))
+    flip = a + b > 1
+    a, b = np.where(flip, 1 - a, a), np.where(flip, 1 - b, b)
+    t = tris[pick]
+    return t[:, 0] + a * (t[:, 1] - t[:, 0]) + b * (t[:, 2] - t[:, 0])
