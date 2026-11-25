@@ -9,3 +9,6 @@ export ROBOCASA_DIR="$W/repos/robocasa365"
 export MUJOCO_GL=osmesa PYOPENGL_PLATFORM=osmesa
 export LD_LIBRARY_PATH="$RC365_ENV_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"   # libOSMesa lives here
 export NUMBA_CACHE_DIR="$W/cache/numba_rc365"
+# numba 0.61.2 / llvmlite 0.44 segfault in the LLVM optimiser while compiling the object-placement sampler
+# (robocasa/utils/placement_samplers.py) on this server (Xeon 8352V); without optimisation it compiles and caches.
+export NUMBA_OPT=0
