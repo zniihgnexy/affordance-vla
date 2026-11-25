@@ -190,6 +190,11 @@ Rules specific to this repository:
   the week, newer content replaces older content in the same notebook (a new pipeline figure replaces the old
   one; what changed is recorded once, in the review's change section). Notebooks of single experiments go to
   `report/experiments/` as appendices of their week and are linked from that week's review.
+  Since 2026-11-25 the weekly review is the one document the project lead reads: everything explored or run
+  in that week is recorded in it; visualisations and pipeline figures come first; a dataset gets a small demo and
+  a figure of what it contains; every experiment and demo carries a command that can be copied and run. Each
+  task hands in its section as `scripts/report/weekly_<Monday as YYYY_MM_DD>_<topic>.py` with its media under
+  `report/media/weekly_<Monday as YYYY_MM_DD>/<topic>/`; one issue assembles and executes the notebook.
 
 Still open (2026-11-17): training and evaluation runs are configured through environment variables of
 `scripts/vla/run_*_gpu.sh` and `scripts/eval/run_libero_pro_gpu.sh`, documented per run in `EXPERIMENTS.md`, not
