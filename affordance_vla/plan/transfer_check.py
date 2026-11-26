@@ -84,7 +84,8 @@ def grasp_outcomes(cmap: CanonicalMap, surface: Surface, grasps: Sequence[Grasp]
             errors.append(NO_MATCH_DEG)
             continue
         shares.append(float(weights[region].sum() / weights.sum()))
-        contact = np.flatnonzero((weights >= CONTACT_FRACTION * weights.max()) & (cmap.score > 0))
+        contact = np.flatnonzero((weights >= CONTACT_FRACTION * weights.max()) & (cmap.score > 0)
+                                 & (np.linalg.norm(cmap.axis, axis=1) > 0))  # a point scored 0 < s ~ 0 has no axis
         if contact.size == 0:
             no_axis += 1
             errors.append(NO_MATCH_DEG)

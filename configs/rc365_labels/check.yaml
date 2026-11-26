@@ -1,0 +1,11 @@
+# Step 1 (1), AFFO-15: the checks on the extracted events (scripts/data/rc365_label_check.py). Paths relative to $W.
+name: check_v1
+extract: runs/rc365_labels/extract_v1
+data_root: data/robocasa365
+categories:                       # handle: the category has a handle that fixes its azimuth (mug); cup and bowl do not
+  mug: {handle: true}
+  cup: {handle: false}
+  bowl: {handle: false}
+min_grasps: 20                    # a category needs this many source grasps and this many held-out grasps to be checked
+treatments: [plain, ring, robot]
+out: runs/rc365_labels/check_v1
