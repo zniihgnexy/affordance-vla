@@ -69,6 +69,11 @@ class ServerPolicy:
         self.client.close()
 
 
+def _plain(value: Any) -> Any:
+    """A numpy scalar as the Python number it holds (JSON cannot write numpy integers)."""
+    return value.item() if isinstance(value, np.generic) else value
+
+
 def _write_video(frames: list[np.ndarray], path: Path) -> None:
     import imageio.v2 as imageio
 
@@ -120,8 +125,8 @@ def run_episode(
         "queries": queries,
         "policy_seconds": round(policy_seconds, 1),
         "lang": str(obs.get(LANGUAGE_KEY, "")),
-        "layout_id": getattr(inner, "layout_id", None),
-        "style_id": getattr(inner, "style_id", None),
+        "layout_id": _plain(getattr(inner, "layout_id", None)),
+        "style_id": _plain(getattr(inner, "style_id", None)),
         "trace": trace,
     }
 

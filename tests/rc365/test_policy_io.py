@@ -53,3 +53,11 @@ def test_episode_seed_is_stable_and_separates_cells():
     seeds = {io.episode_seed(1234, t, c, i) for t in ("OpenDrawer", "OpenCabinet") for c in "AB" for i in range(20)}
     assert len(seeds) == 80
     assert io.episode_seed(1234, "OpenDrawer", "A", 3) != io.episode_seed(1235, "OpenDrawer", "A", 3)
+
+
+def test_numpy_scalars_become_plain_numbers_for_json():
+    import json
+
+    from affordance_vla.sim.rc365_eval import _plain
+
+    assert json.dumps([_plain(np.int64(3)), _plain(None), _plain("x")]) == '[3, null, "x"]'
