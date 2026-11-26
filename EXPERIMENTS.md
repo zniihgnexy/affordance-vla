@@ -198,3 +198,23 @@ source envs/server/libero_env.sh; "$LIBERO_PYTHON" scripts/data/rc365_label_char
 | --- | --- | --- |
 | `extract_v1` | 8 atomic tasks, pretrain + target human demonstrations (part tasks: first 150 target episodes) | 1647 episodes replayed (1717 files incl. an earlier partial run); mug 103 pretrain / 503 target grasps, cup 0 / 4, bowl 1 / 2; record section 3 |
 | `check_v1` | pass lines of step 0 (landing >= 0.8, closing-axis median < 20 deg); treatments plain / ring / robot | mug: plain 0.79 / 12.9 deg, ring 0.89 / 12.9 deg (pass), robot 0.33 / 14.8 deg; 4 of 5 held-out mugs pass, mug_8 does not; parts: closing line 0.71-0.94 alike across kitchens, stove knob motion not; record sections 3-4 |
+
+## 9. RoboCasa365 label follow-ups (Pipeline v4 step 1 (3), AFFO-18; server, CPU only)
+
+Record: `docs/vla/2026-11-26_VLA_branch_第1步_旋钮标签与把手对齐.md`. Reads `extract_v1` of section 8 (nothing is replayed except for the part figures); outputs in `$W/runs/rc365_labels/check_v2/`.
+
+```bash
+source envs/server/robocasa365_env.sh; export PYTHONPATH=$PWD
+"$RC365_PYTHON" scripts/data/rc365_joint_check.py --config configs/rc365_labels/joint_check.yaml     # knob frame diagnosis; joint-derived vs gripper label of 4 part tasks (seconds)
+"$RC365_PYTHON" scripts/data/rc365_mug_align.py --config configs/rc365_labels/mug_align.yaml         # mug transfer check, handle aligned (seconds); --set handle_x0=1.1 --set out=... for the sensitivity
+"$RC365_PYTHON" scripts/data/rc365_joint_figures.py --config configs/rc365_labels/joint_figures.yaml # labels on rendered frames (~3 min)
+source envs/server/libero_env.sh; export PYTHONPATH=$PWD:$PYTHONPATH
+"$LIBERO_PYTHON" scripts/data/rc365_joint_charts.py --config configs/rc365_labels/joint_check.yaml --out report/media/weekly_2026_11_23/label_followups
+"$LIBERO_PYTHON" scripts/data/rc365_mug_figure.py --config configs/rc365_labels/mug_align.yaml --out report/media/weekly_2026_11_23/label_followups
+```
+
+| Run | Settings | Result |
+| --- | --- | --- |
+| `check_v2/joint_parts.json`, `knob_diagnosis.json` | `joint_check.yaml`: four part tasks, new label = joint axis / anchor and the sign of the joint change (1 s window or whole demonstration) | stove-knob contact scatter 32.9 -> 2.02 cm with the joint anchor as origin (body origin is 49 cm from the knob); drawer / door handle motion consistent across kitchens 0.73 -> 1.00, 0.91 -> 0.98; faucet 0.49 -> 0.91 (67 deg from the gripper direction); knob translation direction 0.15, turn axis + sign 0.85-0.93 per stove design (record sections 2-3) |
+| `check_v2/mug_align.json` | `mug_align.yaml`: handle length aligned (`length`) or registered (`registered`) before the nearest-point transfer; plain / ring | `none` rows equal AFFO-15's; `length` + ring: 0.94 / 12.0 deg, `mug_8` 0.84 / 10.9 deg (pass); `registered` + ring: `mug_8` 0.87 / 20.5 deg (axis 0.5 deg over the line) (record section 4) |
+| `check_v1_repro/` | `check.yaml --set out=runs/rc365_labels/check_v1_repro` | `counts.json`, `objects.json`, `parts.json` byte-identical to `check_v1/` |
