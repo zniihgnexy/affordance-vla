@@ -178,3 +178,23 @@ bash scripts/server/submit_queue_job.sh 164 rc365_eval 20000 1 "cards=6 7" -- \
 | `qwenpi_rc365_full_b1` | QwenPI, all weights, batch 1 | out of memory (37.30 GiB) |
 | `qwenoft_rc365_full_b1` | QwenOFT, all weights, batch 1 | out of memory in the first backward (29.64 GiB allocated, 42.22 GiB reserved) |
 | `eval_qwenoft_frozen_300` | evaluation of the 300-step QwenOFT, 10 episodes x 3 tasks | 0/30 successes, 4.2 / 5.1 / 5.2 min per episode, 55 min wall |
+
+## 8. RoboCasa365 interaction labels (Pipeline v4 step 1 (1), AFFO-15; server, CPU only)
+
+Record: `docs/vla/2026-11-26_VLA_branch_第1步_交互map标签.md`. Needs the `robocasa365` env (`envs/server/robocasa365_env.sh`);
+the charts run in any env with matplotlib (`envs/server/libero_env.sh`). Data and outputs on the NAS (`$W/runs/rc365_labels/`).
+
+```bash
+bash scripts/data/fetch_robocasa365.sh --dry-run --split pretrain CoffeeSetupMug ...   # sizes first; --split target|pretrain, human demos only
+source envs/server/robocasa365_env.sh; export PYTHONPATH=$PWD
+"$RC365_PYTHON" scripts/data/rc365_extract.py --config configs/rc365_labels/extract.yaml       # replay 8 tasks, record grasps / touches (24 procs, ~1 h)
+"$RC365_PYTHON" scripts/data/rc365_label_check.py --config configs/rc365_labels/check.yaml --stage all   # counts, mug transfer + treatments, part consistency (~1 min)
+"$RC365_PYTHON" scripts/data/rc365_label_figures.py --config configs/rc365_labels/figures.yaml          # labels projected on rendered frames
+source envs/server/libero_env.sh; "$LIBERO_PYTHON" scripts/data/rc365_label_charts.py --config configs/rc365_labels/check.yaml \
+    --out report/media/weekly_2026_11_23/interaction_labels
+```
+
+| Run | Settings | Result |
+| --- | --- | --- |
+| `extract_v1` | 8 atomic tasks, pretrain + target human demonstrations (part tasks: first 150 target episodes) | 1647 episodes replayed (1717 files incl. an earlier partial run); mug 103 pretrain / 503 target grasps, cup 0 / 4, bowl 1 / 2; record section 3 |
+| `check_v1` | pass lines of step 0 (landing >= 0.8, closing-axis median < 20 deg); treatments plain / ring / robot | mug: plain 0.79 / 12.9 deg, ring 0.89 / 12.9 deg (pass), robot 0.33 / 14.8 deg; 4 of 5 held-out mugs pass, mug_8 does not; parts: closing line 0.71-0.94 alike across kitchens, stove knob motion not; record sections 3-4 |

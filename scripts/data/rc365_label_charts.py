@@ -133,8 +133,8 @@ def parts_chart(report: dict, out: Path) -> None:
     tasks = [k for k in report if k.endswith("/both")]
     fig, axes = plt.subplots(1, 2, figsize=(10, 3.4))
     for ax, name, tol in (
-        (axes[0], "closing", "within 20° of the other kitchens' mean line"),
-        (axes[1], "motion", "within 30° of the other kitchens' mean direction"),
+        (axes[0], "closing", "within 20° of the other\nkitchens' mean line"),
+        (axes[1], "motion", "within 30° of the other\nkitchens' mean direction"),
     ):
         for k, frame in enumerate(("part", "world", "base")):
             values = [report[t][f"{name}_{frame}_frame"].get("across_kitchens_within_tolerance") or 0 for t in tasks]
@@ -143,7 +143,7 @@ def parts_chart(report: dict, out: Path) -> None:
             xticks=range(len(tasks)),
             xticklabels=[t.split("/")[0] for t in tasks],
             ylim=(0, 1.05),
-            title=f"{name}: share of touches {tol}",
+            title=f"{name}: share of touches\n{tol}",
         )
         ax.tick_params(axis="x", labelsize=7)
         ax.legend(fontsize=7)

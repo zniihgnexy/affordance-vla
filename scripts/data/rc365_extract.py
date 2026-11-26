@@ -109,7 +109,10 @@ def main() -> None:
         for task, spec in cfg["tasks"].items()
         for split in cfg["splits"]
         for ep in list_episodes(
-            rc.dataset_dir(root, task, split), spec.get("categories"), cfg.get("max_episodes"), spec.get("names")
+            rc.dataset_dir(root, task, split),
+            spec.get("categories"),
+            spec.get("limit", {}).get(split, cfg.get("max_episodes")),
+            spec.get("names"),
         )
     ]
     print(f"{len(items)} episodes, {cfg['workers']} workers -> {out}", flush=True)

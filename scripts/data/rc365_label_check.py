@@ -113,7 +113,7 @@ def stage_parts(cfg: dict, work: Path, out: Path) -> dict:
                 continue
             ds = {s: rc.dataset_dir(root, task, s) for s in ("pretrain", "target")}
             layouts = [eps.read_meta(ds[t.split], t.episode)["layout_id"] for t in touches]
-            names = Counter(t.part.split("_")[-1] if False else t.fixture for t in touches)
+            names = Counter(t.fixture for t in touches)
             report[f"{task}/{split}"] = {
                 **parts_lib.part_report(touches, layouts),
                 "episodes_replayed": len(sel),

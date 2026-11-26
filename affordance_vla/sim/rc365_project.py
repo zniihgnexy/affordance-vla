@@ -53,6 +53,8 @@ def draw_map(image: np.ndarray, uv: np.ndarray, score: np.ndarray, radius: int =
     """Dots coloured by score (yellow high, purple low) on a copy of the image; low scores are left out."""
     layer = image.copy()
     keep = score > SCORE_FLOOR
+    if not keep.any():  # nothing of the map is visible in this frame
+        return layer
     colours = cv2.applyColorMap((255 * np.clip(score[keep], 0, 1)).astype(np.uint8), cv2.COLORMAP_VIRIDIS)[:, 0, ::-1]
     for (x, y), colour in zip(uv[keep], colours):
         cv2.circle(layer, (int(x), int(y)), radius, tuple(int(c) for c in colour), -1, cv2.LINE_AA)
