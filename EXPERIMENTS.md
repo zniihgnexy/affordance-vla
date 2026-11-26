@@ -39,6 +39,9 @@ terminal narration is in English. Demo commands for the week-2 meeting: section 
 | LIBERO-Spatial | `SUITE=libero_spatial RAW=$W/data/libero_states/libero_spatial OUT=$W/runs/plan_following/demos_spatial bash scripts/data/replay_libero_states.sh`, then `build_plan_dataset.py ... --container plate_1 --bddl-dir $W/repos/LIBERO-PRO/libero/libero/bddl_files/libero_spatial` | `dataset_spatial/` |
 | Replay with object orientations (Pipeline v3, L) | `OUT=$W/runs/plan_following/demos_pose bash scripts/data/replay_libero_states.sh`; LIBERO-10: `SUITE=libero_10 RAW=$W/data/libero_states/libero_10 OUT=$W/runs/plan_following/demos_libero10 MAX_JOBS=30 bash scripts/data/replay_libero_states.sh` | `demos_pose/` (500), `demos_libero10/` (500) |
 | 3D canonical interaction maps (Pipeline v3, L2) | `source envs/server/libero_env.sh && PYTHONPATH=.:$PYTHONPATH $LIBERO_PYTHON scripts/data/build_interaction_labels.py --suite libero_object --demos $W/runs/plan_following/demos_pose --out $W/runs/interaction_labels/object`; LIBERO-10: `--suite libero_10 --demos .../demos_libero10 --out .../interaction_labels/libero10` | `maps.npz`, `summary.json`, `check/<category>.png` |
+| LIBERO-90 mug demonstrations (Pipeline v4 step 0 (1)): states and actions of the 10 tasks that hold a mug, replayed with object poses | `source envs/server/libero_env.sh && $LIBERO_PYTHON scripts/data/fetch_libero_states.py libero_90 $W/data/libero_states/libero_90 --only <the 10 task names>`, then `SUITE=libero_90 RAW=$W/data/libero_states/libero_90 OUT=$W/runs/plan_following/demos_libero90_mug MAX_JOBS=30 bash scripts/data/replay_libero_states.sh` | `libero_90/`, `demos_libero90_mug/` (500 logs) |
+| Mug transfer check (Pipeline v4 step 0 (1)): leave one mug mesh out, carry the map of the other two to it by nearest point and by NDF | `bash scripts/data/run_mug_transfer_check.sh collect`; `bash scripts/server/submit_queue_job.sh 164 mug_ndf 8000 3 "cards=<free cards>" -- bash $PWD/scripts/data/run_mug_transfer_check.sh ndf` (GPU, about 1 h at most; needs `$W/repos/ndf_robot` and `$W/models/ndf/multi_category_weights.pth`); `bash scripts/data/run_mug_transfer_check.sh evaluate`. Settings: `configs/mug_transfer/mug_mesh.yaml`; record: `docs/vla/2026-11-25_VLA_branch_第0步_mug搬运检查.md` | `$W/runs/mug_transfer/mug_mesh/` (`results.md`, `results.json`, `figures/`) |
+| HOT3D demo: what can a human-hand dataset give our map (AFFO-11; CPU; hot3d env) | `bash envs/server/setup_hot3d_env.sh` once, then `bash scripts/data/fetch_hot3d_demo.sh` (2 clips + 3 meshes, 0.6 GB, no sign-up), then `source envs/server/hot3d_env.sh && PYTHONPATH=. python scripts/data/hot3d_contact_demo.py --out $W/runs/hot3d_demo/mug_white_v2` (30 s; `--threshold-mm 5`, `--hand-points 4000`, `--max-drift-deg 20` are the defaults; `--hand-points 0` uses the hand mesh vertices, `--max-drift-deg 180` does not split a hold) | `overlay.png`, `contact.png`, `maps.npz` (one map in `interaction_labels.load_maps` format), `summary.json`; copies in `report/media/weekly_2026_11_23/hot3d/`; record `docs/vla/2026-11-25_VLA_branch_HOT3D评估.md` |
 | Logs for the local simulator | `python scripts/data/export_sim_logs.py --root $W/runs/libero_pro --out $W/cache/sim_logs/libero_pro --runs released ...` | image-free copies |
 
 `dataset` (6 tasks) and `dataset_salad` (1 task) are earlier subsets of LIBERO-Object built the same way.
@@ -134,5 +137,44 @@ Experiment notebooks (appendices of their week), from `report/experiments/`:
 `python ../../scripts/report/build_<name>.py <notebook>.ipynb`. Then
 `python -m jupyter nbconvert --to notebook --execute --inplace <notebook>.ipynb`. Each builder's docstring
 names its notebook and inputs; media go to the tracked `report/media/`.
+Week 3 (`report/2026-11-23_weekly_review.ipynb`, built by `scripts/report/build_weekly_2026_11_23.py`, one module per section
+`scripts/report/weekly_2026_11_23_<topic>.py`) reads only tracked files, so it also builds and executes on the Mac (env with
+nbformat and jupyter, e.g. `affordance3d`); its section 7 lists the demo commands of the week.
 The layer-level pipeline figures are rendered on the Mac (needs Google Chrome):
 `python scripts/report/render_pipeline_detail.py report/media/pipeline_overview/detail/pipeline_v3_layers.html`.
+
+## 6. RoboCasa365 set-up check (Pipeline v4 step 0, AFFO-10; server)
+
+Record: `docs/vla/2026-11-25_VLA_branch_第0步_RoboCasa365搭建.md`. Needs the conda env
+`/data/xinyizheng/envs/robocasa365` (simulator, CPU) and `starvla` (training, GPU); data and assets on the NAS.
+
+```bash
+bash envs/server/setup_robocasa365_env.sh                 # env, pinned code, assets (22 GB), idempotent
+bash scripts/data/fetch_robocasa365.sh [--dry-run] [TASK ...]   # default CoffeeSetupMug OpenDrawer TurnOffStove, 1.4 GB
+source envs/server/robocasa365_env.sh                     # $RC365_PYTHON, software rendering
+"$RC365_PYTHON" scripts/data/replay_robocasa365.py --task CoffeeSetupMug OpenDrawer TurnOffStove --episodes 5 \
+    --out $W/runs/robocasa365_replay/<run>                # re-render from saved states; depth, segmentation, PSNR, timings
+"$RC365_PYTHON" scripts/report/make_rc365_figures.py --replay $W/runs/robocasa365_replay/<run> \
+    --out report/media/weekly_2026_11_23/robocasa365      # figures of the weekly review
+```
+
+Training and evaluation of starVLA on three tasks (configs `configs/rc365/`; wrappers document their settings):
+
+```bash
+# QwenOFT (MLP head), frozen VLM; FREEZE= trains everything; CONFIG=...qwenpi_rc365_3tasks.yaml is QwenPI
+bash scripts/server/submit_queue_job.sh 164 rc365_oft 30000 1 "cards=6 7" -- \
+    env RUN=<run> CONFIG=$PWD/configs/rc365/qwenoft_rc365_3tasks.yaml BATCH=8 STEPS=300 \
+    bash $PWD/scripts/rc365/run_train_gpu.sh              # -> $W/runs/robocasa365_starvla/<run>/{train.log,PEAK_MEMORY.txt,checkpoints/}
+bash scripts/server/submit_queue_job.sh 164 rc365_eval 20000 1 "cards=6 7" -- \
+    env CKPT=$W/runs/robocasa365_starvla/<run>/checkpoints/steps_300_pytorch_model.pt EPISODES=10 \
+    bash $PWD/scripts/rc365/run_eval_gpu.sh               # -> $W/runs/robocasa365_eval/eval_<run>/{summary.txt,client_<Task>.log,videos/}
+```
+
+| Run | Settings | Result |
+| --- | --- | --- |
+| `qwenoft_rc365_frozen` | QwenOFT, frozen VLM, batch 8, 300 steps | peak 11.42 GiB, 0.445 s/step model time |
+| `qwenpi_rc365_3tasks_frozen` | QwenPI, frozen VLM, batch 8 | out of memory (46.41 GiB) |
+| `qwenpi_rc365_frozen_b1` | QwenPI, frozen VLM, batch 1 | out of memory (41.46 GiB) |
+| `qwenpi_rc365_full_b1` | QwenPI, all weights, batch 1 | out of memory (37.30 GiB) |
+| `qwenoft_rc365_full_b1` | QwenOFT, all weights, batch 1 | out of memory in the first backward (29.64 GiB allocated, 42.22 GiB reserved) |
+| `eval_qwenoft_frozen_300` | evaluation of the 300-step QwenOFT, 10 episodes x 3 tasks | 0/30 successes, 4.2 / 5.1 / 5.2 min per episode, 55 min wall |

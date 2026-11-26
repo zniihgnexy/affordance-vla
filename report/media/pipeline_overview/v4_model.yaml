@@ -1,0 +1,108 @@
+# VLA Pipeline v4 at test time (docs/vla/2026-11-25_VLA_branch_Pipeline_v4.md, sections 1-3), week-3 review, section 1.
+# Same drawing rules and colours as v3_model.yaml (paper.yaml): gold = open-source starVLA model with released
+# weights; orange = ours, trained (the v3 parts that exist on LIBERO); grey = ours, no weights; purple dashed =
+# new in v4, designed, not built. Crops: one frame of a recorded RoboCasa365 demonstration (CoffeeSetupMug), made
+# from report/media/weekly_2026_11_23/robocasa365/three_cameras.png.
+paper: paper.yaml
+figure:
+  id: v4_model
+  width: 820
+  pptx_app: office
+
+layout: col
+gap: 8
+
+panels:
+  - id: s_main
+    frame: none
+    body:
+      - row:
+          gap: 16
+          align: start
+          body:
+            - col:
+                id: c_in
+                gap: 7
+                align: center
+                body:
+                  - {id: agent, shape: image, w: 54, src: v4_agent.png, caption: "agent view (1 of 2)"}
+                  - {id: wrist, shape: image, w: 54, src: v4_wrist.png, caption: "wrist view"}
+                  - {id: recent, text: "**recent frames**\nthe last few steps,\nnot one frame", fill: purple.light, dash: true}
+                  - {id: instr, text: "**instruction**\n“put the mug under\nthe coffee machine”", role: neutral}
+            - group:
+                id: g_vlm
+                title: "starVLA VLM"
+                fill: gold.pale
+                pad: 7
+                body:
+                  - {id: llm, text: "**vision encoder +\nlanguage model**\nQwen3-VL-4B\nlayer states kept\nLoRA on the VLM\n(QwenOFT, one 48 GB card)", role: backbone, minh: 150}
+            - col:
+                id: c_mid
+                gap: 12
+                align: center
+                body:
+                  - {id: und, text: "**1 · understanding**\nreads recent frames + instruction\nwhich step are we in?\nwhat is the next object to touch?", fill: purple.light, dash: true}
+                  - {id: target, text: "**next interaction target**\ne.g. “mug”, then “coffee machine”", fill: purple.light, dash: true}
+                  - {id: maphead, text: "**2 · interaction map head**\nscore + depth per cell on the target\nwhere to touch, which way to close\n(v3: 7.9M parameters, LIBERO)", role: core}
+                  - {id: mapcat, text: "**one 3D map per category**\ncarried to unseen instances;\nhandles, knobs; direction after touch", fill: purple.light, dash: true}
+            - col:
+                id: c_plan
+                gap: 10
+                align: center
+                body:
+                  - {id: decode, text: "**decode to a 3D contact**\ncell + offset → pixel\ndepth along the camera ray", role: neutral}
+                  - {id: plan, text: "**plan vector**\nreach · approach · event\n(+ direction after touch: new)", role: neutral}
+                  - {id: hold, text: "**plan hold**\none contact per phase", role: neutral}
+                  - {id: penc, text: "**plan encoder**\nMLP → 2560, trained", role: core}
+            - col:
+                id: c_act
+                gap: 10
+                align: center
+                body:
+                  - {id: dit, text: "**3 · action obeys the plan**\nstarVLA QwenOFT action head\n+ plan embedding, trained with\ncounterfactual plans: same image,\nplan moved, actions relabelled", role: backbone}
+                  - {id: actions, text: "**actions**\nΔpos · Δrot · gripper", role: neutral}
+
+  - id: s_key
+    frame: none
+    body:
+      - row:
+          gap: 5
+          align: center
+          body:
+            - {id: k1, shape: sharpbox, w: 11, h: 7, fill: gold.light}
+            - {id: k1_s, shape: spacer, w: 3, h: 4}
+            - {id: k1t, shape: text, text: "starVLA (open source)", type: annot}
+            - {id: k2, shape: sharpbox, w: 11, h: 7, fill: orange.light}
+            - {id: k2_s, shape: spacer, w: 3, h: 4}
+            - {id: k2t, shape: text, text: "ours, trained (built for LIBERO)", type: annot}
+            - {id: k3, shape: sharpbox, w: 11, h: 7, fill: grey.pale}
+            - {id: k3_s, shape: spacer, w: 3, h: 4}
+            - {id: k3t, shape: text, text: "ours, no weights", type: annot}
+            - {id: k4, shape: sharpbox, w: 11, h: 7, fill: purple.light, dash: true}
+            - {id: k4_s, shape: spacer, w: 3, h: 4}
+            - {id: k4t, shape: text, text: "new in v4, designed, not built", type: annot}
+
+edges:
+  - {from: agent.e, to: llm.w}
+  - {from: wrist.e, to: llm.w}
+  - {from: recent.e, to: llm.w, color: purple, dash: true}
+  - {from: instr.e, to: llm.w}
+  - {from: llm.e, to: und.w, color: purple, dash: true}
+  - {from: und.s, to: target.n, color: purple, dash: true}
+  - {from: target.s, to: maphead.n, color: purple, dash: true}
+  - {from: mapcat.n, to: maphead.s}
+  - {from: maphead.e, to: decode.w}
+  - {from: decode.s, to: plan.n}
+  - {from: plan.s, to: hold.n}
+  - {from: hold.s, to: penc.n}
+  - {from: penc.e, to: dit.w}
+  - {from: dit.s, to: actions.n}
+
+caption: >-
+  \textbf{Pipeline v4: understanding names the next object to touch, the interaction map says where and which way,
+  the action obeys.} A VLM reads the recent frames and the instruction and answers which step of the task is
+  running and which object comes next. The interaction map of that object's category gives the contact point and the
+  closing direction; the plan built from it is held until the gripper event, and an action head trained with
+  counterfactual plans follows it. Gold: starVLA, open source; orange: our parts built and trained for LIBERO in
+  v3; grey: ours, no weights; purple dashed: new in v4, designed, not built. The frame is a recorded RoboCasa365
+  demonstration (CoffeeSetupMug).

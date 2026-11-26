@@ -1,0 +1,21 @@
+# Pipeline v4, step 0 (1): leave-one-mesh-out transfer of the mug interaction map, nearest point vs NDF.
+# Paths are relative to the work directory $W (the NAS), except `ndf_src` and `ndf_weights` which are under $W too.
+name: mug_mesh
+categories: [porcelain_mug, white_yellow_mug, red_coffee_mug]   # white, yellow-white, red
+suites: [libero_10, libero_90]          # simulators whose tasks hold the meshes (the first with each is used)
+demos:                                  # replayed with object orientations (scripts/data/replay_libero_states.sh)
+  - runs/plan_following/demos_libero10
+  - runs/plan_following/demos_libero90_mug
+surface_points: 3000
+seed: 0
+nearest:
+  max_distance: 0.15                    # category units; farther surface points score 0
+ndf:
+  weights: models/ndf/multi_category_weights.pth
+  src: repos/ndf_robot/src
+  starts: 10
+  iterations: 250
+  batch: 4                              # grasps optimised together (10 starts each): about 2 GB on the GPU
+  max_grasps_per_source: 100            # random subset of each source mesh's held grasps (null: all of them)
+  seed: 0
+out: runs/mug_transfer/mug_mesh

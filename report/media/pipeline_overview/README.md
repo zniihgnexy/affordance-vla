@@ -60,3 +60,11 @@ Only the spec and the PNG are kept in git. Audit of the v3 figures (23 Nov): 0 e
 
 Add `-f svg,pptx` to get a PowerPoint file to edit by hand. Once that file has been edited, it becomes the source
 of the figure.
+
+**Pipeline v4 (25 Nov 2026).** `v4_model.yaml` / `v4_model.png` draw `docs/vla/2026-11-25_VLA_branch_Pipeline_v4.md` (week-3 review, section 1), with the colours of
+`paper.yaml`; purple dashed = new in v4, designed, not built. `v4_agent.png` and `v4_wrist.png` are crops of
+`report/media/weekly_2026_11_23/robocasa365/three_cameras.png` (a recorded CoffeeSetupMug frame). The Mac has no LibreOffice, so this one was
+rendered with the skill's SVG step and Google Chrome: `python <skill dir>/scripts/render.py v4_model.yaml -o v4_model -f svg`, fonts
+set to Arial, then `Google Chrome --headless=new --force-device-scale-factor=3 --screenshot=v4_model.png` on a page that holds the SVG
+at 820 pt width (the SVG is not kept in git). Redrawn the same way on 26 Nov after the project lead chose the backbone: the VLM box and the action box now say
+QwenOFT with LoRA on the VLM; the figure is also used in `RESEARCH_PROPOSAL.md`.
