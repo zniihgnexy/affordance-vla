@@ -1,6 +1,6 @@
 # 交接摘要（HANDOVER）
 
-**最后更新：2026-11-26 上午（第十八版，成员要求 Mac 端同时更新文档和代码：Mac clone 的 `main` 已快进到汇总分支，以后每次验收后都这样做；要不要 push GitHub 上的 `main` 在问成员），VLA Lead。** 下一次更新：每完成一个阶段，或成员做出新决定时。
+**最后更新：2026-11-26 上午（第十九版，成员选了 9A：`main` 也由 VLA Lead push；GitHub、Mac、服务器三处的 `main` 已同步到汇总分支），VLA Lead。** 下一次更新：每完成一个阶段，或成员做出新决定时。
 
 这份文件说明项目现在进行到哪、还缺什么。它不复制也不取代下面的文件，冲突时以它们和成员的话为准：
 
@@ -55,7 +55,7 @@
 - **第 1 步前半已下发（2026-11-26 10:13，AFFO-8 的第 3 阶段，两条并行，都交给 VLA Engineer）：** 8 个原子任务从服务器上 RoboCasa365 的注册表里选定：`CoffeeSetupMug`、`PickPlaceCounterToCabinet`、`PickPlaceCounterToStove`、`PickPlaceSinkToCounter`、`OpenDrawer`、`OpenCabinet`、`TurnOffStove`、`TurnOnSinkFaucet`（都有 pretrain 的人工示范、MimicGen 示范和 target 示范；注册表里原子任务 65 个，其中 18 个有 target 示范，60 个有 MimicGen 示范）。**AFFO-15**：类别级交互 map 的标签，只用 CPU；在 RoboCasa 留出的实例上重做搬运检查，量对称部位的覆盖问题并比较两种处理，把手、旋钮加“碰到之后往哪个方向动”。**AFFO-16**：QwenOFT 加 LoRA 的底座策略，GPU 上限 40 小时；先对齐评测桥、试跑量显存和速度、算预算，40 小时内做不出一次训练加一轮评测就停下并改成 `blocked`；评测分三种条件：A 见过的厨房和实例，B 见过的厨房加没见过的实例，C 官方的目标设置。训练只用 pretrain 划分的示范。下载分工：AFFO-15 下人工示范，AFFO-16 下 MimicGen 示范，避免写同一个文件。验收和 `blocked` 的唤醒各两条，登记在 AFFO-2 上。两条都通过后，向成员报告并提第 1 步后半（map 头、门控、服从训练）的拆解和 GPU 开销。
 - **Research proposal（2026-11-26）：** `RESEARCH_PROPOSAL.md`，在仓库根目录，英文，约 1,800 词；渲染成 A4（11 pt，边距 2 cm）是 4 页，第 4 页留有余量。八节：摘要、动机和三个研究问题、pipeline（图）、affordance map 的提取（我们的做法五步、和四类别的做法的对比表、HOT3D 这类人手数据）、候选数据集（表）、评测、已有的初步结果、计划加算力加风险。数字都抄自任务记录和两份调研；参考文献只列调研里核对过 arXiv 编号的，其余只写名字。Pipeline v4 的图按 7A 重画了两处文字（`report/media/pipeline_overview/v4_model.{yaml,png}`）。**语言是我定的（英文），成员没有指定。**
 - **周报怎么不断更新【做法是我定的】：** 本周（11-23 至 11-29）的 notebook 已有一版；周四到周日的新内容（7A、8A 的决定，research proposal，重画的 v4 图，第 1 步前半到那时的进度）在 11-29（周日）下午统一更新一次：AFFO-2 上登记了那天的定时唤醒，届时建一条汇总任务。下一周起，每条任务交付时交它那一周的小节。
-- **Mac 端同时更新（成员 2026-11-26 10:25，AFFO-2：“记得 mac 端尽量同时更新文件和 code 的部分”）。** **【我的理解】** 成员要的是打开 Mac 上的仓库就能看到最新的文档和代码，不用自己再合并。做法：`agent/vla-lead/affo-2-docs` 当作汇总分支（它从 11-26 起已经带着代码）；每条任务验收后，把它的分支并进汇总分支并 push，再把 Mac clone 的 `main` 快进到汇总分支。还在做的任务分支只 fetch，不合并。这替代了 11-24 定的“成员合并每条分支”里 Mac 这一头的部分；GitHub 上的 `main` 仍然不由 agent push，除非成员同意（AFFO-2 问题 9）。第一次快进在 2026-11-26 上午做了：Mac 的 `main` 从 `f3f9da2` 到汇总分支的最新提交。
+- **Mac 端同时更新（成员 2026-11-26 10:25，AFFO-2：“记得 mac 端尽量同时更新文件和 code 的部分”）。** **【我的理解】** 成员要的是打开 Mac 上的仓库就能看到最新的文档和代码，不用自己再合并。做法：`agent/vla-lead/affo-2-docs` 当作汇总分支（它从 11-26 起已经带着代码）；每条任务验收后，把它的分支并进汇总分支并 push，再把 Mac clone 的 `main` 快进到汇总分支。还在做的任务分支只 fetch，不合并。这替代了 11-24 定的“成员合并每条分支”里 Mac 这一头的部分；GitHub 上的 `main` 仍然不由 agent push，除非成员同意（AFFO-2 问题 9）。第一次快进在 2026-11-26 上午做了：Mac 的 `main` 从 `f3f9da2` 到汇总分支的最新提交。 **成员 2026-11-26 10:39 选了 9A：** 每次更新 Mac 后，VLA Lead 也 push GitHub 上的 `main`（只做快进，不强推），并在服务器的主工作副本 `~/affordance-vla` 里 `git pull --ff-only`，三处保持一致。当天上午第一次做完。顺序固定：汇总分支和 `main` 从普通 clone 里一起 push（push 前的测试在那里跑）→ Mac clone 快进并 fetch → 服务器 pull。
 
 **交叉筛选的理由【推断】：** 一条提取路线能不能用，取决于数据集给不给它需要的东西。RoboCasa365 是唯一三条路线都接得上、又有非抓取任务的候选，所以是主候选。
 
@@ -161,7 +161,8 @@
 | 第 1 步的骨架：QwenOFT，单卡，VLM 加 LoRA，和动作头一起训；全量微调留到有多卡算力时（7A） | QwenPI 的动作头 33.5 亿参数，单卡连冻结 VLM 都训不了；没有公开的 RoboCasa365 权重，底座要自己训 | 11-26 |
 | 第 1 步前半开始：标签和底座策略；GPU 一次一张卡、走队列，上限 40 GPU 小时（8A） | 成员的决定 | 11-26 |
 | 周报按伦敦时间的自然周不断更新 | 成员的要求 | 11-26 |
-| Mac clone 跟着同时更新文档和代码：验收后的分支并进汇总分支，Mac 的 `main` 快进过去；GitHub 的 `main` 不由 agent push | 成员的要求；后半句是 VLA Lead 的做法，等成员对问题 9 的回答 | 11-26 |
+| Mac clone 跟着同时更新文档和代码：验收后的分支并进汇总分支，Mac 的 `main` 快进过去 | 成员的要求（11-26 10:25）；具体做法是 VLA Lead 定的 | 11-26 |
+| GitHub 上的 `main` 由 VLA Lead 一起 push，服务器主工作副本跟着 pull，三处一致（9A）。这取代了 11-24 定的“每条分支由成员合并” | 成员的决定 | 11-26 |
 | AFFO-3 深核的入围名单：数据集 RoboCasa365、BEHAVIOR-1K（只核可行性）、HD-EPIC；提取路线 NDF、Robo-ABC（RAM 作对照）、VRB。DROID 是备选，RoboCasa365 深核通过了，没有查 | 第 2 节的交叉表；筛选按已批准的做法由 VLA Lead 做 | 11-24 |
 | 交给成员和导师选的方案是 A、B、C 三个，VLA Lead 推荐 B（第 2 节）。这是建议，不是决定；成员选定前不启动任何实验 | 第 2 节 | 11-24 |
 | 计划先不考虑算力。成员的原话是“运算资源我只后悔申请布里斯托大学的 isambard ai 的 gpu，你可以先不用考虑运算资源的部分”；**【推断】** 意思是之后会申请 Isambard AI 的 GPU，已在回复里请成员确认这个理解 | 成员在 AFFO-3 的评论 | 11-25 |
@@ -199,7 +200,6 @@
 
 **等成员的：**
 
-- **GitHub 上的 `main` 要不要由 VLA Lead 一起 push（AFFO-2 问题 9，2026-11-26 上午提出）。** Mac clone 的 `main` 已经快进到汇总分支，所以它领先 `origin/main`（`f3f9da2`）；服务器上的主工作副本 `~/affordance-vla` 也还停在 `f3f9da2`。9A：以后每次快进后顺手 push `main`，GitHub、Mac、服务器三处一致；9B：只更新 Mac，`main` 由成员自己 push。成员回答之前不 push `main`；服务器上的任务分支仍从 `origin/agent/vla-engineer/affo-12` 起，再并入 `origin/agent/vla-lead/affo-2-docs`。
 - **账号的用量上限会中断运行。** 2026-11-24 一次（12:08），11-25 两轮（15:55 到 16:13，23:15），11-26 00:00 的唤醒也因此失败。中断后平台不自动重试，要 VLA Lead 重启。**【推断】** 同一账号下别的项目的 agent 也在用这份额度，所以什么时候用尽不由本项目决定。对策：任务每完成一个大步骤就在评论里记进度；被中断后在该 issue 上评论并 @ 执行 agent 让它从断点继续。 **唤醒（2026-11-26 起）：** 成员设了一个每 5 小时触发一次的 autopilot（伦敦时间 00:00、05:00、10:00……），每次建一条指派给 VLA Lead 的 issue「唤醒」。被它叫起来时按第 7 节“被额度中断后接续”那一行做。00:00 那次（AFFO-13）在额度恢复（00:50）之前触发，直接失败；05:00 那次（AFFO-14）把断掉的事接上了。
 - **11-23 组会的反馈。** 导师的反馈已在 11-24 给出（第 2 节）。还有没有别的反馈，成员要求这轮讨论结束后再问。
 - **全量微调怎么做。** 这是“必须训练 VLA”这条要求落地的地方，11-10 起搁置（`[README]` 11-10 第 3 条）。Pipeline v2 写主力是 Qwen3-VL-2B，实际所有实验用的是 4B 的官方权重，`[v3]` M0 也写 4B。v3 的时间表要求 12 月中通知整机时段、1 月中做全量微调。它在续研计划里，随计划一起等讨论。 2026-11-25 第 0 步 ② 量过显存（第 2 节），这件事并入上面“第 1 步用哪个骨架、怎么训练”。
@@ -245,8 +245,8 @@
 - `tests/test_config.py::test_the_resolved_config_records_its_source` 从 Multica 的任务 worktree 里 push 时会失败：Mac 的 pre-push hook 会跑 pytest，git 在 linked worktree 里给 hook 导出了 `GIT_DIR`，测试里“临时目录不是仓库”的假设就不成立了。2026-11-24 实测：任务 worktree 里 448 过 1 败，push 被挡住；普通 clone 里 449 全过。要改的是这个测试，不是 hook。在改好之前，从 Mac push 文档要用一个普通 clone。
 - **【推断】** 夜间自动接续作业的脚本（`chain_*.sh`）放在 NAS 的缓存目录里，不在仓库里（`[笔记:v0-status]` 多处提到）；作业的先后关系因此没有版本记录。
 - 同一个父 issue 上登记两条唤醒、两个子 issue 几乎同时到 `in_review` 时，会排出两条 VLA Lead 的运行，后一条是重复的。11-24 的做法：先到的那条把两件事都做完，再用 `multica issue cancel-task` 取消还在排队的那条。子 issue 全部关闭时平台会自己唤醒父 issue 的负责人，等“标为 done”不用另外登记唤醒；等 `in_review` 才需要登记。
-- 每条任务分支的第一个提交是平台自动加的 baseline（`chore(agent): baseline — uncommitted work from the local directory`），内容是 Mac clone 里那两处没提交的本地改动（第 7 节）。合并任何一条任务分支，这两处改动都会跟着进去。`agent/vla-lead/affo-2-docs` 没有这个提交。
-- **【未核实】** 服务器工作副本现在的状态：有没有未提交的改动、队列里有没有本项目的作业。11-23 的会话摘要说服务器、GitHub 和 Mac 三处都在 `f3f9da2`。
+- 2026-11-26 之前的每条 Mac 任务分支，第一个提交是平台自动加的 baseline（`chore(agent): baseline — uncommitted work from the local directory`），内容是 Mac clone 里那两处没提交的本地改动。这两处改动 11-26 随汇总分支进了 `main`，Mac clone 的工作区现在是干净的，之后新建的任务分支不再带它们。Mac clone 里以后再出现没提交的改动，平台还会这样带进任务分支，合并前要看一眼。
+- 服务器主工作副本的状态（2026-11-26 上午核对）：`~/affordance-vla` 在 `main`，工作区干净，已 pull 到和 GitHub 一致。各任务的 worktree 在 `~/wt-affo-*`（9、10、11、12、12-run、15、16），都没有清。
 
 ## 7. 硬性约束和工作流
 
@@ -270,7 +270,7 @@
 | 汇报 | 一周一份周报，按伦敦自然周；同一周内新内容替换旧内容；单个实验的 notebook 放 `report/experiments/`；notebook 由 `scripts/report/build_*.py` 生成，执行后再提交；视频和图放进 tracked 的 `report/media/` | `AGENTS.md` Part B |
 | 提交前检查 | 服务器上没有 git hook，提交前手动跑 `pytest` 和 `ruff`；Mac 上的 pre-push hook 会跑 pytest | `[笔记:git-workflow-quirks]` |
 
-**Mac clone 的状态（2026-11-26 上午）：** `main` 已快进到汇总分支 `agent/vla-lead/affo-2-docs` 的最新提交，工作区干净，领先 `origin/main`（`f3f9da2`）。此前工作区里那两处没提交的本地改动（`docs/local_simulation.md` 多了几个空行，第二周周报有两个单元格的执行计数被清空；成员 11-24 决定保留）原样进了历史：平台的 baseline 提交带着一模一样的内容，快进前后两个文件逐字节相同。快进的做法：先核对这两个文件和目标提交里的相同，再 `git checkout --` 还原它们，然后 `git merge --ff-only`。以后 Mac 上如果又有没提交的改动而目标提交改了同一个文件，先停下问成员，不要丢弃。
+**Mac clone 的状态（2026-11-26 上午）：** `main` 在汇总分支 `agent/vla-lead/affo-2-docs` 的最新提交，和 `origin/main` 相同，工作区干净。此前工作区里那两处没提交的本地改动（`docs/local_simulation.md` 多了几个空行，第二周周报有两个单元格的执行计数被清空；成员 11-24 决定保留）原样进了历史：平台的 baseline 提交带着一模一样的内容，快进前后两个文件逐字节相同。快进的做法：先核对 Mac clone 里没有会被覆盖的本地改动，再 `git merge --ff-only`。以后 Mac 上如果有没提交的改动而目标提交改了同一个文件，先停下问成员，不要丢弃。
 
 **分支（2026-11-24 晚）：** 交接文档原来在 `agent/vla-lead/affo-2-docs`，已 push，从 `main` 起只有文档改动，等成员合并。AFFO-3 的任务分支 `agent/vla-lead/affo-3` 已经把它合并进来，本文件从第四版起在这条分支上更新；这条分支没有 push，合并它就同时带上了 `affo-2-docs` 的全部提交。两条调研分支 `agent/vla-scout/affo-4`、`agent/vla-scout/affo-5` 也已合并进来，所以 AFFO-3 的全部产出都在 `agent/vla-lead/affo-3` 这一条分支上。Mac 本地的 `agent/vla-lead/affo-2` 是 AFFO-2 的任务分支，历史里有一个意外提交（`8cbb4ec`，读历史时从此前会话抽出的对话文本），不要 push，也不要整条合并。
 
@@ -292,6 +292,8 @@
 - 成员的研究直觉：一次抓取 = 抓哪个（语义）× 抓哪里和朝哪（3D affordance）× 手怎么动（动作头），每件事负责一种变化（`[笔记:vla-direction]`）。
 
 ## 9. 维护记录
+
+- 2026-11-26 上午（第十九版）：成员选了 9A。`main` 和汇总分支一起 push 到 GitHub（快进，从 `f3f9da2` 起），Mac clone 快进，服务器主工作副本 pull；`AGENTS.md` Part B、AFFO-8 的说明和两条验收唤醒跟着改了（第 2、5、6、7 节）。
 
 - 2026-11-26 上午（第十八版）：成员要求 Mac 端同时更新文档和代码。记入我的理解和做法（第 2、5、6、7、8 节），`AGENTS.md` Part B 加了一句；Mac clone 的 `main` 快进到汇总分支；AFFO-15、AFFO-16 的验收唤醒加了“并进汇总分支并快进 Mac”这一步；向成员提了问题 9（要不要一起 push `main`）。
 
