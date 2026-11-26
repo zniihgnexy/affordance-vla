@@ -178,3 +178,34 @@ bash scripts/server/submit_queue_job.sh 164 rc365_eval 20000 1 "cards=6 7" -- \
 | `qwenpi_rc365_full_b1` | QwenPI, all weights, batch 1 | out of memory (37.30 GiB) |
 | `qwenoft_rc365_full_b1` | QwenOFT, all weights, batch 1 | out of memory in the first backward (29.64 GiB allocated, 42.22 GiB reserved) |
 | `eval_qwenoft_frozen_300` | evaluation of the 300-step QwenOFT, 10 episodes x 3 tasks | 0/30 successes, 4.2 / 5.1 / 5.2 min per episode, 55 min wall |
+
+## 8. RoboCasa365 base policy (Pipeline v4 step 1, AFFO-16; server)
+
+Record: `docs/vla/2026-11-26_VLA_branch_第1步_底座策略.md`. QwenOFT with LoRA on the language-model layers, trained with the
+MLP action head on the PRETRAIN split of eight atomic tasks (MimicGen + human demonstrations, no target demonstrations),
+evaluated on seen and unseen object instances. One card at a time, queue priority 164, cap 40 GPU hours.
+Settings: `configs/rc365/qwenoft_lora_rc365_8tasks.yaml` (training), `configs/rc365/base_policy_eval.yaml` (evaluation),
+`configs/rc365/data_registry_affo16/data_config.py` (mixtures). Needs the envs of section 6; run from the repo root.
+
+```bash
+# data (CPU): MimicGen pretrain, 55.0 GB for the eight tasks (--dry-run prints sizes; --max-gb stops above N GB); human: --source human
+bash scripts/rc365/fetch_pretrain_demos.sh --source mg [--dry-run]
+MIX=affo16_rc365_pretrain_<Task> bash scripts/rc365/prepare_train_data.sh      # CPU: step index + statistics of one task (or the whole mixture)
+# checks (CPU)
+bash scripts/rc365/check_train_eval_alignment.sh                              # training data path vs evaluation input, same raw step
+source envs/server/robocasa365_env.sh && PYTHONPATH=$W/repos/starVLA_rc365:. "$RC365_PYTHON" scripts/rc365/check_env_conditions.py --task OpenDrawer
+# LoRA trial: peak memory and step time at several batch sizes
+bash scripts/server/submit_queue_job.sh 164 rc365_lora_trial 40000 1 "cards=0 1 2 3 5 6 7" -- \
+    env PREFIX=affo16_lora_trial bash $PWD/scripts/rc365/run_lora_trial_gpu.sh
+# training (restartable: the same RUN continues from its latest checkpoint)
+bash scripts/server/submit_queue_job.sh 164 rc365_base 40000 1 "cards=0 1 2 3 5 6 7" -- \
+    env RUN=affo16_base_oft_lora bash $PWD/scripts/rc365/run_train_base_gpu.sh      # -> $W/runs/robocasa365_starvla/<RUN>/
+# evaluation: fold the adapters into the weights (CPU), then server + 24 simulator clients (BENCH=1: measure server capacity first)
+python scripts/rc365/merge_lora_checkpoint.py --ckpt $W/runs/robocasa365_starvla/<RUN>/checkpoints/steps_N_pytorch_model.pt \
+    --out $W/runs/robocasa365_starvla/<RUN>_merged_N
+bash scripts/server/submit_queue_job.sh 164 rc365_eval_base 20000 1 "cards=0 1 2 3 5 6 7" -- \
+    env CKPT=$W/runs/robocasa365_starvla/<RUN>_merged_N/checkpoints/steps_N_pytorch_model.pt RUN=<name> \
+    OVERRIDES="conditions=[A,B,C]" bash $PWD/scripts/rc365/run_eval_base_gpu.sh     # -> $W/runs/robocasa365_eval/<name>/
+python scripts/rc365/summarise_eval.py $W/runs/robocasa365_eval/<name>              # table.md, summary.json
+python scripts/rc365/video_montage.py --out sheet.png <videos>                      # look at failures
+```
