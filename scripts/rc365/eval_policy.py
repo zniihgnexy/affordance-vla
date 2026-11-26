@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import socket
 import subprocess
@@ -21,43 +20,13 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from affordance_vla.analysis.rc365_stats import summarise  # noqa: E402
 from affordance_vla.config import load_config, resolved  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 W = Path(os.environ.get("W", "/mnt/nas/xinyizheng/affordance_vla"))
 STARVLA = Path(os.environ.get("STARVLA", W / "repos/starVLA_rc365"))
 STARVLA_PYTHON = os.environ.get("STARVLA_PYTHON", "/data/xinyizheng/envs/starvla/bin/python")
-
-
-def wilson(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
-    """The Wilson score interval of a success rate."""
-    if n == 0:
-        return 0.0, 1.0
-    p = wins / n
-    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
-    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
-    return max(0.0, centre - half), min(1.0, centre + half)
-
-
-def summarise(rows: list[dict]) -> dict:
-    cells: dict[str, dict] = {}
-    for row in rows:
-        cell = cells.setdefault(f"{row['task']}/{row['condition']}", {"n": 0, "wins": 0, "steps": 0})
-        cell["n"] += 1
-        cell["wins"] += int(row["success"])
-        cell["steps"] += row["steps"]
-    for cell in cells.values():
-        cell["rate"] = cell["wins"] / cell["n"]
-        cell["wilson95"] = [round(x, 3) for x in wilson(cell["wins"], cell["n"])]
-    by_condition: dict[str, dict] = {}
-    for key, cell in cells.items():
-        total = by_condition.setdefault(key.split("/")[1], {"n": 0, "wins": 0})
-        total["n"] += cell["n"]
-        total["wins"] += cell["wins"]
-    for total in by_condition.values():
-        total["rate"] = total["wins"] / total["n"]
-        total["wilson95"] = [round(x, 3) for x in wilson(total["wins"], total["n"])]
-    return {"cells": cells, "by_condition": by_condition}
 
 
 def free_port() -> int:

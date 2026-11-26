@@ -14,6 +14,6 @@ conditions: [A, B]
 episodes: 20          # per task and condition
 chunk: 5              # episodes per client process (one simulator build per chunk)
 clients: 24           # simulator processes at once (the project cap is 30, shared with the sibling task)
-base_seed: 1234       # episode seed = crc32(base_seed/task/condition/index)
+base_seed: 1234       # episode seed = crc32(base_seed/task/index): A and B share seeds, so they share kitchens
 n_act: 8              # actions executed per policy query (the model predicts 16)
 videos_per_cell: 3    # episodes 0..2 of every cell are recorded

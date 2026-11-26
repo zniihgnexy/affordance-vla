@@ -71,6 +71,10 @@ def action_steps(actions: np.ndarray, n_steps: int) -> list[dict[str, np.ndarray
     return [{key: row[lo:hi] for key, (lo, hi) in ACTION_SLICES.items()} for row in actions[:n_steps]]
 
 
-def episode_seed(base_seed: int, task: str, condition: str, index: int) -> int:
-    """The seed of evaluation episode `index` of one (task, condition) cell: stable across runs and processes."""
-    return zlib.crc32(f"{base_seed}/{task}/{condition}/{index}".encode()) % (2**31)
+def episode_seed(base_seed: int, task: str, index: int) -> int:
+    """The seed of evaluation episode `index` of a task: stable across runs and processes.
+
+    It does not depend on the condition on purpose: with the same seed conditions A and B draw the same kitchen
+    (layout, style, fixtures) and differ only in the object instances, so episode i of A and of B can be paired.
+    """
+    return zlib.crc32(f"{base_seed}/{task}/{index}".encode()) % (2**31)

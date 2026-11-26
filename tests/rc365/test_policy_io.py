@@ -48,11 +48,11 @@ def test_action_steps_reject_a_wrong_chunk(chunk, n):
         io.action_steps(chunk, n)
 
 
-def test_episode_seed_is_stable_and_separates_cells():
-    assert io.episode_seed(1234, "OpenDrawer", "A", 3) == io.episode_seed(1234, "OpenDrawer", "A", 3)
-    seeds = {io.episode_seed(1234, t, c, i) for t in ("OpenDrawer", "OpenCabinet") for c in "AB" for i in range(20)}
-    assert len(seeds) == 80
-    assert io.episode_seed(1234, "OpenDrawer", "A", 3) != io.episode_seed(1235, "OpenDrawer", "A", 3)
+def test_episode_seed_is_stable_and_separates_tasks_and_episodes():
+    assert io.episode_seed(1234, "OpenDrawer", 3) == io.episode_seed(1234, "OpenDrawer", 3)
+    seeds = {io.episode_seed(1234, t, i) for t in ("OpenDrawer", "OpenCabinet") for i in range(20)}
+    assert len(seeds) == 40
+    assert io.episode_seed(1234, "OpenDrawer", 3) != io.episode_seed(1235, "OpenDrawer", 3)
 
 
 def test_an_episode_record_with_numpy_values_is_one_json_line():

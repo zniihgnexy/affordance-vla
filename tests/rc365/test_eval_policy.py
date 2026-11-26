@@ -9,21 +9,6 @@ spec.loader.exec_module(eval_policy)
 CFG = {"tasks": ["OpenDrawer", "OpenCabinet"], "conditions": ["A", "B"], "episodes": 10, "chunk": 5}
 
 
-def test_wilson_interval_brackets_the_rate_and_widens_for_few_episodes():
-    low, high = eval_policy.wilson(5, 20)
-    assert low < 0.25 < high
-    assert eval_policy.wilson(0, 20)[0] == 0.0
-    assert (high - low) < (eval_policy.wilson(1, 4)[1] - eval_policy.wilson(1, 4)[0])
-
-
-def test_summary_counts_per_cell_and_condition():
-    rows = [{"task": "OpenDrawer", "condition": c, "success": s, "steps": 100} for c, s in
-            [("A", True), ("A", False), ("B", False), ("B", False)]]
-    summary = eval_policy.summarise(rows)
-    assert summary["cells"]["OpenDrawer/A"]["rate"] == 0.5
-    assert summary["by_condition"]["B"]["wins"] == 0 and summary["by_condition"]["A"]["n"] == 2
-
-
 def test_jobs_skip_finished_slices_and_keep_partial_ones():
     assert len(eval_policy.jobs(CFG, set())) == 8
     done = {("OpenDrawer", "A", i) for i in range(5)} | {("OpenDrawer", "B", i) for i in range(4)}
@@ -31,3 +16,11 @@ def test_jobs_skip_finished_slices_and_keep_partial_ones():
     assert ("OpenDrawer", "A", 0, 5) not in remaining
     assert ("OpenDrawer", "B", 0, 5) in remaining
     assert len(remaining) == 7
+
+
+def test_client_command_carries_the_cell_and_the_shared_settings():
+    cfg = {**CFG, "base_seed": 7, "n_act": 8, "videos_per_cell": 3}
+    command = eval_policy.client_command(cfg, ("OpenDrawer", "B", 5, 10), 5601, Path("/out"))
+    assert command[command.index("--task") + 1] == "OpenDrawer"
+    assert command[command.index("--start") + 1:command.index("--start") + 3] == ["5", "--stop"]
+    assert command[command.index("--base-seed") + 1] == "7" and command[command.index("--port") + 1] == "5601"

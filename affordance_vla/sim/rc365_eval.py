@@ -150,7 +150,7 @@ def run_cell(
     try:
         for index in indices:
             video = video_dir / f"{task}_{condition}_{index:03d}.mp4" if video_dir and index < videos_per_cell else None
-            record = run_episode(env, policy, episode_seed(base_seed, task, condition, index), horizon, n_act, video)
+            record = run_episode(env, policy, episode_seed(base_seed, task, index), horizon, n_act, video)
             record |= {"task": task, "condition": condition, "index": index}
             records.append(record)
             with out_jsonl.open("a") as handle:
