@@ -13,7 +13,7 @@ _ROBOT_TAG = "panda_omron_robocasa365"
 _DATE = "20250819"
 HUMAN_WEIGHT = 0.4
 
-# task -> time stamp of its MimicGen folder (robocasa.utils.dataset_registry.ATOMIC_TASK_DATASETS[task]["pretrain"]["mg_path"])
+# task -> time stamp of its MimicGen folder (ATOMIC_TASK_DATASETS[task]["pretrain"]["mg_path"] of robocasa)
 _MG_STAMP = {
     "CoffeeSetupMug": "2025-08-20-21-54-35",
     "PickPlaceCounterToCabinet": "2025-08-20-21-56-25",
@@ -37,7 +37,8 @@ def _entries(tasks, human_weight):
 
 
 DATASET_NAMED_MIXTURES = {
-    **{f"affo16_rc365_pretrain_{task}": _entries([task], HUMAN_WEIGHT) for task in _MG_STAMP},  # one task: cache building
+    # one task each, to build the caches of the eight tasks in parallel
+    **{f"affo16_rc365_pretrain_{task}": _entries([task], HUMAN_WEIGHT) for task in _MG_STAMP},
     "affo16_rc365_pretrain_8tasks": _entries(_MG_STAMP, HUMAN_WEIGHT),
     "affo16_rc365_pretrain_coffee_mg": _entries(["CoffeeSetupMug"], 0.0),   # trial: one task, one source
     "affo16_rc365_pretrain_3tasks": _entries(["CoffeeSetupMug", "OpenDrawer", "TurnOffStove"], HUMAN_WEIGHT),

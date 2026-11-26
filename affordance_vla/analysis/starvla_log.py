@@ -1,4 +1,4 @@
-"""Read the loss and step time out of a starVLA training log (it prints a metrics dict every `logging_frequency` steps)."""
+"""Read the loss and step time out of a starVLA training log (a metrics dict is printed every few steps)."""
 from __future__ import annotations
 
 import re
