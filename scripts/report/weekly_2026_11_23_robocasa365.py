@@ -15,10 +15,8 @@ def robocasa365_cells(md, code) -> None:
     md(r"""
 ## 4 · Step 0 ②: RoboCasa365 runs on the server (AFFO-10)
 
-Three of the 50 target tasks, **CoffeeSetupMug** (pick a mug, place it under the coffee machine), **OpenDrawer** and
-**TurnOffStove** (a knob), as the recorded demonstrations show them: three cameras, 256 × 256, 20 fps.
+Three of the 50 target tasks (**CoffeeSetupMug**, **OpenDrawer**, **TurnOffStove**; frames in section 2) were used for every check below.
 """)
-    code(f'Image(filename=str(ROOT / "{MEDIA}/three_cameras.png"), width=900)')
     md(r"""
 **Replay.** From the saved MuJoCo model and state of each step, the simulator renders the same view again (software
 rendering, no GPU) and adds what the videos do not hold: depth and instance segmentation.
@@ -57,6 +55,8 @@ bash scripts/server/submit_queue_job.sh 164 rc365_eval 20000 1 "cards=6 7" -- \
     env CKPT=$W/runs/robocasa365_starvla/my_train/checkpoints/steps_300_pytorch_model.pt \
     bash $PWD/scripts/rc365/run_eval_gpu.sh
 ```
+
+`cards=6 7` is what was free when AFFO-10 ran (GPU 0 was full then). **Use `cards=0` first; if GPU 0 is full, list the cards that have room at that moment.** The two queue commands need a GPU and were run by AFFO-10, not re-run for this review.
 
 RoboCasa365 was only run on the server (22 GB of assets, 1.4 GB of demonstrations for these three tasks); no Mac command is given because none was tried.
 """)

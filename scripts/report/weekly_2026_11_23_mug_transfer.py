@@ -15,7 +15,7 @@ MUGS = ("porcelain_mug", "white_yellow_mug", "red_coffee_mug")
 def mug_transfer_cells(md, code) -> None:
     """Figures first, then the conclusions (at most ten lines), then the commands."""
     md(r"""
-## Carrying the mug map to a mug that was never demonstrated
+## 3 · Step 0 ①: carrying the mug map to a mug nobody demonstrated (AFFO-9)
 
 The check: build the map from two mugs' demonstrations, carry it to the third mug, and compare it with where the demonstrators grasped that third mug. Each figure: *left* nearest-point transfer in the category frame, *middle* NDF transfer, *right* the mug's own demonstrations; orange = the held-out mug's own grasps, projected onto one demonstration frame.
 """)
