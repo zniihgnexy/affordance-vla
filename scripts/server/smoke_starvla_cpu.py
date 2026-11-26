@@ -33,7 +33,7 @@ def build_config(args: argparse.Namespace):
         "trainer.vla_data.video_backend=torchvision_av",
         f"output_dir={args.out}",  # the trainer sets this in setup_directories(); the dataloader writes stats there
     ])
-    cfg = OmegaConf.merge(OmegaConf.load(CONFIG_YAML), overrides)
+    cfg = OmegaConf.merge(OmegaConf.load(args.config_yaml), overrides)
     return wrap_config(apply_config_compat(cfg))
 
 
@@ -61,6 +61,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--vlm", required=True)
     parser.add_argument("--data-root", required=True)
+    parser.add_argument("--config-yaml", default=CONFIG_YAML)
     parser.add_argument("--framework", default="QwenPI")
     parser.add_argument("--data-mix", default="libero_all")
     parser.add_argument("--batch-size", type=int, default=2)
