@@ -43,7 +43,8 @@ def main() -> None:
         for seed in args.seeds:
             first = (env.reset(seed=seed), fingerprint(env))[1]
             second = (env.reset(seed=seed), fingerprint(env))[1]
-            print(f"  seed {seed}: {first} | again: {second} | {'SAME' if first == second else 'DIFFERENT'}", flush=True)
+            verdict = "SAME" if first == second else "DIFFERENT"
+            print(f"  seed {seed}: {first} | again: {second} | {verdict}", flush=True)
         env.close()
 
 

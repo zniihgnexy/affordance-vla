@@ -87,12 +87,16 @@ def run_episode(
     """One episode from the scene drawn by `seed`; returns its record (success, steps, a coarse trace)."""
     started = time.time()
     obs, _ = env.reset(seed=seed)
-    steps, first_success = 0, None
+    steps, first_success, queries, policy_seconds = 0, None, 0, 0.0
     trace: list[list[float]] = []
     frames: list[np.ndarray] = []
     while steps < horizon and first_success is None:
+        asked = time.perf_counter()
         chunk = action_steps(policy(build_example(obs)), n_act)
-        trace.append([steps, *np.round(obs["state.end_effector_position_relative"], 3), float(obs["state.gripper_qpos"][0])])
+        policy_seconds += time.perf_counter() - asked
+        queries += 1
+        eef = np.round(obs["state.end_effector_position_relative"], 3)
+        trace.append([steps, *eef, float(obs["state.gripper_qpos"][0])])
         for action in chunk:
             if video_path is not None and steps % VIDEO_EVERY == 0:
                 frames.append(obs[f"video.{CAMERAS[0]}"])
@@ -113,6 +117,8 @@ def run_episode(
         "steps": steps,
         "horizon": horizon,
         "seconds": round(time.time() - started, 1),
+        "queries": queries,
+        "policy_seconds": round(policy_seconds, 1),
         "lang": str(obs.get(LANGUAGE_KEY, "")),
         "layout_id": getattr(inner, "layout_id", None),
         "style_id": getattr(inner, "style_id", None),

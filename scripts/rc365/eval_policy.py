@@ -69,7 +69,8 @@ def free_port() -> int:
 def start_server(ckpt: str, port: int, log: Path) -> subprocess.Popen:
     env = {**os.environ, "PYTHONPATH": str(STARVLA), "HF_HUB_OFFLINE": "1", "TOKENIZERS_PARALLELISM": "false"}
     server = subprocess.Popen(
-        [STARVLA_PYTHON, "deployment/model_server/server_policy.py", "--ckpt_path", ckpt, "--port", str(port), "--use_bf16"],
+        [STARVLA_PYTHON, "deployment/model_server/server_policy.py", "--ckpt_path", ckpt, "--port", str(port),
+         "--use_bf16"],
         cwd=STARVLA, env=env, stdout=log.open("w"), stderr=subprocess.STDOUT,
     )
     for _ in range(240):
@@ -93,6 +94,14 @@ def jobs(cfg: dict, done: set[tuple[str, str, int]]) -> list[tuple[str, str, int
                 if any((task, condition, i) not in done for i in range(start, stop)):
                     out.append((task, condition, start, stop))
     return out
+
+
+def client_command(cfg: dict, job: tuple[str, str, int, int], port: int, out: Path) -> list[str]:
+    task, condition, start, stop = job
+    args = {"task": task, "condition": condition, "start": start, "stop": stop, "port": port, "out": out,
+            "base-seed": cfg["base_seed"], "n-act": cfg["n_act"], "videos-per-cell": cfg["videos_per_cell"]}
+    return [sys.executable, str(REPO / "scripts/rc365/eval_client.py"),
+            *(token for key, value in args.items() for token in (f"--{key}", str(value)))]
 
 
 def read_rows(path: Path) -> list[dict]:
@@ -127,12 +136,8 @@ def main() -> None:
                 task, condition, start, stop = pending.pop(0)
                 log = (out / "client_logs" / f"{task}_{condition}_{start}.log")
                 log.parent.mkdir(exist_ok=True)
-                proc = subprocess.Popen(
-                    [sys.executable, str(REPO / "scripts/rc365/eval_client.py"), "--task", task, "--condition", condition,
-                     "--start", str(start), "--stop", str(stop), "--port", str(port), "--base-seed", str(cfg["base_seed"]),
-                     "--n-act", str(cfg["n_act"]), "--videos-per-cell", str(cfg["videos_per_cell"]), "--out", str(out)],
-                    env=env, stdout=log.open("w"), stderr=subprocess.STDOUT,
-                )
+                command = client_command(cfg, (task, condition, start, stop), port, out)
+                proc = subprocess.Popen(command, env=env, stdout=log.open("w"), stderr=subprocess.STDOUT)
                 running.append((proc, (task, condition, start)))
             time.sleep(5)
     finally:
