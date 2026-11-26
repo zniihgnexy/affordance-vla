@@ -3,11 +3,11 @@
 # shared GPU queue (A6000 server). Same launch as run_train_gpu.sh, through scripts/rc365/train_lora_launcher.py.
 # Settings from the environment (defaults in brackets):
 #   RUN [qwenoft_lora_rc365_8tasks]  outputs go to $W/runs/robocasa365_starvla/$RUN
-#   STEPS [30000]  BATCH [8]  SAVE [2500]  MIX [affo16_rc365_pretrain_8tasks]  (mixtures: configs/rc365/data_registry_affo16)
+#   STEPS [48000]  BATCH [16]  SAVE [4000]  MIX [affo16_rc365_pretrain_8tasks]  (mixtures: configs/rc365/data_registry_affo16)
 #   CONFIG [configs/rc365/qwenoft_lora_rc365_8tasks.yaml]   EXTRA  more starVLA key=value overrides, e.g. "--framework.lora.rank 32"
 #   RESUME [1]  1: an existing $RUN folder is continued from its latest checkpoint (a queue restart); 0: refuse to reuse it
 # Submit (never run directly; the queue sets CUDA_VISIBLE_DEVICES), from the repo root:
-#   bash scripts/server/submit_queue_job.sh 164 rc365_base 30000 1 "cards=0" -- \
+#   bash scripts/server/submit_queue_job.sh 164 rc365_base 40000 1 "cards=0" -- \
 #       env RUN=<run> bash $PWD/scripts/rc365/run_train_base_gpu.sh
 # Output: $OUT/{config.yaml,dataset_statistics.json,checkpoints/,train.log,PEAK_MEMORY.txt,versions.txt};
 # train.log has "timing/model" and "timing/data" every 10 steps.
@@ -17,7 +17,7 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 STARVLA="${STARVLA:-$W/repos/starVLA_rc365}"
 PY_ENV="${PY_ENV:-/data/xinyizheng/envs/starvla}"
 RUN="${RUN:-qwenoft_lora_rc365_8tasks}"
-STEPS="${STEPS:-30000}"; BATCH="${BATCH:-8}"; SAVE="${SAVE:-2500}"
+STEPS="${STEPS:-48000}"; BATCH="${BATCH:-16}"; SAVE="${SAVE:-4000}"
 MIX="${MIX:-affo16_rc365_pretrain_8tasks}"
 CONFIG="${CONFIG:-$REPO/configs/rc365/qwenoft_lora_rc365_8tasks.yaml}"
 RESUME="${RESUME:-1}"
