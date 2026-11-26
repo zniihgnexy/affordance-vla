@@ -74,6 +74,13 @@ def _plain(value: Any) -> Any:
     return value.item() if isinstance(value, np.generic) else value
 
 
+def record_line(record: dict[str, Any]) -> str:
+    """An episode record as one JSON line (numpy scalars written as plain numbers)."""
+    import json
+
+    return json.dumps(record, default=_plain)
+
+
 def _write_video(frames: list[np.ndarray], path: Path) -> None:
     import imageio.v2 as imageio
 
@@ -134,12 +141,11 @@ def run_episode(
 def run_cell(
     task: str, condition: str, indices: list[int], policy: Callable[[dict], np.ndarray], base_seed: int,
     n_act: int, out_jsonl: Path, video_dir: Path | None = None, videos_per_cell: int = 3,
+    horizon: int | None = None,
 ) -> list[dict[str, Any]]:
     """Episodes `indices` of one (task, condition) cell; each record is appended to `out_jsonl` as it finishes."""
-    import json
-
     env = make_env(task, condition)
-    horizon = task_horizon(task)
+    horizon = horizon or task_horizon(task)
     records = []
     try:
         for index in indices:
@@ -148,7 +154,7 @@ def run_cell(
             record |= {"task": task, "condition": condition, "index": index}
             records.append(record)
             with out_jsonl.open("a") as handle:
-                handle.write(json.dumps(record) + "\n")
+                handle.write(record_line(record) + "\n")
     finally:
         env.close()
     return records

@@ -55,9 +55,10 @@ def test_episode_seed_is_stable_and_separates_cells():
     assert io.episode_seed(1234, "OpenDrawer", "A", 3) != io.episode_seed(1235, "OpenDrawer", "A", 3)
 
 
-def test_numpy_scalars_become_plain_numbers_for_json():
+def test_an_episode_record_with_numpy_values_is_one_json_line():
     import json
 
-    from affordance_vla.sim.rc365_eval import _plain
+    from affordance_vla.sim.rc365_eval import record_line
 
-    assert json.dumps([_plain(np.int64(3)), _plain(None), _plain("x")]) == '[3, null, "x"]'
+    record = {"layout_id": np.int64(3), "trace": [[0, np.float32(0.25), np.float64(1.0)]], "success": True}
+    assert json.loads(record_line(record)) == {"layout_id": 3, "trace": [[0, 0.25, 1.0]], "success": True}

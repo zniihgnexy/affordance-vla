@@ -37,6 +37,7 @@ def _entries(tasks, human_weight):
 
 
 DATASET_NAMED_MIXTURES = {
+    **{f"affo16_rc365_pretrain_{task}": _entries([task], HUMAN_WEIGHT) for task in _MG_STAMP},  # one task: cache building
     "affo16_rc365_pretrain_8tasks": _entries(_MG_STAMP, HUMAN_WEIGHT),
     "affo16_rc365_pretrain_coffee_mg": _entries(["CoffeeSetupMug"], 0.0),   # trial: one task, one source
     "affo16_rc365_pretrain_3tasks": _entries(["CoffeeSetupMug", "OpenDrawer", "TurnOffStove"], HUMAN_WEIGHT),
