@@ -1,0 +1,10 @@
+# Step 1 (3), AFFO-18, part B: the mug transfer check with the handle aligned before the nearest-point transfer
+# (scripts/data/rc365_mug_align.py). Paths relative to $W. The sources are the 12 pretrain mugs, the targets the 5 held-out
+# mugs, the check is that of AFFO-15 (landing >= 0.8, closing-axis median < 20 deg).
+name: mug_align_v1
+extract: runs/rc365_labels/extract_v1
+category: mug
+alignments: [none, length, registered]   # none = AFFO-15's plain / ring rows
+handle_x0: 1.05                          # category units; points beyond it along the handle direction are the handle
+treatments: [plain, ring]
+out: runs/rc365_labels/check_v2
