@@ -53,7 +53,7 @@ EXPERIMENTS.md       every experiment's command and settings
 ## Start here
 
 1. [VLA documentation index](docs/vla/README.md) — all design, search and setup records.
-2. [Pipeline v3](docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md) — the current design (in Chinese): a directional interaction affordance map on every object, a semantic gate that picks the named one, and an action head trained to follow the plan; experiments run in three stages. It replaces the method part of [Pipeline v2](docs/vla/2026-11-10_VLA_branch_Pipeline_v2.md).
+2. [Pipeline v4](docs/vla/2026-11-25_VLA_branch_Pipeline_v4.md) — the current scope and experiment plan (in Chinese, approved 25 Nov 2026): RoboCasa365 kitchens next to LIBERO, multi-step tasks and stage understanding. Its method core is [Pipeline v3](docs/vla/2026-11-19_VLA_branch_Pipeline_v3.md) (in Chinese): a directional interaction affordance map on every object, a semantic gate that picks the named one, and an action head trained to follow the plan; experiments run in three stages. It replaces the method part of [Pipeline v2](docs/vla/2026-11-10_VLA_branch_Pipeline_v2.md).
 3. [V0 server setup record](docs/vla/2026-11-10_VLA_branch_V0_服务器搭建记录.md) — what is installed on the A6000 server and how the GPU queue works.
 
 ### Weekly reviews
