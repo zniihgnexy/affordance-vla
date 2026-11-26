@@ -15,7 +15,9 @@ def dataset_cells(md, code) -> None:
 
 The project lead's advisor asked (24 Nov) for a VLA that is not limited to one kind of task: it should extend to tasks in indoor rooms and show some video understanding. We needed one simulator with several kinds of interaction, room-level scenes and demonstrations with fine actions. **RoboCasa365** (2026) is that: kitchens, with demonstrations. Three of its tasks as the recorded demonstrations show them (a pick-and-place, a drawer, a knob); three cameras, 256 × 256, 20 fps:
 """)
-    code('Image(filename=str(ROOT / "report" / "media" / "weekly_2026_11_23" / "robocasa365" / "three_cameras.png"), width=900)')
+    code(
+        'Image(filename=str(ROOT / "report" / "media" / "weekly_2026_11_23" / "robocasa365" / "three_cameras.png"), width=900)'
+    )
     md(r"""
 **What the survey compared** (AFFO-4, 24 Nov; abstracts, project pages and data cards only, **nothing was downloaded or run**; "not found" = the survey did not find it, not that it does not exist). Compressed from 11 candidates to the 8 that matter:
 

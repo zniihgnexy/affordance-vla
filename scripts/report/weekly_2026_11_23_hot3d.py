@@ -15,11 +15,13 @@ def hot3d_cells(md, code) -> None:
 
 **Real data, ground-truth annotations** (motion capture), no model involved: [HOT3D](https://facebookresearch.github.io/hot3d/) (Meta, CVPR 2025) = egocentric recordings of 19 people handling 33 rigid objects, with per-frame 6-DoF object poses, hand meshes and scanned object meshes. Below: two 5-second clips of one person holding the white mug (`P0015_dbe00981`).
 """)
-    code('from pathlib import Path\n'
-         'from IPython.display import Image\n'
-         'ROOT = next(p for p in [Path.cwd(), *Path.cwd().parents] if (p / "affordance_vla").is_dir())\n'
-         'HOT3D = ROOT / "report" / "media" / "weekly_2026_11_23" / "hot3d"\n'
-         'Image(filename=str(HOT3D / "overlay.png"), width=620)')
+    code(
+        "from pathlib import Path\n"
+        "from IPython.display import Image\n"
+        'ROOT = next(p for p in [Path.cwd(), *Path.cwd().parents] if (p / "affordance_vla").is_dir())\n'
+        'HOT3D = ROOT / "report" / "media" / "weekly_2026_11_23" / "hot3d"\n'
+        'Image(filename=str(HOT3D / "overlay.png"), width=620)'
+    )
     md(r"""
 *Top of the figure above: the annotated hand meshes (thumb in orange) and the mug mesh drawn on the camera frame (Aria RGB, fisheye). Below: the same 10 seconds turned into labels.*
 """)

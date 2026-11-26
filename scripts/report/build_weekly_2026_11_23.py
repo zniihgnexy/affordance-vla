@@ -9,6 +9,7 @@ report/media/pipeline_overview/v4_model.png. Nothing runs on a GPU or on the ser
 Sections: 0 and 8 from weekly_2026_11_23_summary.py, 1 pipeline.py, 2 datasets.py, 3 mug_transfer.py (AFFO-9),
 4 robocasa365.py (AFFO-10), 5 hot3d.py (AFFO-11), 6 methods.py, 7 commands.py.
 """
+
 import sys
 from pathlib import Path
 

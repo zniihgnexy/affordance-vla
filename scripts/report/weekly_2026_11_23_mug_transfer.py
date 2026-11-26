@@ -19,9 +19,11 @@ def mug_transfer_cells(md, code) -> None:
 
 The check: build the map from two mugs' demonstrations, carry it to the third mug, and compare it with where the demonstrators grasped that third mug. Each figure: *left* nearest-point transfer in the category frame, *middle* NDF transfer, *right* the mug's own demonstrations; orange = the held-out mug's own grasps, projected onto one demonstration frame.
 """)
-    code('MUG_FIGURES = ROOT / "report" / "media" / "weekly_2026_11_23" / "mug_transfer"\n'
-         f'for name in {MUGS!r}:\n'
-         '    display(Image(filename=str(MUG_FIGURES / f"{name}.png"), width=1000))')
+    code(
+        'MUG_FIGURES = ROOT / "report" / "media" / "weekly_2026_11_23" / "mug_transfer"\n'
+        f"for name in {MUGS!r}:\n"
+        '    display(Image(filename=str(MUG_FIGURES / f"{name}.png"), width=1000))'
+    )
     md(r"""
 | Held-out mug (own grasps) | Method (source grasps) | Landing rate (pass ≥ 0.8) | Median axis error (pass < 20°) |
 | --- | --- | --- | --- |
