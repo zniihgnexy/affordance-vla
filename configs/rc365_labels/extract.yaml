@@ -1,0 +1,17 @@
+# Step 1 (1), AFFO-15: replay the human demonstrations of 8 RoboCasa365 atomic tasks and record held grasps of
+# mug / cup / bowl and touches of handles and knobs. Paths are relative to the work directory $W (the NAS).
+name: extract_v1
+data_root: data/robocasa365
+splits: [pretrain, target]
+# part tasks: the target split has 10 kitchens only, so its first 150 episodes show them all; the pretrain split has ~100 kitchens
+workers: 24               # replay processes (the limit is 30, shared with the sibling task)
+tasks:
+  CoffeeSetupMug: {kind: object, categories: [mug, cup, bowl]}
+  PickPlaceCounterToCabinet: {kind: object, categories: [mug, cup, bowl], names: [obj]}   # only episodes whose manipulated object (`obj`) is one
+  PickPlaceCounterToStove: {kind: object, categories: [mug, cup, bowl], names: [obj]}
+  PickPlaceSinkToCounter: {kind: object, categories: [mug, cup, bowl], names: [obj]}
+  OpenDrawer: {kind: part, limit: {target: 150}}
+  OpenCabinet: {kind: part, limit: {target: 150}}
+  TurnOffStove: {kind: part, limit: {target: 150}}
+  TurnOnSinkFaucet: {kind: part, limit: {target: 150}}
+out: runs/rc365_labels/extract_v1

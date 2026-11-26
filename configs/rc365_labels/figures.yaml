@@ -1,0 +1,19 @@
+# Step 1 (1), AFFO-15: label overlays on rendered frames (scripts/data/rc365_label_figures.py). Paths relative to $W, out to the repo.
+extract: runs/rc365_labels/extract_v1
+data_root: data/robocasa365
+out: report/media/weekly_2026_11_23/interaction_labels
+camera: robot0_agentview_left
+size: 384
+before: 25                  # steps before the touch / grasp for the first panel
+after: 20                   # steps after it for the third panel
+treatment: ring             # mug map: plain | ring | robot (set after scripts/data/rc365_label_check.py)
+map_categories: {mug: true} # category: has a handle
+tasks:                      # split of the demonstrations drawn; episodes = figures per task; tries = episodes looked at
+  CoffeeSetupMug: {kind: object, split: target, episodes: 2, tries: 10}
+  PickPlaceCounterToCabinet: {kind: object, split: pretrain, episodes: 2, tries: 12}
+  PickPlaceCounterToStove: {kind: object, split: pretrain, episodes: 2, tries: 12}
+  PickPlaceSinkToCounter: {kind: object, split: pretrain, episodes: 2, tries: 12}
+  OpenDrawer: {kind: part, split: pretrain, episodes: 2, tries: 10}
+  OpenCabinet: {kind: part, split: pretrain, episodes: 2, tries: 10}
+  TurnOffStove: {kind: part, split: pretrain, episodes: 2, tries: 10}
+  TurnOnSinkFaucet: {kind: part, split: pretrain, episodes: 2, tries: 10}

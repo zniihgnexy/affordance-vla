@@ -63,9 +63,10 @@ def category_map(sources: Sequence[Source]) -> CategoryMap:
 
 
 def transfer_nearest(cmap: CategoryMap, frame: CategoryFrame, surface: Surface, name: str,
-                     max_distance: float = MAX_DISTANCE) -> CanonicalMap:
-    """The category map on another mesh: every surface point takes the nearest summed point of the category map."""
-    distance, nearest = cKDTree(cmap.points).query(frame.point_to_category(surface.points))
+                     max_distance: float = MAX_DISTANCE, tree: cKDTree | None = None) -> CanonicalMap:
+    """The category map on another mesh: every surface point takes the nearest summed point of the category map.
+    `tree` is the KD-tree of `cmap.points` when the caller carries one map to many meshes (the result is the same)."""
+    distance, nearest = (tree or cKDTree(cmap.points)).query(frame.point_to_category(surface.points))
     reached = distance <= max_distance
     total = np.where(reached, cmap.total[nearest], 0.0)
     tensor = np.where(reached[:, None, None], cmap.tensor[nearest], 0.0)

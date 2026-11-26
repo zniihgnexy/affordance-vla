@@ -7,7 +7,7 @@ tracked images):
 Reads only tracked files: report/media/weekly_2026_11_23/ (figures of the task records) and
 report/media/pipeline_overview/v4_model.png. Nothing runs on a GPU or on the server. In English, short.
 Sections: 0 and 8 from weekly_2026_11_23_summary.py, 1 pipeline.py, 2 datasets.py, 3 mug_transfer.py (AFFO-9),
-4 robocasa365.py (AFFO-10), 5 hot3d.py (AFFO-11), 6 methods.py, 7 commands.py.
+4 robocasa365.py (AFFO-10), 4b interaction_labels.py (AFFO-15), 5 hot3d.py (AFFO-11), 6 methods.py, 7 commands.py.
 """
 
 import sys
@@ -17,6 +17,7 @@ import nbformat as nbf
 from weekly_2026_11_23_commands import command_cells
 from weekly_2026_11_23_datasets import dataset_cells
 from weekly_2026_11_23_hot3d import hot3d_cells
+from weekly_2026_11_23_interaction_labels import interaction_label_cells
 from weekly_2026_11_23_methods import methods_cells
 from weekly_2026_11_23_mug_transfer import mug_transfer_cells
 from weekly_2026_11_23_pipeline import pipeline_cells
@@ -53,6 +54,7 @@ pipeline_cells(md, code)
 dataset_cells(md, code)
 mug_transfer_cells(md, code)
 robocasa365_cells(md, code)
+interaction_label_cells(md, code)
 hot3d_cells(md, code)
 methods_cells(md, code)
 command_cells(md)
