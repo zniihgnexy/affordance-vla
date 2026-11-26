@@ -1,6 +1,6 @@
 # 交接摘要（HANDOVER）
 
-**最后更新：2026-11-26 上午（第十九版，成员选了 9A：`main` 也由 VLA Lead push；GitHub、Mac、服务器三处的 `main` 已同步到汇总分支），VLA Lead。** 下一次更新：每完成一个阶段，或成员做出新决定时。
+**最后更新：2026-11-26 中午（第二十版，research proposal 按成员的要求加了两张图和“map 怎么接进 VLA”的初步想法；GitHub、Mac、服务器三处的 `main` 已同步），VLA Lead。** 下一次更新：每完成一个阶段，或成员做出新决定时。
 
 这份文件说明项目现在进行到哪、还缺什么。它不复制也不取代下面的文件，冲突时以它们和成员的话为准：
 
@@ -54,6 +54,7 @@
 - **成员 2026-11-26 10:08 的决定和新要求（AFFO-2）：** ① 7A：第 1 步改用 QwenOFT，单卡，VLM 加 LoRA，全量微调留到有多卡算力时。② 8A：第 1 步前半开始，标签和底座策略都做，GPU 一次一张卡、走队列，上限 40 GPU 小时。③ 本周的周报按伦敦时间的自然周不断更新。④ 要一份 research proposal：尽量简单，核心是 pipeline、候选数据集和 affordance map 的提取，4 页以内，md 格式，放在仓库根目录。
 - **第 1 步前半已下发（2026-11-26 10:13，AFFO-8 的第 3 阶段，两条并行，都交给 VLA Engineer）：** 8 个原子任务从服务器上 RoboCasa365 的注册表里选定：`CoffeeSetupMug`、`PickPlaceCounterToCabinet`、`PickPlaceCounterToStove`、`PickPlaceSinkToCounter`、`OpenDrawer`、`OpenCabinet`、`TurnOffStove`、`TurnOnSinkFaucet`（都有 pretrain 的人工示范、MimicGen 示范和 target 示范；注册表里原子任务 65 个，其中 18 个有 target 示范，60 个有 MimicGen 示范）。**AFFO-15**：类别级交互 map 的标签，只用 CPU；在 RoboCasa 留出的实例上重做搬运检查，量对称部位的覆盖问题并比较两种处理，把手、旋钮加“碰到之后往哪个方向动”。**AFFO-16**：QwenOFT 加 LoRA 的底座策略，GPU 上限 40 小时；先对齐评测桥、试跑量显存和速度、算预算，40 小时内做不出一次训练加一轮评测就停下并改成 `blocked`；评测分三种条件：A 见过的厨房和实例，B 见过的厨房加没见过的实例，C 官方的目标设置。训练只用 pretrain 划分的示范。下载分工：AFFO-15 下人工示范，AFFO-16 下 MimicGen 示范，避免写同一个文件。验收和 `blocked` 的唤醒各两条，登记在 AFFO-2 上。两条都通过后，向成员报告并提第 1 步后半（map 头、门控、服从训练）的拆解和 GPU 开销。
 - **Research proposal（2026-11-26）：** `RESEARCH_PROPOSAL.md`，在仓库根目录，英文，约 1,800 词；渲染成 A4（11 pt，边距 2 cm）是 4 页，第 4 页留有余量。八节：摘要、动机和三个研究问题、pipeline（图）、affordance map 的提取（我们的做法五步、和四类别的做法的对比表、HOT3D 这类人手数据）、候选数据集（表）、评测、已有的初步结果、计划加算力加风险。数字都抄自任务记录和两份调研；参考文献只列调研里核对过 arXiv 编号的，其余只写名字。Pipeline v4 的图按 7A 重画了两处文字（`report/media/pipeline_overview/v4_model.{yaml,png}`）。**语言是我定的（英文），成员没有指定。**
+- **Research proposal 加图（成员 2026-11-26 11:03，AFFO-2：多加图，尤其是 affordance map 怎么用、怎么加进 VLA，可以写初步想法）。** 现在三张图，仍是 A4 四页以内：图 1 是 pipeline（原有）；图 2“从示范到训练标签”五步，全用已有的真实画面拼成（RoboCasa365 重放、LIBERO mug 上的示范抓取、RoboCasa365 的 mug 点云、HOT3D 的 mug 接触图、LIBERO 画面上的计划标签）；图 3“map 怎么变成计划、计划怎么进动作头”，上排是真实 rollout 的画面，下排是四条路线。第 4 节重写成三小节（提取；使用和接入；别的来源）。**四条路线里只有 A 是做过的**（计划向量过小 MLP，加到动作 token 上，初值为零；`affordance_vla/heads/plan_policy.py`）；**B（把前 k 个格子当 token）、C（VLM 同时预测 map 作辅助目标）、D（把接触点画回输入图）是 VLA Lead 写的初步想法，没有实验，成员也还没有确认要做。** 图里也改正了一点：现有的 map 头只出分数和深度，闭合方向是计划中的输出。图的规格和素材在 `report/media/research_proposal/`，素材由 `scripts/report/proposal_figure_crops.py` 从已有的图里裁出。
 - **周报怎么不断更新【做法是我定的】：** 本周（11-23 至 11-29）的 notebook 已有一版；周四到周日的新内容（7A、8A 的决定，research proposal，重画的 v4 图，第 1 步前半到那时的进度）在 11-29（周日）下午统一更新一次：AFFO-2 上登记了那天的定时唤醒，届时建一条汇总任务。下一周起，每条任务交付时交它那一周的小节。
 - **Mac 端同时更新（成员 2026-11-26 10:25，AFFO-2：“记得 mac 端尽量同时更新文件和 code 的部分”）。** **【我的理解】** 成员要的是打开 Mac 上的仓库就能看到最新的文档和代码，不用自己再合并。做法：`agent/vla-lead/affo-2-docs` 当作汇总分支（它从 11-26 起已经带着代码）；每条任务验收后，把它的分支并进汇总分支并 push，再把 Mac clone 的 `main` 快进到汇总分支。还在做的任务分支只 fetch，不合并。这替代了 11-24 定的“成员合并每条分支”里 Mac 这一头的部分；GitHub 上的 `main` 仍然不由 agent push，除非成员同意（AFFO-2 问题 9）。第一次快进在 2026-11-26 上午做了：Mac 的 `main` 从 `f3f9da2` 到汇总分支的最新提交。 **成员 2026-11-26 10:39 选了 9A：** 每次更新 Mac 后，VLA Lead 也 push GitHub 上的 `main`（只做快进，不强推），并在服务器的主工作副本 `~/affordance-vla` 里 `git pull --ff-only`，三处保持一致。当天上午第一次做完。顺序固定：汇总分支和 `main` 从普通 clone 里一起 push（push 前的测试在那里跑）→ Mac clone 快进并 fetch → 服务器 pull。
 
@@ -211,6 +212,7 @@
 
 - **物体坐标系里的交互 map 混进了“机器人从哪边来”。** 第 0 步 ① 显示：对杯沿这种绕竖直轴对称的部位，示范只覆盖朝向机器人的那一侧，统计出的 map 因此带着场景的摆放，不只是物体本身的属性。**【推断】** 第 1 步做标签时要处理这一点，两个候选：对称的部位沿对称轴补全成一圈，测试时再按机器人的方位挑点；或者把抓取记在“朝向机器人”的坐标系里。哪个好要在 RoboCasa 上试，那里杯子的摆放是随机的。
 - RoboCasa365 的评测慢：每回合约 4.8 分钟（失败的回合跑满 600–750 步）。**【推断】** 8 个任务 × 两种实例划分 × 20 回合约 27 小时的仿真时间，要靠并行的 CPU 客户端摊开（上限 30 个进程），每个设置的回合数要先做预算。
+- **计划怎么进动作头，在 QwenOFT 上还没有设计。** LIBERO 阶段的做法（路线 A）是给 QwenPI 的 DiT 的动作 token 加一个计划嵌入；QwenOFT 的动作头是小 MLP，接法要重做。proposal 里列了 A–D 四条路线作为第 1 步后半的候选对比，其中 C 单独用就是 v3 基线表里的“affordance 只作辅助预测”。**【推断】** B 可能顺带缓解“对称部位只有一侧有示范”的问题，没有验证。
 - 新颖性偏薄：最近的是 SIDO；贡献要落在和已有修法的正面比较、以及预测 affordance 驱动下的 LIBERO-PRO 结果上（R9）。B、D、E、F 四个基线都还没实现。
 - 位置扰动的差距在计划头（0.66 对 0.92）：tomato sauce 0% 选对格子；VLM 的一个图像 token 比小物体还大（`[README]` 11-11 的 notebook 说明；`[笔记:v0-status]`）。
 - 语义门控在 Object 上看不出作用（g1 只认错 3/40），要靠 Spatial 验证（`[v3]` 第 10 节末）。
@@ -292,6 +294,8 @@
 - 成员的研究直觉：一次抓取 = 抓哪个（语义）× 抓哪里和朝哪（3D affordance）× 手怎么动（动作头），每件事负责一种变化（`[笔记:vla-direction]`）。
 
 ## 9. 维护记录
+
+- 2026-11-26 中午（第二十版）：proposal 加了图 2、图 3 和路线 A–D，记入哪些做过、哪些只是想法（第 2、6 节）；新增 `scripts/report/proposal_figure_crops.py` 和 `report/media/research_proposal/`。汇总分支和 `main` 一起 push，Mac 快进，服务器 pull。
 
 - 2026-11-26 上午（第十九版）：成员选了 9A。`main` 和汇总分支一起 push 到 GitHub（快进，从 `f3f9da2` 起），Mac clone 快进，服务器主工作副本 pull；`AGENTS.md` Part B、AFFO-8 的说明和两条验收唤醒跟着改了（第 2、5、6、7 节）。
 

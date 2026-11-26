@@ -1,0 +1,64 @@
+# RESEARCH_PROPOSAL.md, figure 2: how the interaction (affordance) map is extracted. Every picture is a crop of a
+# figure made from real data by an earlier task (scripts/report/proposal_figure_crops.py): 1 RoboCasa365 replay
+# (AFFO-10), 2 demonstrated grasps on a LIBERO mug (AFFO-9), 3 RoboCasa365 mug meshes (AFFO-10), 4 a scanned mug
+# with touch frequency and closing axes from human-hand data (AFFO-11), 5 the planned per-object label on a LIBERO
+# frame (week-2 review). Colours: ../pipeline_overview/paper.yaml.
+paper: ../pipeline_overview/paper.yaml
+figure:
+  id: map_extraction
+  width: 560
+  pptx_app: office
+
+layout: col
+gap: 4
+
+panels:
+  - id: s_main
+    frame: none
+    body:
+      - row:
+          gap: 18
+          align: start
+          body:
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: replay, shape: image, w: 186, h: 62, src: replay_rgb_depth_seg.png}
+                  - {id: t1, shape: text, size: 7, text: "**1 · replay a demonstration**\nfrom saved states: RGB, depth, segmentation"}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: grasps, shape: image, w: 62, h: 62, src: demo_grasps_on_mug.png}
+                  - {id: t2, shape: text, size: 7, text: "**2 · record grasps**\nin the object frame"}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: cat, shape: image, w: 56, h: 62, src: category_instances.png}
+                  - {id: t3, shape: text, size: 7, text: "**3 · category frame**\nseen and held-out\ninstances aligned"}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: map3d, shape: image, w: 62, h: 62, src: map_on_surface.png}
+                  - {id: t4, shape: text, size: 7, text: "**4 · 3D map**\nwhere it is touched,\nclosing axes"}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: label, shape: image, w: 62, h: 62, src: frame_map_v3.png}
+                  - {id: t5, shape: text, size: 7, text: "**5 · project to the image**\nlabel for every object"}
+
+edges:
+  - {from: replay.e, to: grasps.w}
+  - {from: grasps.e, to: cat.w}
+  - {from: cat.e, to: map3d.w}
+  - {from: map3d.e, to: label.w}
+
+caption: >-
+  \textbf{From demonstrations to a training label.} A demonstration is replayed from its saved simulator states,
+  which also gives depth and segmentation; each grasp is recorded in the frame of the object; all instances of a
+  category are aligned to one frame and their grasps accumulated into one 3D map (score and closing axis on the
+  surface); the map is carried to the instance in view and projected into the camera image.

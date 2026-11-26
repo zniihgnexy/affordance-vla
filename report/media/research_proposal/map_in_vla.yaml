@@ -1,0 +1,83 @@
+# RESEARCH_PROPOSAL.md, figure 3: how the interaction map is used and where it enters the VLA. Top: the path at
+# test time, with frames of a real LIBERO-PRO rollout (input, the predicted map with its best cell boxed, the decoded
+# plan). Bottom: four ways for the plan to reach the action head. A is built and trained on LIBERO; B, C and D are
+# ideas, not built (A adds the plan embedding to every action token, see affordance_vla/heads/plan_policy.py). The last picture is a real demonstration frame with its path rewritten to another object.
+# Colours: ../pipeline_overview/paper.yaml (gold starVLA, orange ours and trained, grey no weights, purple dashed
+# not built).
+paper: ../pipeline_overview/paper.yaml
+figure:
+  id: map_in_vla
+  width: 560
+  pptx_app: office
+
+layout: col
+gap: 9
+
+panels:
+  - id: s_use
+    title: "At test time: the map becomes a plan, and the action follows the plan"
+    title_align: left
+    frame: none
+    body:
+      - row:
+          gap: 12
+          align: start
+          body:
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: frame, shape: image, w: 50, h: 50, src: frame_input.png}
+                  - {id: tf, shape: text, size: 7, text: "**input**\nframes + instruction"}
+            - {id: vlm, h: 50, text: "**VLM**\nQwen3-VL-4B\n+ LoRA", role: backbone}
+            - {id: head, h: 50, text: "**map head**\nper cell: score,\ndepth (+ closing\ndirection, planned)", role: core}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: mapimg, shape: image, w: 50, h: 50, src: frame_map_now.png}
+                  - {id: tm, shape: text, size: 7, text: "**predicted map**\nbest cell boxed"}
+            - {id: dec, h: 50, text: "**decode**\nbest cell +\ndepth → 3D\ncontact", role: neutral}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: planimg, shape: image, w: 50, h: 50, src: frame_plan.png}
+                  - {id: tp, shape: text, size: 7, text: "**plan**\ncontact, approach, grip"}
+            - {id: iface, h: 50, text: "**plan interface**\nA, B, C or D\n(below)", role: core}
+            - {id: act, h: 50, text: "**action head**\ntrained to obey\nthe plan\n→ actions", role: backbone}
+
+  - id: s_ways
+    title: "How the plan reaches the action head: A is built, B to D are ideas to compare"
+    title_align: left
+    frame: none
+    body:
+      - row:
+          gap: 9
+          align: start
+          body:
+            - {id: wa, h: 50, text: "**A · plan embedding**\nplan vector → small MLP →\nadded to the action tokens", role: core}
+            - {id: wb, h: 50, text: "**B · map tokens**\nthe top-k cells as tokens;\nthe robot pose picks one", fill: purple.light, dash: true}
+            - {id: wc, h: 50, text: "**C · auxiliary target**\nthe adapted VLM also\npredicts the map", fill: purple.light, dash: true}
+            - {id: wd, h: 50, text: "**D · visual prompt**\ncontact and direction drawn\non the next input image", fill: purple.light, dash: true}
+            - col:
+                gap: 3
+                align: center
+                body:
+                  - {id: cf, shape: image, w: 50, h: 50, src: frame_counterfactual.png}
+                  - {id: tc, shape: text, size: 7, text: "**training, every route**\nsame image, plan moved,\nactions relabelled"}
+
+edges:
+  - {from: frame.e, to: vlm.w}
+  - {from: vlm.e, to: head.w}
+  - {from: head.e, to: mapimg.w}
+  - {from: mapimg.e, to: dec.w}
+  - {from: dec.e, to: planimg.w}
+  - {from: planimg.e, to: iface.w}
+  - {from: iface.e, to: act.w}
+
+caption: >-
+  \textbf{The interaction map is turned into a plan, and the plan is what the action head must obey.} A small head on
+  the VLM predicts a score and a depth per image cell (a closing direction is planned); the best cell of the target object is
+  decoded into a 3D contact and a short plan. Four ways for the plan to reach the action head: A, an embedding added
+  to the action tokens, is built and trained on LIBERO; B, C and D are ideas. Every route is trained with counterfactual plans.
