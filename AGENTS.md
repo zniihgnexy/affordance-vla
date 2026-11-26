@@ -177,6 +177,9 @@ Rules specific to this repository:
   and experiments stay on the server; the Mac keeps the repository and pulls visualisations and weekly reviews.
   Each issue's code is committed on its own branch (`agent/...`) in its own git worktree on the server and
   pushed; the project lead merges into `main`. Documentation-only work may be written on the Mac task branch.
+  Since 2026-11-26 (project lead): the Mac clone is kept in step with both documents and code. After a task is
+  accepted, VLA Lead merges its branch into the integration branch `agent/vla-lead/affo-2-docs`, pushes that, and
+  fast-forwards the Mac clone's `main` to it. `main` on GitHub is pushed only when the project lead says so.
 - GPU work goes through the shared queue (`scripts/server/submit_queue_job.sh`), never started directly.
   Since 2026-11-24 this project uses GPU 0 first (`cards=0`; it was `cards=7` from 2026-11-20 to 2026-11-23)
   and may use priority 164. Since 2026-11-25: when GPU 0 has no room for the job, other cards with room may
