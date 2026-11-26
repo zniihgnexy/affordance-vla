@@ -137,6 +137,9 @@ Experiment notebooks (appendices of their week), from `report/experiments/`:
 `python ../../scripts/report/build_<name>.py <notebook>.ipynb`. Then
 `python -m jupyter nbconvert --to notebook --execute --inplace <notebook>.ipynb`. Each builder's docstring
 names its notebook and inputs; media go to the tracked `report/media/`.
+Week 3 (`report/2026-11-23_weekly_review.ipynb`, built by `scripts/report/build_weekly_2026_11_23.py`, one module per section
+`scripts/report/weekly_2026_11_23_<topic>.py`) reads only tracked files, so it also builds and executes on the Mac (env with
+nbformat and jupyter, e.g. `affordance3d`); its section 7 lists the demo commands of the week.
 The layer-level pipeline figures are rendered on the Mac (needs Google Chrome):
 `python scripts/report/render_pipeline_detail.py report/media/pipeline_overview/detail/pipeline_v3_layers.html`.
 
