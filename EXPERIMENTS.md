@@ -255,3 +255,41 @@ python scripts/rc365/classify_failures.py $W/runs/robocasa365_eval/<name>       
 
 Result (2026-11-27): run `affo16_base_oft_lora` (48000 steps, batch 16, seed 42) evaluated as `affo16_eval_base_48000`:
 A 74/160, B 74/160, C 82/160; 26.5 of the 40 GPU hours. Details and the open problems: the record file above.
+
+## 11. RoboCasa365 base-policy checks (Pipeline v4 step 1 (4a), AFFO-19; server)
+
+Record: `docs/vla/2026-11-27_VLA_branch_第1步_底座检查.md`. Three checks of the section-10 base policy before any method is
+added: success against training steps, why the arm stops at the stove knob and the faucet, and seen against unseen object
+instances with more episodes. Cap: 4 GPU hours of the 13.5 left of AFFO-16's 40; one card at a time, queue priority 164.
+The checkpoints are the merged ones of section 10 (`scripts/rc365/merge_lora_checkpoint.py`, output folders
+`affo16_base_oft_lora_merged_{16000,32000,48000}`). The evaluation code is section 10's; the new parts are all off unless
+asked for: `--probes part,objects` (`affordance_vla/sim/rc365_probe.py`), `first_episode` (config key), `CONFIG` (job
+variable). Every episode seed is `crc32(base_seed/task/index)`, so the same index is the same kitchen across runs and splits.
+
+```bash
+# (1) 16000 / 32000 steps, condition A, 8 tasks x 20 episodes (configs/rc365/base_checks_steps.yaml)         -> affo19_steps<N>_A
+bash scripts/server/submit_queue_job.sh 164 rc365_affo19_steps 20000 1 "cards=0 1 2 3 5 6 7" -- \
+    env PHASE=steps bash $PWD/scripts/rc365/run_base_checks_gpu.sh
+# (2) TurnOffStove, TurnOnSinkFaucet with the part probe, n_act 8 and 4 at the same time (base_checks_stuck.yaml)   -> affo19_stuck_nact{8,4}
+bash scripts/server/submit_queue_job.sh 164 rc365_affo19_stuck 25000 1 "cards=0 1 2 3 5 6 7" -- \
+    env PHASE=stuck bash $PWD/scripts/rc365/run_base_checks_gpu.sh
+# (3) four pick tasks, A and B, episodes 20-79 (base_checks_instances.yaml; EXTRA="episodes=N" cuts the episodes)    -> affo19_instances_AB_20_79
+bash scripts/server/submit_queue_job.sh 164 rc365_affo19_instances 20000 1 "cards=0 1 2 3 5 6 7" -- \
+    env PHASE=instances bash $PWD/scripts/rc365/run_base_checks_gpu.sh
+# objects of the episodes AFFO-16 already ran (CPU; same seeds, no policy): category and instance of every object
+source envs/server/robocasa365_env.sh && PYTHONPATH=$W/repos/starVLA_rc365:. "$RC365_PYTHON" scripts/rc365/record_objects.py \
+    --out $W/runs/robocasa365_eval/affo19_objects_0_19 --tasks CoffeeSetupMug PickPlaceCounterToCabinet \
+    PickPlaceCounterToStove PickPlaceSinkToCounter --conditions A B --stop 20
+# tables (CPU, any python with the repo): <D> = $W/runs/robocasa365_eval, O = $D/affo19_summary
+python scripts/rc365/summarise_checks.py steps --run 16000=$D/affo19_steps16000_A --run 32000=$D/affo19_steps32000_A \
+    --run 48000=$D/affo16_eval_base_48000 --out $O
+python scripts/rc365/summarise_checks.py stuck --nact8 $D/affo19_stuck_nact8 --nact4 $D/affo19_stuck_nact4 \
+    --reference $D/affo16_eval_base_48000 --out $O
+python scripts/rc365/summarise_checks.py instances --new $D/affo19_instances_AB_20_79 --old $D/affo16_eval_base_48000 \
+    --objects $D/affo19_objects_0_19/objects.jsonl --out $O
+# figures for the weekly review (matplotlib, e.g. the starvla env)
+/data/xinyizheng/envs/starvla/bin/python scripts/report/make_base_checks_figures.py --summary $O --nact8 $D/affo19_stuck_nact8 \
+    --nact4 $D/affo19_stuck_nact4 --out report/media/weekly_2026_11_23/base_checks
+```
+
+Result: see the record file once the three runs are finished (section filled in at hand-over).

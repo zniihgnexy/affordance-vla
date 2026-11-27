@@ -68,7 +68,7 @@ def success_vs_steps(report: dict, out: Path) -> None:
     for k, s in enumerate(steps):
         entries = [report["success"][s][t] for t in tasks]
         right.bar(
-            [i + (k - 1) * width for i in range(len(tasks))],
+            [i + (k - (len(steps) - 1) / 2) * width for i in range(len(tasks))],
             [100 * e["rate"] for e in entries],
             width,
             yerr=errors(entries),
