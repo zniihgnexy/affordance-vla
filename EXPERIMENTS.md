@@ -208,4 +208,10 @@ bash scripts/server/submit_queue_job.sh 164 rc365_eval_base 20000 1 "cards=0 1 2
     OVERRIDES="conditions=[A,B,C]" bash $PWD/scripts/rc365/run_eval_base_gpu.sh     # -> $W/runs/robocasa365_eval/<name>/
 python scripts/rc365/summarise_eval.py $W/runs/robocasa365_eval/<name>              # table.md, summary.json
 python scripts/rc365/video_montage.py --out sheet.png <videos>                      # look at failures
+python scripts/rc365/classify_failures.py $W/runs/robocasa365_eval/<name>           # failures.json: class of every failed episode
+/data/xinyizheng/envs/starvla/bin/python scripts/report/make_base_policy_figures.py --eval $W/runs/robocasa365_eval/<name> \
+    --train $W/runs/robocasa365_starvla/<RUN> --out report/media/weekly_2026_11_23/base_policy   # success, failure and loss figures
 ```
+
+Result (2026-11-27): run `affo16_base_oft_lora` (48000 steps, batch 16, seed 42) evaluated as `affo16_eval_base_48000`:
+A 74/160, B 74/160, C 82/160; 26.5 of the 40 GPU hours. Details and the open problems: the record file above.
