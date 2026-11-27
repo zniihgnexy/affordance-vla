@@ -5,6 +5,7 @@
 #   CKPT   steps_N_pytorch_model.pt of a MERGED checkpoint (scripts/rc365/merge_lora_checkpoint.py; the run folder next
 #          to checkpoints/ holds config.yaml and dataset_statistics.json)
 #   RUN    [eval_<run folder name>]  outputs go to $W/runs/robocasa365_eval/$RUN (an existing folder is continued)
+#   CONFIG [configs/rc365/base_policy_eval.yaml]  evaluation config (e.g. configs/rc365/base_checks_stuck.yaml)
 #   OVERRIDES  key=value config overrides, space separated, e.g. "episodes=5 clients=8"
 #   BENCH [0]  1: first measure how many clients the server carries (bench_policy_server.py), logged to bench.log
 # Submit (never run directly), from the repo root:
@@ -32,4 +33,4 @@ if [ "${BENCH:-0}" = 1 ]; then
   kill "$server" 2> /dev/null; wait "$server" 2> /dev/null
 fi
 # shellcheck disable=SC2086
-"$RC365_PYTHON" "$REPO/scripts/rc365/eval_policy.py" --ckpt "$CKPT" --run "$RUN" ${OVERRIDES:-} >> "$OUT/eval.log" 2>&1
+"$RC365_PYTHON" "$REPO/scripts/rc365/eval_policy.py" --ckpt "$CKPT" --run "$RUN" ${CONFIG:+--config "$REPO/$CONFIG"} ${OVERRIDES:-} >> "$OUT/eval.log" 2>&1

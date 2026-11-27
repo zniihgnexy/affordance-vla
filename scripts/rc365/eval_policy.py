@@ -54,11 +54,11 @@ def start_server(ckpt: str, port: int, log: Path) -> subprocess.Popen:
 
 
 def jobs(cfg: dict, done: set[tuple[str, str, int]]) -> list[tuple[str, str, int, int]]:
-    """(task, condition, start, stop) slices of `chunk` episodes that still have episodes to run."""
+    """(task, condition, start, stop) slices of `chunk` episodes (indices first_episode..episodes-1) still to run."""
     out = []
     for task in cfg["tasks"]:
         for condition in cfg["conditions"]:
-            for start in range(0, cfg["episodes"], cfg["chunk"]):
+            for start in range(cfg.get("first_episode", 0), cfg["episodes"], cfg["chunk"]):
                 stop = min(start + cfg["chunk"], cfg["episodes"])
                 if any((task, condition, i) not in done for i in range(start, stop)):
                     out.append((task, condition, start, stop))
@@ -69,6 +69,8 @@ def client_command(cfg: dict, job: tuple[str, str, int, int], port: int, out: Pa
     task, condition, start, stop = job
     args = {"task": task, "condition": condition, "start": start, "stop": stop, "port": port, "out": out,
             "base-seed": cfg["base_seed"], "n-act": cfg["n_act"], "videos-per-cell": cfg["videos_per_cell"]}
+    if cfg.get("probes"):
+        args["probes"] = ",".join(cfg["probes"])
     return [sys.executable, str(REPO / "scripts/rc365/eval_client.py"),
             *(token for key, value in args.items() for token in (f"--{key}", str(value)))]
 

@@ -13,7 +13,7 @@ Needs the robocasa365 environment (source envs/server/robocasa365_env.sh) and th
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,7 @@ from affordance_vla.sim.rc365_policy_io import (
     build_example,
     episode_seed,
 )
+from affordance_vla.sim.rc365_probe import make_probes
 
 CONDITIONS: dict[str, dict[str, Any]] = {
     "A": {"split": "pretrain"},
@@ -95,10 +96,16 @@ def run_episode(
     horizon: int,
     n_act: int,
     video_path: Path | None = None,
+    probes: Sequence[Any] = (),
 ) -> dict[str, Any]:
-    """One episode from the scene drawn by `seed`; returns its record (success, steps, a coarse trace)."""
+    """One episode from the scene drawn by `seed`; returns its record (success, steps, a coarse trace).
+
+    `probes` (affordance_vla.sim.rc365_probe) add their results to the record under their names; none by default.
+    """
     started = time.time()
     obs, _ = env.reset(seed=seed)
+    for probe in probes:
+        probe.reset()
     steps, first_success, queries, policy_seconds = 0, None, 0, 0.0
     trace: list[list[float]] = []
     frames: list[np.ndarray] = []
@@ -114,6 +121,8 @@ def run_episode(
                 frames.append(obs[f"video.{CAMERAS[0]}"])
             obs, _, _, _, info = env.step(action)
             steps += 1
+            for probe in probes:
+                probe.step()
             if info["success"]:
                 first_success = steps
                 break
@@ -135,22 +144,24 @@ def run_episode(
         "layout_id": _plain(getattr(inner, "layout_id", None)),
         "style_id": _plain(getattr(inner, "style_id", None)),
         "trace": trace,
+        **{probe.name: probe.result() for probe in probes},
     }
 
 
 def run_cell(
     task: str, condition: str, indices: list[int], policy: Callable[[dict], np.ndarray], base_seed: int,
     n_act: int, out_jsonl: Path, video_dir: Path | None = None, videos_per_cell: int = 3,
-    horizon: int | None = None,
+    horizon: int | None = None, probe_names: Sequence[str] = (),
 ) -> list[dict[str, Any]]:
     """Episodes `indices` of one (task, condition) cell; each record is appended to `out_jsonl` as it finishes."""
     env = make_env(task, condition)
+    probes = make_probes(probe_names, env, task)
     horizon = horizon or task_horizon(task)
     records = []
     try:
         for index in indices:
             video = video_dir / f"{task}_{condition}_{index:03d}.mp4" if video_dir and index < videos_per_cell else None
-            record = run_episode(env, policy, episode_seed(base_seed, task, index), horizon, n_act, video)
+            record = run_episode(env, policy, episode_seed(base_seed, task, index), horizon, n_act, video, probes)
             record |= {"task": task, "condition": condition, "index": index}
             records.append(record)
             with out_jsonl.open("a") as handle:

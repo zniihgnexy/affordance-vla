@@ -1,0 +1,10 @@
+# AFFO-19 item 2: the two floor tasks, condition A, the seeds of the 48000-step evaluation, with the part probe
+# (gripper-to-part distance, contact and joint value at every environment step). Two runs share one job (n_act=8 and
+# n_act=4, 14 clients each, below the project cap of 30): set n_act on the command line.
+base: base_policy_eval.yaml
+tasks: [TurnOffStove, TurnOnSinkFaucet]
+conditions: [A]
+chunk: 3
+clients: 14
+videos_per_cell: 0
+probes: [part]

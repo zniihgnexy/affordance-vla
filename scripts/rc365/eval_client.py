@@ -35,6 +35,7 @@ def main() -> None:
     parser.add_argument("--base-seed", type=int, default=1234)
     parser.add_argument("--n-act", type=int, default=8, help="actions executed per policy query")
     parser.add_argument("--videos-per-cell", type=int, default=3)
+    parser.add_argument("--probes", default="", help="comma-separated recorders (affordance_vla.sim.rc365_probe)")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
@@ -49,6 +50,7 @@ def main() -> None:
         records = rc365_eval.run_cell(
             args.task, args.condition, todo, policy, args.base_seed, args.n_act, results,
             video_dir=args.out / "videos", videos_per_cell=args.videos_per_cell,
+            probe_names=[name for name in args.probes.split(",") if name],
         )
     finally:
         policy.close()

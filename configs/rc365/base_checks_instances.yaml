@@ -1,0 +1,10 @@
+# AFFO-19 item 3: seen (A) and unseen (B) object instances on the four pick tasks, episodes 20-79 (the first 20 are in
+# the 48000-step evaluation, which stays untouched); A and B share seeds, so same index = same kitchen. The objects probe
+# records category and instance of every object of every episode.
+base: base_policy_eval.yaml
+tasks: [CoffeeSetupMug, PickPlaceCounterToCabinet, PickPlaceCounterToStove, PickPlaceSinkToCounter]
+conditions: [A, B]
+first_episode: 20
+episodes: 80
+videos_per_cell: 0
+probes: [objects]

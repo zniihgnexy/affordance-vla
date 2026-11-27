@@ -1,0 +1,7 @@
+# AFFO-19 item 1: base policy at a mid-training checkpoint, condition A only, 8 tasks x 20 episodes, the seeds of the
+# 48000-step evaluation (base_seed 1234, indices 0-19). chunk 4 packs the 40 slices into two rounds of 24 clients.
+# Checkpoint and run name on the command line: see EXPERIMENTS.md section 11.
+base: base_policy_eval.yaml
+conditions: [A]
+chunk: 4
+videos_per_cell: 0
