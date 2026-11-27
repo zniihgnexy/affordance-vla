@@ -1,0 +1,19 @@
+# Evaluation grid of the AFFO-16 base policy (scripts/rc365/eval_policy.py).
+# Conditions: A pretrain kitchens + pretrain objects, B pretrain kitchens + target objects, C target kitchens + target
+# objects (affordance_vla/sim/rc365_eval.py). Override on the command line, e.g. `episodes=5 conditions=[A]`.
+tasks:
+  - CoffeeSetupMug
+  - PickPlaceCounterToCabinet
+  - PickPlaceCounterToStove
+  - PickPlaceSinkToCounter
+  - OpenDrawer
+  - OpenCabinet
+  - TurnOffStove
+  - TurnOnSinkFaucet
+conditions: [A, B]
+episodes: 20          # per task and condition
+chunk: 5              # episodes per client process (one simulator build per chunk)
+clients: 24           # simulator processes at once (the project cap is 30, shared with the sibling task)
+base_seed: 1234       # episode seed = crc32(base_seed/task/index): A and B share seeds, so they share kitchens
+n_act: 8              # actions executed per policy query (the model predicts 16)
+videos_per_cell: 3    # episodes 0..2 of every cell are recorded

@@ -218,3 +218,40 @@ source envs/server/libero_env.sh; export PYTHONPATH=$PWD:$PYTHONPATH
 | `check_v2/joint_parts.json`, `knob_diagnosis.json` | `joint_check.yaml`: four part tasks, new label = joint axis / anchor and the sign of the joint change (1 s window or whole demonstration) | stove-knob contact scatter 32.9 -> 2.02 cm with the joint anchor as origin (body origin is 49 cm from the knob); drawer / door handle motion consistent across kitchens 0.73 -> 1.00, 0.91 -> 0.98; faucet 0.49 -> 0.91 (67 deg from the gripper direction); knob translation direction 0.15, turn axis + sign 0.85-0.93 per stove design (record sections 2-3) |
 | `check_v2/mug_align.json` | `mug_align.yaml`: handle length aligned (`length`) or registered (`registered`) before the nearest-point transfer; plain / ring | `none` rows equal AFFO-15's; `length` + ring: 0.94 / 12.0 deg, `mug_8` 0.84 / 10.9 deg (pass); `registered` + ring: `mug_8` 0.87 / 20.5 deg (axis 0.5 deg over the line) (record section 4) |
 | `check_v1_repro/` | `check.yaml --set out=runs/rc365_labels/check_v1_repro` | `counts.json`, `objects.json`, `parts.json` byte-identical to `check_v1/` |
+
+## 10. RoboCasa365 base policy (Pipeline v4 step 1 (2), AFFO-16; server)
+
+Record: `docs/vla/2026-11-26_VLA_branch_第1步_底座策略.md`. QwenOFT with LoRA on the language-model layers, trained with the
+MLP action head on the PRETRAIN split of eight atomic tasks (MimicGen + human demonstrations, no target demonstrations),
+evaluated on seen and unseen object instances. One card at a time, queue priority 164, cap 40 GPU hours.
+Settings: `configs/rc365/qwenoft_lora_rc365_8tasks.yaml` (training), `configs/rc365/base_policy_eval.yaml` (evaluation),
+`configs/rc365/data_registry_affo16/data_config.py` (mixtures). Needs the envs of section 6; run from the repo root.
+
+```bash
+# data (CPU): MimicGen pretrain, 55.0 GB for the eight tasks (--dry-run prints sizes; --max-gb stops above N GB); human: --source human
+bash scripts/rc365/fetch_pretrain_demos.sh --source mg [--dry-run]
+MIX=affo16_rc365_pretrain_<Task> bash scripts/rc365/prepare_train_data.sh      # CPU: step index + statistics of one task (or the whole mixture)
+# checks (CPU)
+bash scripts/rc365/check_train_eval_alignment.sh                              # training data path vs evaluation input, same raw step
+source envs/server/robocasa365_env.sh && PYTHONPATH=$W/repos/starVLA_rc365:. "$RC365_PYTHON" scripts/rc365/check_env_conditions.py --task OpenDrawer
+# LoRA trial: peak memory and step time at several batch sizes
+bash scripts/server/submit_queue_job.sh 164 rc365_lora_trial 40000 1 "cards=0 1 2 3 5 6 7" -- \
+    env PREFIX=affo16_lora_trial bash $PWD/scripts/rc365/run_lora_trial_gpu.sh
+# training (restartable: the same RUN continues from its latest checkpoint)
+bash scripts/server/submit_queue_job.sh 164 rc365_base 40000 1 "cards=0 1 2 3 5 6 7" -- \
+    env RUN=affo16_base_oft_lora bash $PWD/scripts/rc365/run_train_base_gpu.sh      # -> $W/runs/robocasa365_starvla/<RUN>/
+# evaluation: fold the adapters into the weights (CPU), then server + 24 simulator clients (BENCH=1: measure server capacity first)
+python scripts/rc365/merge_lora_checkpoint.py --ckpt $W/runs/robocasa365_starvla/<RUN>/checkpoints/steps_N_pytorch_model.pt \
+    --out $W/runs/robocasa365_starvla/<RUN>_merged_N
+bash scripts/server/submit_queue_job.sh 164 rc365_eval_base 20000 1 "cards=0 1 2 3 5 6 7" -- \
+    env CKPT=$W/runs/robocasa365_starvla/<RUN>_merged_N/checkpoints/steps_N_pytorch_model.pt RUN=<name> \
+    OVERRIDES="conditions=[A,B,C]" bash $PWD/scripts/rc365/run_eval_base_gpu.sh     # -> $W/runs/robocasa365_eval/<name>/
+python scripts/rc365/summarise_eval.py $W/runs/robocasa365_eval/<name>              # table.md, summary.json
+python scripts/rc365/video_montage.py --out sheet.png <videos>                      # look at failures
+python scripts/rc365/classify_failures.py $W/runs/robocasa365_eval/<name>           # failures.json: class of every failed episode
+/data/xinyizheng/envs/starvla/bin/python scripts/report/make_base_policy_figures.py --eval $W/runs/robocasa365_eval/<name> \
+    --train $W/runs/robocasa365_starvla/<RUN> --out report/media/weekly_2026_11_23/base_policy   # success, failure and loss figures
+```
+
+Result (2026-11-27): run `affo16_base_oft_lora` (48000 steps, batch 16, seed 42) evaluated as `affo16_eval_base_48000`:
+A 74/160, B 74/160, C 82/160; 26.5 of the 40 GPU hours. Details and the open problems: the record file above.
