@@ -5,6 +5,7 @@
 #                    policy servers on the one card, 14 simulator clients each; configs/rc365/base_checks_stuck.yaml)
 #   PHASE=instances  seen (A) and unseen (B) instances, episodes 20-79 of the four pick tasks (base_checks_instances.yaml)
 # The checkpoints are MERGED ones ($W/runs/robocasa365_starvla/affo16_base_oft_lora_merged_<N>, scripts/rc365/merge_lora_checkpoint.py).
+#   EXTRA  config overrides added in the instances phase, e.g. "episodes=60" to cut the episodes per cell
 # Outputs: $W/runs/robocasa365_eval/affo19_<phase run names>/ (an existing folder is continued, never overwritten).
 # Submit (never run directly), from the repo root:
 #   bash scripts/server/submit_queue_job.sh 164 rc365_affo19_stuck 25000 1 "cards=0 1 2 3 5 6 7" -- \
@@ -25,6 +26,6 @@ case "${PHASE:?PHASE is steps, stuck or instances}" in
     eval_run 48000 affo19_stuck_nact4 configs/rc365/base_checks_stuck.yaml "n_act=4" &
     wait ;;
   instances)
-    eval_run 48000 affo19_instances_AB_20_79 configs/rc365/base_checks_instances.yaml "" ;;
+    eval_run 48000 affo19_instances_AB_20_79 configs/rc365/base_checks_instances.yaml "${EXTRA:-}" ;;
   *) echo "PHASE must be steps, stuck or instances" >&2; exit 2 ;;
 esac
