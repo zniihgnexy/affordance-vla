@@ -292,4 +292,11 @@ python scripts/rc365/summarise_checks.py instances --new $D/affo19_instances_AB_
     --nact4 $D/affo19_stuck_nact4 --out report/media/weekly_2026_11_23/base_checks
 ```
 
-Result: see the record file once the three runs are finished (section filled in at hand-over).
+Result (2026-11-28; all three runs finished, 3.5 of the 4 GPU hours; details in the record file): (1) condition A, 8 tasks x 20
+episodes, success 27/160 (17 %) at 16 000, 59/160 (37 %) at 32 000, 74/160 (46 %) at 48 000 steps; 32 000 -> 48 000 paired
+15 only-earlier against 30 only-later, sign test p = 0.036, so still rising after 32 000 (inference, medium confidence).
+(2) TurnOffStove 0/20 for both n_act 8 and 4; TurnOnSinkFaucet 6/20 (n_act 8) and 8/20 (n_act 4); most failures reach the
+part (stove: 17 of 20 within 8 cm; 7 touched without turning it) rather than stopping short; the n_act=8 rerun matches
+AFFO-16 in 39 of 40 outcomes. (3) four pick tasks, 75 episodes per cell (AFFO-16's 20 + new indices 20-74; the job was cut
+from 80 to 75 by `EXTRA="episodes=75"` to fit the GPU budget, the folder keeps the name `_20_79`): A 170/300, B 163/300,
+paired only-A 47 / only-B 40, p = 0.52, A-B = +2.3 points (95 %: -3.8 to +8.4).

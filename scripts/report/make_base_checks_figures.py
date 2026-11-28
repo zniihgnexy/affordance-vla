@@ -2,7 +2,7 @@
 
   success_vs_steps.png     success in condition A at 16 000 / 32 000 / 48 000 training steps, total and per task
   part_distance.png        gripper-to-part distance over the episode, TurnOffStove and TurnOnSinkFaucet, n_act 8 and 4
-  seen_vs_unseen.png       seen (A) against unseen (B) object instances on the four pick tasks, 80 episodes per bar
+  seen_vs_unseen.png       seen (A) against unseen (B) object instances on the four pick tasks, 75 episodes per bar
 
 Usage (repo root; matplotlib needed, e.g. the starvla env; run scripts/rc365/summarise_checks.py first):
   python scripts/report/make_base_checks_figures.py --summary <dir with steps.json stuck.json instances.json> \
